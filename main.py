@@ -14,7 +14,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет приветственное сообщение при команде /start."""
     user = update.effective_user
     # Отправляем сообщение "Привет, Мир!" пользователю, который нажал /start
-    await update.message.reply_text(f'Привет, {user.first_name}! Это простой тестовый бот. Мир!') # Используем имя пользователя для персонализации
+    await update.message.reply_text(f'Привет, {user.first_name}! Это простой тестовый бот. Мир!!!!!!!!!!!!!!!') # Используем имя пользователя для персонализации
 
 def main() -> None:
     """Запускает бота."""
