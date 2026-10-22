@@ -2,4 +2,5 @@ psutil>=6.0,<7
 pyautogui>=0.9.54
 pyperclip>=1.9
 pywin32>=308
-pillow>=10
+pillow>=11.0,<13
+screeninfo>=0.8,<1
