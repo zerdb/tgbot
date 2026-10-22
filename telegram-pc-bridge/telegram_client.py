@@ -24,7 +24,8 @@ class TelegramBotClient:
 
     def keyboard(self):
         return {"inline_keyboard":[
-            [{"text":"🖥 ПК","callback_data":"menu_pc"},{"text":"📸 Скриншот","callback_data":"cmd:/screenshot"}],\n            [{"text":"📊 Мониторинг","callback_data":"menu_monitor"}],
+            [{"text":"🖥 ПК","callback_data":"menu_pc"},{"text":"📸 Скриншот","callback_data":"cmd:/screenshot"}],
+            [{"text":"📊 Мониторинг","callback_data":"menu_monitor"}],
             [{"text":"📁 Файлы","callback_data":"menu_files"},{"text":"🪟 Окна","callback_data":"menu_windows"}],
             [{"text":"📱 Приложения","callback_data":"menu_apps"},{"text":"🧰 Проекты","callback_data":"menu_projects"}],
             [{"text":"⚙️ Система","callback_data":"menu_system"},{"text":"📋 Журнал","callback_data":"menu_log"}]]}
