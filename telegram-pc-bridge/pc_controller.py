@@ -26,6 +26,11 @@ except ImportError:
     pyperclip = None
 
 try:
+    from screeninfo import get_monitors
+except ImportError:
+    get_monitors = None
+
+try:
     import win32gui
     import win32con
     import win32process
@@ -41,6 +46,7 @@ class PCController:
 
     def __init__(self):
         home = Path.home()
+        self.psutil = psutil
         self.allowed_folders = {
             "desktop": home / "Desktop",
             "downloads": home / "Downloads",
@@ -130,6 +136,30 @@ class PCController:
             return self.stop_allowed_app(arg.lower())
         if command == "/files":
             return self.list_files(arg or "downloads")
+        if command == "/find":
+            parts = arg.split(maxsplit=1)
+            if len(parts) < 2:
+                return False, "❌ Формат: /find downloads имя"
+            found = self.search_files(parts[0], parts[1])
+            if not found:
+                return True, "🔎 Ничего не найдено."
+            return True, "🔎 НАЙДЕНО
+" + "
+".join("• " + (self.relative_key(item) or item.name) for item in found)
+        if command == "/rename":
+            parts = arg.split(maxsplit=1)
+            if len(parts) < 2:
+                return False, "❌ Формат: /rename downloads/file.txt новое.txt"
+            return self.rename_file(parts[0], parts[1])
+        if command == "/copy":
+            parts = arg.split(maxsplit=1)
+            if len(parts) < 2:
+                return False, "❌ Формат: /copy downloads/file.txt documents"
+            return self.copy_file(parts[0], parts[1])
+        if command == "/archive":
+            return self.archive_file(arg)
+        if command == "/stats":
+            return self.path_info(arg)
         if command == "/processes":
             return True, self.processes()
         if command == "/proc":
@@ -168,6 +198,8 @@ class PCController:
             return True, self.projects()
         if command == "/project":
             return self.run_project(arg.lower())
+        if command == "/project_log":
+            return self.project_log(arg.lower())
         if command == "/drives":
             return True, self.drives()
         if command == "/network":
@@ -466,6 +498,11 @@ class PCController:
             return None, f"❌ Скриншот: {exc}"
 
     def monitor_records(self):
+        if get_monitors is not None:
+            try:
+                return [(m.x, m.y, m.width, m.height) for m in get_monitors()]
+            except Exception:
+                pass
         if pyautogui is None:
             return []
         try:
