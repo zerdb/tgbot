@@ -57,6 +57,7 @@ class TelegramBotClient:
                  {"text": "🧰 Проекты", "callback_data": "menu_projects"}],
                 [{"text": "🔔 Оповещения", "callback_data": "menu_alerts"},
                  {"text": "⏻ Питание", "callback_data": "menu_power"}],
+                [{"text": "🎮 Управление", "callback_data": "menu_control"}],
                 [{"text": "📋 Журнал", "callback_data": "menu_log"},
                  {"text": "❓ Помощь", "callback_data": "cmd:/help"}],
             ]
@@ -90,7 +91,14 @@ class TelegramBotClient:
             ],
             "menu_system": [
                 [("📋 Clipboard", "menu_clip"), ("⌨️ Hotkeys", "menu_hotkeys")],
-                [("⚙️ Службы", "cmd:/services"), ("⬅️ Назад", "menu:root")],
+                [("⚙️ Службы", "menu_services"), ("⬅️ Назад", "menu:root")],
+            ],
+            "menu_services": [
+                [("📋 Список служб", "cmd:/services")],
+                [("▶️ Spooler", "confirm:/service_start spooler"), ("⛔ Spooler", "confirm:/service_stop spooler")],
+                [("▶️ W32Time", "confirm:/service_start w32time"), ("⛔ W32Time", "confirm:/service_stop w32time")],
+                [("▶️ BITS", "confirm:/service_start bits"), ("⛔ BITS", "confirm:/service_stop bits")],
+                [("⬅️ Назад", "menu_system")],
             ],
             "menu_clip": [
                 [("📋 Прочитать", "cmd:/clip_get"), ("✏️ Записать", "info:clipset")],
@@ -103,11 +111,17 @@ class TelegramBotClient:
             ],
             "menu_screenshot": [
                 [("🖥 Весь экран", "cmd:/screenshot full"), ("🪟 Активное окно", "cmd:/screenshot active")],
-                [("⏱ С задержкой 3с", "cmd:/screenshot full 3"), ("⬅️ Назад", "menu:root")],
+                [("🖥 Мониторы", "view:monitors"), ("⏱ Задержка 3с", "cmd:/screenshot full 3")],
+                [("⬅️ Назад", "menu:root")],
             ],
             "menu_alerts": [
                 [("🔔 Включить", "alerts:on"), ("🔕 Выключить", "alerts:off")],
                 [("ℹ️ Статус", "alerts:status"), ("⬅️ Назад", "menu:root")],
+            ],
+            "menu_control": [
+                [("📸 Скриншот", "menu_screenshot"), ("🖱 Клик", "info:click")],
+                [("⌨️ Ввод текста", "info:type"), ("📋 Буфер", "menu_clip")],
+                [("⬅️ Назад", "menu:root")],
             ],
             "menu_power": [
                 [("🔒 Заблокировать", "confirm:/lock"), ("🖥 Свернуть всё", "confirm:/minimize_all")],
@@ -367,7 +381,7 @@ class TelegramBotClient:
         if data.startswith("file_stats:"):
             key = self.token_map.get(data[11:])
             if key:
-                ok, reply = self.controller.folder_stats(key)
+                ok, reply = self.controller.path_info(key)
                 self.send_message(chat_id, reply, self.keyboard())
             return
         if data.startswith("window:"):
@@ -448,6 +462,9 @@ class TelegramBotClient:
         if data == "view:project_logs":
             self._render_project_logs(chat_id, message["message_id"])
             return
+        if data == "view:monitors":
+            self._render_monitors(chat_id, message["message_id"])
+            return
         if data.startswith("project_log:"):
             name = self.token_map.get(data[12:])
             if name:
@@ -468,6 +485,12 @@ class TelegramBotClient:
             return
         if data == "info:clipset":
             self.send_message(chat_id, "✏️ Используй /clip_set <текст>. Лимит 4000 символов.", self.keyboard())
+            return
+        if data == "info:click":
+            self.send_message(chat_id, "🖱 Управление: /click X Y — клик по координатам основного экрана.", self.keyboard())
+            return
+        if data == "info:type":
+            self.send_message(chat_id, "⌨️ Управление: /type текст — ввод текста в активное окно, максимум 1000 символов.", self.keyboard())
             return
         if data.startswith("alerts:"):
             action = data.split(":", 1)[1]
@@ -615,6 +638,14 @@ class TelegramBotClient:
                 [{"text": "⬅️ Окна", "callback_data": "view:windows"}],
             ]
         })
+
+    def _render_monitors(self, chat_id, message_id):
+        monitors = self.controller.monitor_records()
+        buttons = []
+        for index, (left, top, width, height) in enumerate(monitors):
+            buttons.append([{"text": f"🖥 Монитор {index + 1} • {width}x{height}", "callback_data": f"cmd:/screenshot monitor {index}"}])
+        buttons.append([{"text": "⬅️ Скриншоты", "callback_data": "menu_screenshot"}])
+        self.edit_menu(chat_id, message_id, "🖥 МОНИТОРЫ", {"inline_keyboard": buttons or [[{"text": "⬅️ Назад", "callback_data": "menu_screenshot"}]]})
 
     def _render_project_logs(self, chat_id, message_id):
         buttons = []
