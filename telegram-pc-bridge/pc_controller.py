@@ -460,7 +460,14 @@ class PCController:
         if os.name != "nt":
             return False, "❌ Только Windows."
         try:
-            pyautogui.hotkey("win", "d") if pyautogui else ctypes.windll.user32.keybd_event(0x5B, 0, 0, 0)
+            if pyautogui:
+                pyautogui.hotkey("win", "d")
+            else:
+                user32 = ctypes.windll.user32
+                user32.keybd_event(0x5B, 0, 0, 0)
+                user32.keybd_event(0x44, 0, 0, 0)
+                user32.keybd_event(0x44, 2, 0, 0)
+                user32.keybd_event(0x5B, 2, 0, 0)
             return True, "🖥 Все окна свёрнуты."
         except Exception as exc:
             return False, f"❌ {exc}"
