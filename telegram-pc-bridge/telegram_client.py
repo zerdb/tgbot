@@ -98,6 +98,14 @@ class TelegramBotClient:
                     path,err=self.controller.screenshot()
                     if path:self.send_photo(chat["id"],path); self._result(base,True,"📸 Скриншот отправлен.")
                     else:self.send_message(chat["id"],err); self._result(base,False,err)
+                elif reply.startswith("DOWNLOAD:"):
+                    ok_path, path = self.controller.download_path(reply[9:])
+                    if ok_path:
+                        self.send_document(chat["id"], Path(path))
+                        self._result(base, True, "📤 Файл отправлен.")
+                    else:
+                        self.send_message(chat["id"], path)
+                        self._result(base, False, path)
                 else:self.send_message(chat["id"],reply); self._result(base,ok,reply)
         elif "document" in msg:
             self._receive_upload(chat["id"],msg["document"])
@@ -122,6 +130,13 @@ class TelegramBotClient:
                 path,err=self.controller.screenshot()
                 if path:self.send_photo(cid,path); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id")},True,"📸 Скриншот отправлен.")
                 else:self.send_message(cid,err)
+            elif reply.startswith("DOWNLOAD:"):
+                ok_path, path = self.controller.download_path(reply[9:])
+                if ok_path:
+                    self.send_document(cid, Path(path))
+                    self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id")},True,"📤 Файл отправлен.")
+                else:
+                    self.send_message(cid,path)
             else:self.send_message(cid,reply,self.keyboard()); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id")},ok,reply)
 
     def send_photo(self,chat_id,path):
