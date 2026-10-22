@@ -3,6 +3,7 @@ import getpass
 import os
 import platform
 import shutil
+import sys
 import socket
 import subprocess
 import time
@@ -88,7 +89,7 @@ class PCController:
             "📸 /screenshot  📋 /clip_get  ✏ /clip_set <text>\n"
             "⌨ /hotkey <allow-list>  📦 /projects\n"
             "▶ /project <allow-list project>\n"
-            "💽 /drives  🌐 /network\n"
+            "💽 /drives  🌐 /network  🎮 /gpu\n"
             "⚙ /services  (только allow-list служб)\n"
             "⬆️ /upload и 📤 /download работают через разрешённые папки\n"
             "⚠️ Опасные действия требуют подтверждения в Telegram."
@@ -106,9 +107,14 @@ class PCController:
         if command == "/files": return self.list_files(arg.lower())
         if command == "/processes": return True, self.processes()
         if command == "/windows": return True, self.windows_list()
+        if command == "/focus": return self.focus_window(arg)
+        if command == "/close": return self.close_window(arg)
         if command == "/minimize_all": return self.minimize_all()
+        if command == "/logoff": return self.logoff_windows()
+        if command == "/gpu": return True, self.gpu_status()
         if command == "/lock": return self.lock_windows()
         if command == "/screenshot": return True, "SCREENSHOT"
+        if command == "/download": return True, "DOWNLOAD:" + arg
         if command == "/clip_get": return self.clip_get()
         if command == "/clip_set": return self.clip_set(arg)
         if command == "/hotkey": return self.hotkey(arg.lower())
@@ -173,6 +179,79 @@ class PCController:
             return True
         win32gui.EnumWindows(cb,None)
         return "🪟 ОКНА\n━━━━━━━━━━━━━━━━━━\n" + "\n".join(f"• {title} | PID {pid}" for title,pid in rows[:50])
+
+
+    def resolve_allowed_file(self, raw):
+        raw = raw.strip().replace("\\", "/")
+        if not raw:
+            return None
+        path = Path(raw)
+        if path.is_absolute() or not path.parts:
+            return None
+        folder = self.allowed_folders.get(path.parts[0].lower())
+        if not folder:
+            return None
+        target = (folder.joinpath(*path.parts[1:])).resolve()
+        try:
+            target.relative_to(folder.resolve())
+        except ValueError:
+            return None
+        return target
+
+    def download_path(self, raw):
+        target = self.resolve_allowed_file(raw)
+        if not target or not target.is_file():
+            return False, "❌ Файл должен находиться в desktop/, downloads/ или documents/."
+        return True, str(target)
+
+    def gpu_status(self):
+        if os.name != "nt":
+            return "ℹ️ GPU: мониторинг через nvidia-smi доступен только в Windows."
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=5, check=True
+            )
+            lines = [x.strip() for x in result.stdout.splitlines() if x.strip()]
+            return "🎮 GPU\n" + "\n".join("• " + x for x in lines) if lines else "ℹ️ NVIDIA GPU не обнаружен."
+        except Exception:
+            return "ℹ️ NVIDIA GPU не обнаружен или nvidia-smi недоступен."
+
+    def focus_window(self, title):
+        if win32gui is None or not title:
+            return False, "❌ Нужен pywin32 и точный заголовок окна."
+        hwnd = win32gui.FindWindow(None, title)
+        if not hwnd:
+            return False, f"❌ Окно «{title}» не найдено."
+        try:
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            win32gui.SetForegroundWindow(hwnd)
+            return True, f"✅ Фокус переключён на «{title}»."
+        except Exception as e:
+            return False, f"❌ Не удалось переключить фокус: {e}"
+
+    def close_window(self, title):
+        if win32gui is None or not title:
+            return False, "❌ Нужен pywin32 и точный заголовок окна."
+        hwnd = win32gui.FindWindow(None, title)
+        if not hwnd:
+            return False, f"❌ Окно «{title}» не найдено."
+        try:
+            win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+            return True, f"✅ Окно «{title}» получило команду закрытия."
+        except Exception as e:
+            return False, f"❌ Не удалось закрыть окно: {e}"
+
+    def logoff_windows(self):
+        if os.name != "nt":
+            return False, "❌ Только Windows."
+        try:
+            if ctypes.windll.user32.ExitWindowsEx(0, 0):
+                return True, "🚪 Сеанс Windows завершён."
+            return False, "❌ Windows не разрешила выход."
+        except Exception as e:
+            return False, f"❌ {e}"
 
     def list_files(self,name):
         folder=self.allowed_folders.get(name)
