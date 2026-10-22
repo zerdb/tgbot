@@ -1,65 +1,162 @@
-# Telegram PC Bridge v2
+# Telegram PC Bridge v3
 
-Локальный Tkinter-пульт управления Windows/ПК через Telegram. Управление построено на явном allow-list: бот не принимает произвольные PowerShell/CMD-команды и не выполняет произвольный Python-код.
+Локальный Tkinter-пульт управления ПК через Telegram. Бот работает только с разрешёнными действиями: произвольный CMD/PowerShell/Python-код удалённо не запускается.
 
-## Панель Telegram
+## Что теперь умеет панель
 
-После запуска бот присылает inline-панель:
+### 🖥 Дашборд
+- CPU, RAM, диск, сеть, hostname, пользователь, Python и uptime.
+- GPU через NVIDIA nvidia-smi.
+- Отдельный просмотр дисков и сетевых счётчиков.
 
-- 🖥 ПК — статус, скриншот, блокировка.
-- 📊 Мониторинг — процессы, диски, сеть, GPU.
-- 📁 Файлы — Desktop, Downloads, Documents.
-- 🪟 Окна — список окон, сворачивание, выход из Windows.
-- 📱 Приложения — Notepad, Calculator, Explorer.
-- 🧰 Проекты — запуск заранее известных проектов из репозитория.
-- ⚙️ Система — clipboard, разрешённые hotkeys, allow-list служб.
-- 📋 Журнал — локальный журнал Tkinter.
+### 📁 Полноценный файловый менеджер
+- Desktop / Downloads / Documents.
+- Навигация по вложенным папкам и кнопка «Вверх».
+- Отправка файла с ПК в Telegram.
+- Загрузка документа из Telegram в Downloads.
+- Удаление с подтверждением.
+- Создание ZIP.
+- Информация о файле/папке.
+- Поиск: /find downloads отчёт.
+- Переименование: /rename downloads/file.txt новый.txt.
+- Копирование: /copy downloads/file.txt documents.
+- Ограничение путей не позволяет выйти выше разрешённых папок.
+- Для надёжности загрузка на ПК идёт через .part и атомарный rename.
+- Для передачи через бота используются консервативные лимиты размера.
 
-Опасные действия (`lock`, `minimize_all`, `logoff`) требуют второй кнопки ⚠️ Подтвердить.
+### 🪟 Окна
+- Список видимых окон.
+- Фокусировка окна.
+- Скриншот конкретного окна.
+- Закрытие окна с подтверждением.
+- Свернуть все окна.
 
-## Разрешённые действия
+### 📊 Процессы
+- Топ процессов по RAM.
+- Карточка процесса: PID, имя, CPU, RAM, статус, время запуска и команда.
+- Завершение процесса с подтверждением.
+- Системные процессы и сам Bridge защищены от завершения.
 
-- `/status`, `/processes`, `/drives`, `/network`, `/gpu`
-- `/windows`, `/lock`, `/minimize_all`, `/logoff`
-- `/run <allow-list app>`, `/stop <allow-list app>`
-- `/files <desktop|downloads|documents>`
-- `/screenshot`
-- `/clip_get`, `/clip_set <text>`
-- `/hotkey <allow-list>`
-- `/projects`, `/project <allow-list project>`
-- `/services`
-- `/download <desktop/...|downloads/...|documents/...>`
-- Telegram upload → только в локальную папку `telegram-pc-bridge/downloads/`
+### 📸 Скриншоты
+- Весь экран.
+- Активное окно.
+- Выбор монитора при наличии screeninfo.
+- Таймер перед снимком.
+- Снимок можно отправить прямо в Telegram.
 
-## Allow-list
+### 🎮 Удалённое управление
+- /click X Y — клик по координатам основного экрана.
+- /type текст — ввод текста в активное окно.
+- Allow-list hotkeys.
+- Clipboard чтение/запись.
+- Связка «скриншот → клик → ввод» даёт лёгкий Remote Desktop-подобный сценарий без видеострима.
 
-### Приложения
-`notepad`, `calculator`, `explorer`
+### 🧰 Проекты
+- Запуск только заранее известных проектов репозитория.
+- Используется текущий sys.executable, поэтому проект запускается тем же Python-окружением.
+- stdout/stderr каждого проекта пишется в project_logs/<project>.log.
+- Логи доступны из Telegram.
 
-### Hotkeys
-`ctrl_c`, `ctrl_v`, `ctrl_s`, `ctrl_w`, `alt_tab`, `ctrl_shift_esc`, `win_d`
+### ⚙️ Система
+- Allow-list Windows-служб: Spooler, W32Time, BITS.
+- Запуск/остановка служб через подтверждение.
+- Lock / minimize all / logoff.
+- Sleep / restart / shutdown через подтверждение.
+- Все опасные действия проходят через вторую кнопку подтверждения.
 
-### Windows services
-`spooler`, `w32time`, `bits`
+### 🔔 Оповещения
+Можно включить автоматический мониторинг:
+- CPU ≥ 90%;
+- RAM ≥ 90%;
+- системный диск ≥ 90%.
 
-### Проекты
-Проекты определяются из фиксированного списка директорий репозитория. Произвольный путь к `.exe`, `.py`, `.bat` или PowerShell не принимается.
+Проверка выполняется раз в минуту, а повторное предупреждение ограничено по времени, чтобы Telegram не заспамить.
 
-### Файлы
-Удалённая отправка разрешена только из `Desktop`, `Downloads`, `Documents`. Обход родительских директорий блокируется.
+### 📋 Аудит
+Все команды и опасные действия пишутся в локальный audit.log с временем, User ID и результатом.
 
-## Зависимости
+## Безопасность
 
-```bash
-pip install -r requirements.txt
-```
+1. Telegram User ID задаётся в локальном config.json.
+2. Команды от других пользователей игнорируются.
+3. Произвольные shell-команды запрещены.
+4. Файловые операции ограничены Desktop / Downloads / Documents.
+5. Защищены path traversal и абсолютные пути.
+6. Удаление, завершение процессов, питание, службы и другие опасные действия требуют подтверждения.
+7. Runtime-файлы (config.json, audit.log, downloads/, project_logs/) игнорируются Git.
+
+## Команды
+
+- /status
+- /apps
+- /run <app>
+- /stop <app>
+- /files <folder>
+- /find <folder> <query>
+- /rename <path> <new_name>
+- /copy <path> <destination_folder>
+- /archive <path>
+- /stats <path>
+- /download <path>
+- /processes
+- /proc <pid>
+- /kill <pid>
+- /windows
+- /focus <title>
+- /close <title>
+- /screenshot [full|active|monitor]
+- /click <x> <y>
+- /type <text>
+- /clip_get
+- /clip_set <text>
+- /hotkey <allow-list>
+- /projects
+- /project <allow-list project>
+- /project_log <project>
+- /drives
+- /network
+- /gpu
+- /services
+- /service_start <allow-list service>
+- /service_stop <allow-list service>
+- /alerts_on
+- /alerts_off
+- /lock
+- /minimize_all
+- /sleep
+- /restart
+- /shutdown
+- /logoff
+
+## Установка
+
+Создай/активируй виртуальное окружение в PyCharm и установи:
+
+~~~bash
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+~~~
+
+Если после обновления Python появляется ошибка импорта Pillow/PyAutoGUI, сначала обнови зависимости в этом же .venv.
 
 ## Запуск
 
-```bash
+~~~bash
 python main.py
-```
+~~~
 
-Перед работой укажи свой Telegram User ID. Команды от других пользователей блокируются.
+В окне укажи:
+- Bot Token;
+- свой Telegram User ID.
 
-Токен и User ID сохраняются в локальном `config.json`, который не должен попадать в Git.
+Конфигурация сохраняется локально и не попадает в Git.
+
+## Структура
+
+- main.py — запуск Tkinter.
+- app.py — локальное окно Bridge.
+- telegram_client.py — Telegram API, inline-панель, аудит и передача файлов.
+- pc_controller.py — безопасные операции с ПК.
+- downloads/ — локальные входящие/скриншоты.
+- project_logs/ — stdout/stderr запущенных проектов.
+- audit.log — журнал действий.
