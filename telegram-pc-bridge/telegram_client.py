@@ -2,6 +2,7 @@ import json
 import threading
 import urllib.parse
 import urllib.request
+import socket
 from pathlib import Path
 
 from pc_controller import PCController
@@ -97,10 +98,14 @@ class TelegramBotClient:
                         self._handle_message(message)
                 if not updates:
                     self.stop_event.wait(0.7)
+            except (TimeoutError, socket.timeout):
+                # A polling read timeout is normal: simply start the next poll.
+                if self.running and not self.stop_event.is_set():
+                    self.stop_event.wait(0.2)
             except Exception as exc:
                 if self.running and not self.stop_event.is_set():
                     self.on_status("error", f"Ошибка связи: {exc}")
-                    self.stop_event.wait(1.0)
+                    self.stop_event.wait(2.0)
 
         self.on_status("offline", "Прослушивание остановлено")
 
