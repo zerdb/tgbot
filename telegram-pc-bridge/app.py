@@ -3,9 +3,10 @@ import os
 import queue
 import subprocess
 import sys
-import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import messagebox
+
+import customtkinter as ctk
 
 from telegram_client import TelegramBotClient
 
@@ -14,108 +15,159 @@ CONFIG = Path(__file__).with_name("config.json")
 class TelegramBridgeApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Telegram PC Bridge v3 • Remote Control")
-        self.root.geometry("1080x760")
-        self.root.minsize(780, 560)
+        self.root.title("Telegram PC Bridge  •  Windows 11")
+        self.root.geometry("1120x760")
+        self.root.minsize(900, 620)
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
         self.client = None
         self.events = queue.Queue()
         config = self.load_config()
-        self.token = tk.StringVar(value=config.get("token", ""))
-        self.allowed_user = tk.StringVar(value=str(config.get("allowed_user_id", "")))
-        self.status = tk.StringVar(value="Остановлен")
+        self.token = ctk.StringVar(value=config.get("token", ""))
+        self.allowed_user = ctk.StringVar(value=str(config.get("allowed_user_id", "")))
+        self.status = ctk.StringVar(value="Остановлен")
         self.build_ui()
         self.root.after(100, self.process_events)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def build_ui(self):
-        style = ttk.Style()
-        if "clam" in style.theme_names(): style.theme_use("clam")
-        style.configure("TButton", padding=(12, 8))
-        style.configure("Accent.TButton", padding=(14, 9), font=("TkDefaultFont", 10, "bold"))
-        main = ttk.Frame(self.root, padding=18); main.pack(fill="both", expand=True)
-        ttk.Label(main, text="Telegram → PC Remote Control v3", font=("TkDefaultFont", 20, "bold")).pack(anchor="w")
-        ttk.Label(main, text="Безопасный allow-list: Telegram-команды управляют только заранее разрешёнными действиями.").pack(anchor="w", pady=(3, 16))
+        self.root.configure(fg_color=("#f3f6fb", "#0b0f14"))
+        shell = ctk.CTkFrame(self.root, fg_color="transparent")
+        shell.pack(fill="both", expand=True, padx=28, pady=24)
 
-        connection = ttk.LabelFrame(main, text=" Подключение ", padding=10); connection.pack(fill="x")
-        ttk.Label(connection, text="Bot Token:").grid(row=0,column=0,sticky="w")
-        ttk.Entry(connection,textvariable=self.token,show="•").grid(row=0,column=1,sticky="ew",padx=8)
-        ttk.Label(connection,text="Ваш Telegram User ID:").grid(row=1,column=0,sticky="w",pady=(8,0))
-        ttk.Entry(connection,textvariable=self.allowed_user).grid(row=1,column=1,sticky="ew",padx=8,pady=(8,0))
-        connection.columnconfigure(1,weight=1)
-        ttk.Button(connection,text="▶ Запустить",style="Accent.TButton",command=self.start).grid(row=0,column=2,rowspan=2,padx=(4,0))
-        ttk.Button(connection,text="■ Стоп",command=self.stop).grid(row=0,column=3,rowspan=2,padx=(7,0))
+        header = ctk.CTkFrame(shell, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 18))
+        ctk.CTkLabel(header, text="Telegram PC Bridge", font=ctk.CTkFont(size=30, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(header, text="Удалённое управление ПК через Telegram  •  Windows 11 UI",
+                     text_color=("#5f6b7a", "#9aa6b2"), font=ctk.CTkFont(size=14)).pack(anchor="w", pady=(3, 0))
 
-        status_row=ttk.Frame(main); status_row.pack(fill="x",pady=10)
-        self.status_dot=tk.Label(status_row,text="●",fg="#888888"); self.status_dot.pack(side="left")
-        ttk.Label(status_row,textvariable=self.status).pack(side="left",padx=5)
-        ttk.Button(status_row,text="📂 Голосовые",command=self.open_downloads).pack(side="right")
-        ttk.Button(status_row,text="🧹 Очистить",command=self.clear_messages).pack(side="right",padx=7)
+        connection = ctk.CTkFrame(shell, corner_radius=16)
+        connection.pack(fill="x", pady=(0, 14))
+        ctk.CTkLabel(connection, text="ПОДКЛЮЧЕНИЕ", font=ctk.CTkFont(size=12, weight="bold"),
+                     text_color=("#64748b", "#94a3b8")).grid(row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(16, 6))
+        ctk.CTkLabel(connection, text="Bot Token").grid(row=1, column=0, sticky="w", padx=(18, 8), pady=7)
+        ctk.CTkEntry(connection, textvariable=self.token, show="•", height=40, corner_radius=10).grid(row=1, column=1, sticky="ew", padx=8, pady=7)
+        ctk.CTkLabel(connection, text="Telegram User ID").grid(row=2, column=0, sticky="w", padx=(18, 8), pady=7)
+        ctk.CTkEntry(connection, textvariable=self.allowed_user, height=40, corner_radius=10).grid(row=2, column=1, sticky="ew", padx=8, pady=7)
+        buttons = ctk.CTkFrame(connection, fg_color="transparent")
+        buttons.grid(row=1, column=2, rowspan=2, padx=(8, 18), pady=7)
+        ctk.CTkButton(buttons, text="▶  Запустить", width=130, height=40, corner_radius=10, command=self.start).pack(side="left", padx=4)
+        ctk.CTkButton(buttons, text="■  Стоп", width=100, height=40, corner_radius=10, fg_color=("gray70", "#303740"),
+                      hover_color=("gray60", "#3b4652"), command=self.stop).pack(side="left", padx=4)
+        connection.columnconfigure(1, weight=1)
 
-        info=ttk.LabelFrame(main,text=" Команды с телефона ",padding=8); info.pack(fill="x",pady=(0,10))
-        ttk.Label(info,text="Telegram-панель: файлы • окна • процессы • скриншоты • питание • службы • проекты • clipboard • hotkeys • оповещения • удалённый ввод").pack(anchor="w")
+        cards = ctk.CTkFrame(shell, fg_color="transparent")
+        cards.pack(fill="x", pady=(0, 14))
+        self.status_card = ctk.CTkFrame(cards, corner_radius=16)
+        self.status_card.pack(side="left", fill="x", expand=True, padx=(0, 7))
+        self.status_dot = ctk.CTkLabel(self.status_card, text="●", font=ctk.CTkFont(size=20), text_color="#888888")
+        self.status_dot.pack(side="left", padx=(18, 8), pady=16)
+        ctk.CTkLabel(self.status_card, textvariable=self.status, font=ctk.CTkFont(size=15, weight="bold")).pack(side="left")
+        ctk.CTkButton(self.status_card, text="📂  Открыть файлы", width=150, height=34, corner_radius=9,
+                      command=self.open_downloads).pack(side="right", padx=14)
 
-        box=ttk.LabelFrame(main,text=" Журнал ",padding=8); box.pack(fill="both",expand=True)
-        self.messages=tk.Text(box,wrap="word",state="disabled",font=("TkDefaultFont",10),padx=10,pady=10)
-        scroll=ttk.Scrollbar(box,command=self.messages.yview); self.messages.configure(yscrollcommand=scroll.set)
-        self.messages.pack(side="left",fill="both",expand=True); scroll.pack(side="right",fill="y")
-        ttk.Label(main,text="Важно: задайте свой User ID — тогда команды других пользователей будут заблокированы.").pack(anchor="w",pady=(9,0))
+        info = ctk.CTkFrame(cards, corner_radius=16)
+        info.pack(side="left", fill="x", expand=True, padx=(7, 0))
+        ctk.CTkLabel(info, text="🛡  Защищённый режим", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=18, pady=(14, 2))
+        ctk.CTkLabel(info, text="Allow-list команд • User ID • подтверждения опасных действий",
+                     text_color=("#5f6b7a", "#9aa6b2")).pack(anchor="w", padx=18, pady=(0, 14))
+
+        journal = ctk.CTkFrame(shell, corner_radius=16)
+        journal.pack(fill="both", expand=True)
+        top = ctk.CTkFrame(journal, fg_color="transparent")
+        top.pack(fill="x", padx=16, pady=(14, 7))
+        ctk.CTkLabel(top, text="Журнал активности", font=ctk.CTkFont(size=17, weight="bold")).pack(side="left")
+        ctk.CTkButton(top, text="🧹 Очистить", width=100, height=32, corner_radius=8, fg_color=("gray80", "#252c34"),
+                      hover_color=("gray70", "#303943"), command=self.clear_messages).pack(side="right")
+        self.messages = ctk.CTkTextbox(journal, corner_radius=10, border_width=0, font=ctk.CTkFont(size=13))
+        self.messages.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        self.messages.configure(state="disabled")
+
+        ctk.CTkLabel(shell, text="Конфигурация хранится локально и не отправляется в Git.",
+                     text_color=("#6b7280", "#7f8a96"), font=ctk.CTkFont(size=11)).pack(anchor="w", pady=(8, 0))
 
     def load_config(self):
         try:
             return json.loads(CONFIG.read_text(encoding="utf-8")) if CONFIG.exists() else {}
-        except Exception: return {}
+        except Exception:
+            return {}
 
     def save_config(self):
-        CONFIG.write_text(json.dumps({"token":self.token.get().strip(),"allowed_user_id":self.allowed_user.get().strip()},indent=2),encoding="utf-8")
+        CONFIG.write_text(json.dumps({"token": self.token.get().strip(), "allowed_user_id": self.allowed_user.get().strip()}, indent=2), encoding="utf-8")
 
     def start(self):
-        token=self.token.get().strip()
+        token = self.token.get().strip()
         if not token:
-            messagebox.showwarning("Token","Вставьте токен Telegram-бота."); return
-        uid=self.allowed_user.get().strip()
+            messagebox.showwarning("Token", "Вставьте токен Telegram-бота.")
+            return
+        uid = self.allowed_user.get().strip()
         if uid and not uid.lstrip("-").isdigit():
-            messagebox.showwarning("User ID","Telegram User ID должен быть числом."); return
-        if self.client and self.client.running: return
+            messagebox.showwarning("User ID", "Telegram User ID должен быть числом.")
+            return
+        if self.client and self.client.running:
+            return
         self.save_config()
-        self.client=TelegramBotClient(token,self.queue_message,self.queue_status,uid or None)
+        self.client = TelegramBotClient(token, self.queue_message, self.queue_status, uid or None)
         self.client.start()
 
     def stop(self):
-        if self.client: self.client.stop()
-    def queue_message(self,message): self.events.put(("message",message))
-    def queue_status(self,state,text): self.events.put(("status",state,text))
+        if self.client:
+            self.client.stop()
+
+    def queue_message(self, message):
+        self.events.put(("message", message))
+
+    def queue_status(self, state, text):
+        self.events.put(("status", state, text))
 
     def process_events(self):
         try:
             while True:
-                event=self.events.get_nowait()
-                self.add_message(event[1]) if event[0]=="message" else self.set_status(event[1],event[2])
-        except queue.Empty: pass
-        self.root.after(100,self.process_events)
+                event = self.events.get_nowait()
+                if event[0] == "message":
+                    self.add_message(event[1])
+                else:
+                    self.set_status(event[1], event[2])
+        except queue.Empty:
+            pass
+        self.root.after(100, self.process_events)
 
-    def set_status(self,state,text):
-        colors={"online":"#28a745","connecting":"#e0a800","error":"#dc3545","offline":"#888888"}
-        self.status_dot.configure(fg=colors.get(state,"#888888")); self.status.set(text)
+    def set_status(self, state, text):
+        colors = {"online": "#22c55e", "connecting": "#f59e0b", "error": "#ef4444", "offline": "#94a3b8"}
+        self.status_dot.configure(text_color=colors.get(state, "#94a3b8"))
+        self.status.set(text)
 
-    def add_message(self,msg):
-        name=msg.get("first_name") or msg.get("username") or str(msg.get("user_id"))
-        icons={"voice":"🎤","text":"📱","result":"⚙","security":"🛡"}
-        text=f"{icons.get(msg['type'],'•')} {name} | {msg['text']}\n"
-        if msg.get("file"): text+=f"Файл: {msg['file']}\n"
-        text+=f"Chat ID: {msg.get('chat_id')}  User ID: {msg.get('user_id')}\n\n"
-        self.messages.configure(state="normal"); self.messages.insert("end",text); self.messages.see("end"); self.messages.configure(state="disabled")
+    def add_message(self, msg):
+        name = msg.get("first_name") or msg.get("username") or str(msg.get("user_id"))
+        icons = {"voice": "🎤", "text": "📱", "result": "⚙️", "security": "🛡️"}
+        text = f"{icons.get(msg['type'], '•')}  {name}  |  {msg['text']}\n"
+        if msg.get("file"):
+            text += f"Файл: {msg['file']}\n"
+        text += f"Chat ID: {msg.get('chat_id')}  •  User ID: {msg.get('user_id')}\n\n"
+        self.messages.configure(state="normal")
+        self.messages.insert("end", text)
+        self.messages.see("end")
+        self.messages.configure(state="disabled")
         self.root.bell()
 
     def clear_messages(self):
-        self.messages.configure(state="normal"); self.messages.delete("1.0","end"); self.messages.configure(state="disabled")
+        self.messages.configure(state="normal")
+        self.messages.delete("1.0", "end")
+        self.messages.configure(state="disabled")
 
     def open_downloads(self):
-        folder=Path(__file__).with_name("downloads"); folder.mkdir(exist_ok=True)
+        folder = Path(__file__).with_name("downloads")
+        folder.mkdir(exist_ok=True)
         try:
-            if sys.platform.startswith("win"): os.startfile(folder)
-            elif sys.platform=="darwin": subprocess.Popen(["open",folder])
-            else: subprocess.Popen(["xdg-open",folder])
-        except Exception as exc: messagebox.showerror("Папка",str(exc))
+            if sys.platform.startswith("win"):
+                os.startfile(folder)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", folder])
+            else:
+                subprocess.Popen(["xdg-open", folder])
+        except Exception as exc:
+            messagebox.showerror("Папка", str(exc))
 
     def close(self):
-        self.stop(); self.root.destroy()
+        self.stop()
+        self.root.destroy()
