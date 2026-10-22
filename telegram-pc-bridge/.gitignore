@@ -6,3 +6,5 @@ venv/
 .vscode/
 config.json
 downloads/
+audit.log
+project_logs/
