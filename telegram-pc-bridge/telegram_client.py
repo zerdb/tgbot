@@ -53,6 +53,11 @@ class TelegramBotClient:
         try:
             me = self.test()
             self.on_status("online", f"Бот @{me.get('username', '')} подключён")
+            if self.allowed_user_id:
+                try:
+                    self.send_message(self.allowed_user_id, "🟢 PC Bridge запущен. Панель управления готова.")
+                except Exception as exc:
+                    self.on_status("error", f"Bridge подключён, но меню не отправлено: {exc}")
         except Exception as exc:
             self.running = False
             self.on_status("error", f"Ошибка подключения: {exc}")
@@ -61,17 +66,20 @@ class TelegramBotClient:
         while self.running:
             try:
                 updates = self.api("getUpdates", {
-                    "offset": self.offset, "timeout": 2,
+                    "offset": self.offset, "timeout": 0,
                     "allowed_updates": json.dumps(["message"])
-                }, timeout=5)
+                }, timeout=3)
                 for update in updates:
                     self.offset = update["update_id"] + 1
                     message = update.get("message")
                     if message:
                         self._handle_message(message)
+                if not updates:
+                    self.stop_event.wait(0.7)
             except Exception as exc:
-                if self.running:
+                if self.running and not self.stop_event.is_set():
                     self.on_status("error", f"Ошибка связи: {exc}")
+                    self.stop_event.wait(1.0)
 
         self.on_status("offline", "Прослушивание остановлено")
 
