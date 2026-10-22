@@ -17,6 +17,7 @@ class TelegramBotClient:
         self.running = False
         self.offset = 0
         self.thread = None
+        self.stop_event = threading.Event()
         self.controller = PCController()
         self.download_dir = Path(__file__).with_name("downloads")
         self.download_dir.mkdir(exist_ok=True)
@@ -30,10 +31,27 @@ class TelegramBotClient:
             raise RuntimeError(payload.get("description", "Telegram API error"))
         return payload["result"]
 
+    def keyboard(self):
+        return {
+            "keyboard": [
+                [{"text": "🖥 Статус ПК"}, {"text": "🧩 Приложения"}],
+                [{"text": "📝 Блокнот"}, {"text": "🧮 Калькулятор"}],
+                [{"text": "📁 Проводник"}, {"text": "🖥 Рабочий стол"}],
+                [{"text": "📥 Загрузки"}, {"text": "📄 Документы"}],
+                [{"text": "❓ Помощь"}]
+            ],
+            "resize_keyboard": True,
+            "is_persistent": True
+        }
+
     def send_message(self, chat_id, text):
         chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)] or [""]
         for chunk in chunks:
-            self.api("sendMessage", {"chat_id": chat_id, "text": chunk}, timeout=15)
+            self.api("sendMessage", {
+                "chat_id": chat_id,
+                "text": chunk,
+                "reply_markup": json.dumps(self.keyboard(), ensure_ascii=False)
+            }, timeout=15)
 
     def test(self):
         return self.api("getMe", timeout=10)
@@ -41,12 +59,15 @@ class TelegramBotClient:
     def start(self):
         if self.running:
             return
+        self.stop_event.clear()
         self.running = True
         self.thread = threading.Thread(target=self._poll, daemon=True)
         self.thread.start()
 
     def stop(self):
         self.running = False
+        self.stop_event.set()
+        self.on_status("offline", "Прослушивание остановлено")
 
     def _poll(self):
         self.on_status("connecting", "Подключение к Telegram...")
@@ -103,8 +124,20 @@ class TelegramBotClient:
         if "text" in message:
             text = message["text"]
             self.on_message({**base, "type": "text", "text": text})
-            if text.startswith("/"):
-                ok, reply = self.controller.execute(text)
+            button_commands = {
+                "🖥 Статус ПК": "/status",
+                "🧩 Приложения": "/apps",
+                "📝 Блокнот": "/run notepad",
+                "🧮 Калькулятор": "/run calculator",
+                "📁 Проводник": "/run explorer",
+                "🖥 Рабочий стол": "/files desktop",
+                "📥 Загрузки": "/files downloads",
+                "📄 Документы": "/files documents",
+                "❓ Помощь": "/help",
+            }
+            command = button_commands.get(text, text)
+            if command.startswith("/"):
+                ok, reply = self.controller.execute(command)
                 try:
                     self.send_message(chat["id"], reply)
                     self.on_message({**base, "type": "result", "text": ("SUCCESS: " if ok else "FAILED: ") + reply})
