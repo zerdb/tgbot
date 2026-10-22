@@ -1,7 +1,9 @@
-import tkinter as tk
+import customtkinter as ctk
+
 from app import TelegramBridgeApp
 
+
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = ctk.CTk()
     TelegramBridgeApp(root)
     root.mainloop()
