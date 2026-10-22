@@ -52,7 +52,7 @@ class TelegramBridgeApp:
         ttk.Button(status_row,text="🧹 Очистить",command=self.clear_messages).pack(side="right",padx=7)
 
         info=ttk.LabelFrame(main,text=" Команды с телефона ",padding=8); info.pack(fill="x",pady=(0,10))
-        ttk.Label(info,text="/status   /apps   /run notepad   /files desktop   /files downloads   /help").pack(anchor="w")
+        ttk.Label(info,text="В Telegram появится панель: 🖥 Статус • 📝 Блокнот • 🧮 Калькулятор • 📁 Проводник • 📂 Файлы").pack(anchor="w")
 
         box=ttk.LabelFrame(main,text=" Журнал ",padding=8); box.pack(fill="both",expand=True)
         self.messages=tk.Text(box,wrap="word",state="disabled",font=("TkDefaultFont",10),padx=10,pady=10)
