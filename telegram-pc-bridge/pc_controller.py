@@ -48,6 +48,10 @@ class PCController:
             "/apps — разрешённые приложения\n"
             "/run <имя> — запустить приложение\n"
             "/files <папка> — показать файлы\n"
+            "/processes — список активных процессов\n"
+            "/stop <имя> — остановить только разрешённое приложение\n"
+            "/lock — заблокировать Windows\n"
+            "/minimize_all — свернуть все окна\n"
             "/help — эта справка\n\n"
             f"Приложения: {apps}\n"
             f"Папки: {folders}"
@@ -68,6 +72,14 @@ class PCController:
             return self.run_app(arg)
         if command == "/files":
             return self.list_files(arg)
+        if command == "/processes":
+            return True, self.processes()
+        if command == "/stop":
+            return self.stop_allowed_app(arg)
+        if command == "/lock":
+            return self.lock_windows()
+        if command == "/minimize_all":
+            return self.minimize_all()
         return False, "❌ Неизвестная команда. Отправьте /help."
 
     def status(self):
@@ -106,6 +118,75 @@ class PCController:
     @staticmethod
     def _gb(value):
         return f"{value / (1024 ** 3):.1f}"
+
+    def processes(self):
+        try:
+            rows = []
+            for proc in psutil.process_iter(["pid", "name", "memory_info"]):
+                try:
+                    info = proc.info
+                    memory = (info["memory_info"].rss / (1024 ** 2)) if info["memory_info"] else 0
+                    rows.append((memory, info["pid"], info["name"] or "?"))
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            rows.sort(reverse=True)
+            lines = ["📊 ТОП ПРОЦЕССОВ ПО RAM", "━━━━━━━━━━━━━━━━━━"]
+            for memory, pid, name in rows[:20]:
+                lines.append(f"• {name} | PID {pid} | {memory:.1f} MB")
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"❌ Не удалось получить процессы: {exc}"
+
+    def stop_allowed_app(self, name):
+        if not name:
+            return False, "❌ Укажите приложение. Пример: /stop notepad"
+        if name not in self.allowed_apps:
+            return False, f"⛔ Остановка «{name}» не разрешена. Доступны: {', '.join(self.allowed_apps)}"
+        target_names = {
+            "notepad": {"notepad.exe"},
+            "calculator": {"CalculatorApp.exe", "calc.exe"},
+            "explorer": {"explorer.exe"},
+        }
+        names = target_names.get(name, {Path(self.allowed_apps[name][0]).name.lower()})
+        stopped = 0
+        try:
+            for proc in psutil.process_iter(["name"]):
+                proc_name = (proc.info["name"] or "").lower()
+                if proc_name in {n.lower() for n in names}:
+                    try:
+                        proc.terminate()
+                        stopped += 1
+                    except psutil.AccessDenied:
+                        return False, f"❌ Нет прав на остановку процесса {proc.pid}."
+                    except psutil.NoSuchProcess:
+                        pass
+            if stopped:
+                return True, f"✅ «{name}»: остановлено процессов — {stopped}."
+            return False, f"ℹ️ «{name}» сейчас не запущено."
+        except Exception as exc:
+            return False, f"❌ Ошибка остановки «{name}»: {exc}"
+
+    def lock_windows(self):
+        if not sys.platform.startswith("win"):
+            return False, "❌ /lock доступна только в Windows."
+        try:
+            if ctypes.windll.user32.LockWorkStation():
+                return True, "🔒 Компьютер заблокирован."
+            return False, "❌ Windows не подтвердила блокировку."
+        except Exception as exc:
+            return False, f"❌ Не удалось заблокировать Windows: {exc}"
+
+    def minimize_all(self):
+        if not sys.platform.startswith("win"):
+            return False, "❌ /minimize_all доступна только в Windows."
+        try:
+            ctypes.windll.user32.keybd_event(0x5B, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(0x44, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(0x44, 2, 0, 0)
+            ctypes.windll.user32.keybd_event(0x5B, 2, 0, 0)
+            return True, "🖥 Все окна свернуты."
+        except Exception as exc:
+            return False, f"❌ Не удалось свернуть окна: {exc}"
 
     def run_app(self, name):
         if not name:
