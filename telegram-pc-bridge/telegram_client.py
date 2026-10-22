@@ -3,6 +3,7 @@ import socket
 import threading
 import urllib.parse
 import urllib.request
+import urllib.parse
 from pathlib import Path
 from datetime import datetime
 from pc_controller import PCController
@@ -34,7 +35,7 @@ class TelegramBotClient:
         m={
         "menu_pc":[[("🖥 Статус","cmd:/status"),("📸 Скриншот","cmd:/screenshot")],[("🔒 Блокировка","confirm:/lock"),("🖥 Свернуть всё","confirm:/minimize_all")],[("⬅️ Назад","menu:root")]],
         "menu_monitor":[[("📊 Процессы","cmd:/processes"),("💽 Диски","cmd:/drives")],[("🌐 Сеть","cmd:/network"),("⬅️ Назад","menu:root")]],
-        "menu_files":[[("📂 Рабочий стол","cmd:/files desktop"),("📥 Загрузки","cmd:/files downloads")],[("📄 Документы","cmd:/files documents"),("⬅️ Назад","menu:root")]],
+        "menu_files":[[("📂 Рабочий стол","files:desktop"),("📥 Загрузки","files:downloads")],[("📄 Документы","files:documents"),("⬆️ Файл → ПК","info:upload")],[("⬅️ Назад","menu:root")]],
         "menu_windows":[[("🪟 Список окон","cmd:/windows"),("🖥 Свернуть всё","confirm:/minimize_all")],[("⬅️ Назад","menu:root")]],
         "menu_apps":[[("📝 Блокнот","cmd:/run notepad"),("🧮 Калькулятор","cmd:/run calculator")],[("📁 Проводник","cmd:/run explorer"),("⛔ Стоп…","info:stop")],[("⬅️ Назад","menu:root")]],
         "menu_projects":[[("📦 Список","cmd:/projects")],[("▶️ Tetris","cmd:/project tkinter-tetris"),("▶️ Sorter","cmd:/project tkinter-file-sorter")],[("⬅️ Назад","menu:root")]],
@@ -130,6 +131,33 @@ class TelegramBotClient:
             self.edit_menu(cid,msg["message_id"],"🎛 Раздел: "+data[5:],self.subkeyboard(data)); return
         if data=="info:stop": self.send_message(cid,"⛔ Для остановки доступны только allow-list: /stop notepad, /stop calculator, /stop explorer."); return
         if data=="info:clipset": self.send_message(cid,"✏️ Используй /clip_set <текст> — запись ограничена явной командой."); return
+        if data=="info:upload": self.send_message(cid,"⬆️ Просто отправь мне файл как документ в Telegram. Он будет сохранён в Windows Downloads."); return
+        if data.startswith("files:"):
+            folder=data.split(":",1)[1]
+            ok, listing=self.controller.list_files(folder)
+            buttons=[]
+            if ok:
+                root=self.controller.allowed_folders.get(folder)
+                if root:
+                    try:
+                        for p in sorted(root.iterdir(), key=lambda x:x.name.lower())[:40]:
+                            if p.is_file():
+                                rel=f"{folder}/{p.name}"
+                                buttons.append([{"text":("📄 "+p.name)[:60],"callback_data":"file:"+urllib.parse.quote(rel,safe="")[:50]}])
+                    except Exception:
+                        pass
+            buttons.append([{"text":"⬅️ Назад","callback_data":"menu_files"}])
+            self.edit_menu(cid,msg["message_id"],listing+"\\n\\n👇 Нажми файл, чтобы отправить его в Telegram:",{"inline_keyboard":buttons})
+            return
+        if data.startswith("file:"):
+            raw=urllib.parse.unquote(data[5:])
+            ok_path,path=self.controller.download_path(raw)
+            if ok_path:
+                self.send_document(cid,Path(path))
+                self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id"),"action":"/download "+raw},True,"📤 Файл отправлен.")
+            else:
+                self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id"),"action":"/download "+raw},False,path)
+            return
         if data.startswith("confirm:"):
             action=data[8:]; self.send_message(cid,f"⚠️ Подтвердить действие?\n{action}",{"inline_keyboard":[[{"text":"⚠️ Подтвердить","callback_data":"yes:"+action},{"text":"❌ Отмена","callback_data":"cancel"}]]}); return
         if data=="cancel": self.answer_callback(q["id"],"Отменено"); return
@@ -169,7 +197,9 @@ class TelegramBotClient:
     def _receive_upload(self,chat_id,doc):
         try:
             info=self.api("getFile",{"file_id":doc["file_id"]}); url=f"{API_ROOT}/file/bot{self.token}/{info['file_path']}"
-            name=Path(doc.get("file_name","upload.bin")).name; dest=self.download_dir/name
+            name=Path(doc.get("file_name","upload.bin")).name
+            dest=self.controller.allowed_folders["downloads"] / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
             with urllib.request.urlopen(url,timeout=30) as r: dest.write_bytes(r.read())
-            self.send_message(chat_id,f"✅ Файл сохранён в разрешённую папку downloads: {dest.name}")
+            self.send_message(chat_id,f"✅ Файл сохранён на ПК в Downloads: {dest.name}",self.keyboard())
         except Exception as e:self.send_message(chat_id,f"❌ Upload: {e}")
