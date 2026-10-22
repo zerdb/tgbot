@@ -61,9 +61,9 @@ class TelegramBotClient:
         while self.running:
             try:
                 updates = self.api("getUpdates", {
-                    "offset": self.offset, "timeout": 25,
+                    "offset": self.offset, "timeout": 2,
                     "allowed_updates": json.dumps(["message"])
-                }, timeout=32)
+                }, timeout=5)
                 for update in updates:
                     self.offset = update["update_id"] + 1
                     message = update.get("message")
