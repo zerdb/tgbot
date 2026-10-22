@@ -14,8 +14,8 @@ CONFIG = Path(__file__).with_name("config.json")
 class TelegramBridgeApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Telegram PC Bridge • Remote Control")
-        self.root.geometry("960x690")
+        self.root.title("Telegram PC Bridge v3 • Remote Control")
+        self.root.geometry("1080x760")
         self.root.minsize(780, 560)
         self.client = None
         self.events = queue.Queue()
@@ -33,7 +33,7 @@ class TelegramBridgeApp:
         style.configure("TButton", padding=(12, 8))
         style.configure("Accent.TButton", padding=(14, 9), font=("TkDefaultFont", 10, "bold"))
         main = ttk.Frame(self.root, padding=18); main.pack(fill="both", expand=True)
-        ttk.Label(main, text="Telegram → PC Remote Control", font=("TkDefaultFont", 20, "bold")).pack(anchor="w")
+        ttk.Label(main, text="Telegram → PC Remote Control v3", font=("TkDefaultFont", 20, "bold")).pack(anchor="w")
         ttk.Label(main, text="Безопасный allow-list: Telegram-команды управляют только заранее разрешёнными действиями.").pack(anchor="w", pady=(3, 16))
 
         connection = ttk.LabelFrame(main, text=" Подключение ", padding=10); connection.pack(fill="x")
@@ -52,7 +52,7 @@ class TelegramBridgeApp:
         ttk.Button(status_row,text="🧹 Очистить",command=self.clear_messages).pack(side="right",padx=7)
 
         info=ttk.LabelFrame(main,text=" Команды с телефона ",padding=8); info.pack(fill="x",pady=(0,10))
-        ttk.Label(info,text="В Telegram появится панель: 🖥 Статус • 📝 Блокнот • 🧮 Калькулятор • 📁 Проводник • 📂 Файлы").pack(anchor="w")
+        ttk.Label(info,text="Telegram-панель: файлы • окна • процессы • скриншоты • питание • службы • проекты • clipboard • hotkeys • оповещения • удалённый ввод").pack(anchor="w")
 
         box=ttk.LabelFrame(main,text=" Журнал ",padding=8); box.pack(fill="both",expand=True)
         self.messages=tk.Text(box,wrap="word",state="disabled",font=("TkDefaultFont",10),padx=10,pady=10)
