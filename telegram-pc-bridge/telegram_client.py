@@ -239,6 +239,17 @@ class TelegramBotClient:
 
     def _message(self, message):
         if not self._authorized(message):
+            user = message.get("from", {})
+            self._audit(user.get("id"), "UNAUTHORIZED message", "BLOCKED")
+            if self.allowed_user_id:
+                try:
+                    self.send_message(
+                        self.allowed_user_id,
+                        f"🛡 Заблокирована попытка доступа: user_id={user.get('id')} username=@{user.get('username', '')}",
+                        self.keyboard(),
+                    )
+                except Exception:
+                    pass
             return
         chat = message.get("chat", {})
         base = {
@@ -301,6 +312,8 @@ class TelegramBotClient:
 
     def _callback(self, query):
         if not self._authorized(query):
+            user = query.get("from", {})
+            self._audit(user.get("id"), "UNAUTHORIZED callback", "BLOCKED")
             return
         data = query.get("data", "")
         message = query.get("message", {})
