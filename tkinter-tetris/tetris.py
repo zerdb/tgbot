@@ -210,7 +210,7 @@ class Tetris(tk.Tk):
 
         self.canvas.create_text(sx, 355, text="Управление", anchor="nw", fill="#e6e8f0", font=("TkDefaultFont", 11, "bold"))
         controls = "← → / A D   движение\n↓ / S       вниз\n↑ / W / X   поворот\nSpace       сброс\nP / Esc     пауза\nR           заново"
-        self.canvas.create_text(sx, 382, text=controls, anchor="nw", fill="#9fa6b8", font=("TkFixedFont", 9), spacing1=3)
+        self.canvas.create_text(sx, 382, text=controls, anchor="nw", fill="#9fa6b8", font=("TkFixedFont", 9))
 
         if self.paused or self.game_over:
             self.canvas.create_rectangle(28, 230, WIDTH - 28, 370, fill="#171923", outline="#555d73", width=2)
