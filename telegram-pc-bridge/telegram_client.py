@@ -145,6 +145,9 @@ class TelegramBotClient:
                 "🖥 Свернуть всё": "/minimize_all",
                 "❓ Помощь": "/help",
             }
+            if text == "⛔ Стоп приложения":
+                self.send_message(chat["id"], "⛔ Для безопасности укажи приложение командой /stop notepad, /stop calculator или /stop explorer.")
+                return
             command = button_commands.get(text, text)
             if command.startswith("/"):
                 ok, reply = self.controller.execute(command)
