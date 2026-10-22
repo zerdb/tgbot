@@ -268,9 +268,11 @@ class TelegramBotClient:
     def _execute_and_send(self, chat_id, base, command):
         ok, reply = self.controller.execute(command)
         if reply.startswith("SCREENSHOT:"):
-            mode = reply.split(":", 1)[1].split()[0]
-            delay = 3 if "3" in reply.split(":", 1)[1].split()[1:] else 0
-            path, error = self.controller.screenshot(mode=mode, delay=delay)
+            parts = reply.split(":", 1)[1].split()
+            mode = parts[0] if parts else "full"
+            monitor = int(parts[1]) if mode == "monitor" and len(parts) > 1 and parts[1].isdigit() else 0
+            delay = 3 if "3" in parts[1:] else 0
+            path, error = self.controller.screenshot(mode=mode, monitor=monitor, delay=delay)
             if path:
                 self.send_photo(chat_id, path)
                 self._result(base, True, "📸 Скриншот отправлен.")
@@ -511,8 +513,9 @@ class TelegramBotClient:
         if reply.startswith("SCREENSHOT:"):
             parts = reply.split(":", 1)[1].split()
             mode = parts[0] if parts else "full"
-            delay = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
-            path, error = self.controller.screenshot(mode=mode, delay=delay)
+            monitor = int(parts[1]) if mode == "monitor" and len(parts) > 1 and parts[1].isdigit() else 0
+            delay = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+            path, error = self.controller.screenshot(mode=mode, monitor=monitor, delay=delay)
             if path:
                 self.send_photo(chat_id, path)
                 self._result(base, True, "📸 Скриншот отправлен.")
