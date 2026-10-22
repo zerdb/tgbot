@@ -514,14 +514,33 @@ class PCController:
         if not path:
             return False, "⛔ Проект не входит в allow-list."
         try:
-            python_exe = sys.executable
+            log_dir = Path(__file__).with_name("project_logs")
+            log_dir.mkdir(exist_ok=True)
+            log_path = log_dir / f"{name}.log"
+            log = log_path.open("a", encoding="utf-8")
+            log.write("\n\n===== START " + time.strftime("%Y-%m-%d %H:%M:%S") + " =====\n")
+            log.flush()
             subprocess.Popen(
-                [python_exe, str(path)],
+                [sys.executable, str(path)],
                 cwd=str(path.parent),
+                stdout=log,
+                stderr=subprocess.STDOUT,
                 creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             )
-            return True, f"✅ Проект {name} запущен."
+            return True, f"✅ Проект {name} запущен. Лог: project_logs/{name}.log"
         except Exception as exc:
+            return False, f"❌ {exc}"
+
+    def project_log(self, name, lines=40):
+        if name not in self.allowed_projects:
+            return False, "⛔ Проект не входит в allow-list."
+        path = Path(__file__).with_name("project_logs") / f"{name}.log"
+        if not path.exists():
+            return False, "📋 Лог проекта пока пуст."
+        try:
+            data = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            return True, f"📋 ЛОГ {name}\n━━━━━━━━━━━━━━━━━━\n" + "\n".join(data[-lines:])
+        except OSError as exc:
             return False, f"❌ {exc}"
 
     def drives(self):
