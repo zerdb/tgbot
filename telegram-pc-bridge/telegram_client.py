@@ -24,14 +24,14 @@ class TelegramBotClient:
 
     def keyboard(self):
         return {"inline_keyboard":[
-            [{"text":"🖥 ПК","callback_data":"menu_pc"},{"text":"📊 Мониторинг","callback_data":"menu_monitor"}],
+            [{"text":"🖥 ПК","callback_data":"menu_pc"},{"text":"📸 Скриншот","callback_data":"cmd:/screenshot"}],\n            [{"text":"📊 Мониторинг","callback_data":"menu_monitor"}],
             [{"text":"📁 Файлы","callback_data":"menu_files"},{"text":"🪟 Окна","callback_data":"menu_windows"}],
             [{"text":"📱 Приложения","callback_data":"menu_apps"},{"text":"🧰 Проекты","callback_data":"menu_projects"}],
             [{"text":"⚙️ Система","callback_data":"menu_system"},{"text":"📋 Журнал","callback_data":"menu_log"}]]}
 
     def subkeyboard(self,kind):
         m={
-        "menu_pc":[[("🖥 Статус","cmd:/status"),("🔒 Блокировка","confirm:/lock")],[("🖥 Свернуть всё","confirm:/minimize_all"),("⬅️ Назад","menu:root")]],
+        "menu_pc":[[("🖥 Статус","cmd:/status"),("📸 Скриншот","cmd:/screenshot")],[("🔒 Блокировка","confirm:/lock"),("🖥 Свернуть всё","confirm:/minimize_all")],[("⬅️ Назад","menu:root")]],
         "menu_monitor":[[("📊 Процессы","cmd:/processes"),("💽 Диски","cmd:/drives")],[("🌐 Сеть","cmd:/network"),("⬅️ Назад","menu:root")]],
         "menu_files":[[("📂 Рабочий стол","cmd:/files desktop"),("📥 Загрузки","cmd:/files downloads")],[("📄 Документы","cmd:/files documents"),("⬅️ Назад","menu:root")]],
         "menu_windows":[[("🪟 Список окон","cmd:/windows"),("🖥 Свернуть всё","confirm:/minimize_all")],[("⬅️ Назад","menu:root")]],
