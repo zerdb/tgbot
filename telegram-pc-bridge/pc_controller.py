@@ -194,6 +194,16 @@ class PCController:
             return self.clip_set(arg)
         if command == "/hotkey":
             return self.hotkey(arg.lower())
+        if command == "/click":
+            parts = arg.split()
+            if len(parts) != 2:
+                return False, "❌ Формат: /click X Y"
+            try:
+                return self.mouse_click(int(parts[0]), int(parts[1]))
+            except ValueError:
+                return False, "❌ X и Y должны быть числами."
+        if command == "/type":
+            return self.type_text(arg)
         if command == "/projects":
             return True, self.projects()
         if command == "/project":
@@ -528,6 +538,31 @@ class PCController:
         try:
             pyperclip.copy(text)
             return True, "✅ Буфер обмена обновлён."
+        except Exception as exc:
+            return False, f"❌ {exc}"
+
+    def mouse_click(self, x, y):
+        if pyautogui is None:
+            return False, "❌ Нужен pyautogui."
+        try:
+            width, height = pyautogui.size()
+            if not (0 <= x < width and 0 <= y < height):
+                return False, f"❌ Координаты вне основного экрана: {width}x{height}."
+            pyautogui.click(x, y)
+            return True, f"🖱 Клик: {x}, {y}"
+        except Exception as exc:
+            return False, f"❌ {exc}"
+
+    def type_text(self, text):
+        if pyautogui is None:
+            return False, "❌ Нужен pyautogui."
+        if not text:
+            return False, "❌ Текст пуст."
+        if len(text) > 1000:
+            return False, "❌ Ввод ограничен 1000 символами."
+        try:
+            pyautogui.write(text, interval=0.01)
+            return True, "⌨️ Текст введён."
         except Exception as exc:
             return False, f"❌ {exc}"
 
