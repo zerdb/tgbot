@@ -143,9 +143,7 @@ class PCController:
             found = self.search_files(parts[0], parts[1])
             if not found:
                 return True, "🔎 Ничего не найдено."
-            return True, "🔎 НАЙДЕНО
-" + "
-".join("• " + (self.relative_key(item) or item.name) for item in found)
+            return True, "🔎 НАЙДЕНО\n" + "\n".join("• " + (self.relative_key(item) or item.name) for item in found)
         if command == "/rename":
             parts = arg.split(maxsplit=1)
             if len(parts) < 2:
