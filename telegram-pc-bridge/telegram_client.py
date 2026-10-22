@@ -1,8 +1,10 @@
 import json
 import secrets
 import socket
+import ssl
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -217,9 +219,13 @@ class TelegramBotClient:
                     self.stop_event.wait(0.5)
             except (TimeoutError, socket.timeout):
                 self.stop_event.wait(0.2)
+            except (urllib.error.URLError, ssl.SSLError, ConnectionError, OSError) as exc:
+                if self.running:
+                    self.on_status("connecting", "Связь с Telegram временно прервана — переподключение...")
+                    self.stop_event.wait(2)
             except Exception as exc:
                 if self.running:
-                    self.on_status("error", f"Ошибка связи: {exc}")
+                    self.on_status("connecting", "Временная ошибка связи — переподключение...")
                     self.stop_event.wait(2)
 
     def _authorized(self, message):
