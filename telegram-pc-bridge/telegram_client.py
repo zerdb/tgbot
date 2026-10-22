@@ -4,6 +4,7 @@ import threading
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from datetime import datetime
 from pc_controller import PCController
 
 API_ROOT="https://api.telegram.org"
@@ -13,7 +14,7 @@ class TelegramBotClient:
         self.token=token.strip(); self.on_message=on_message; self.on_status=on_status
         self.allowed_user_id=int(allowed_user_id) if str(allowed_user_id or "").strip() else None
         self.running=False; self.offset=0; self.thread=None; self.stop_event=threading.Event()
-        self.controller=PCController(); self.download_dir=Path(__file__).with_name("downloads"); self.download_dir.mkdir(exist_ok=True)
+        self.controller=PCController(); self.audit_file=Path(__file__).with_name("audit.log"); self.download_dir=Path(__file__).with_name("downloads"); self.download_dir.mkdir(exist_ok=True)
 
     def api(self,method,params=None,timeout=20):
         data=urllib.parse.urlencode(params or {}).encode(); req=urllib.request.Request(f"{API_ROOT}/bot{self.token}/{method}",data=data)
@@ -82,14 +83,23 @@ class TelegramBotClient:
     def _authorized(self,msg):
         return self.allowed_user_id is None or msg.get("from",{}).get("id")==self.allowed_user_id
 
+    def _audit(self, user_id, action, result):
+        try:
+            line = f"{datetime.now().isoformat(timespec='seconds')} | user={user_id} | {action} | {result}\\n"
+            self.audit_file.open("a", encoding="utf-8").write(line)
+        except Exception:
+            pass
+
     def _result(self,base,ok,text):
+        self._audit(base.get("user_id"), base.get("action", "command"), "SUCCESS" if ok else "FAILED")
         self.on_message({**base,"type":"result","text":("SUCCESS: " if ok else "FAILED: ")+text})
 
     def _message(self,msg):
         if not self._authorized(msg): return
-        chat=msg.get("chat",{}); base={"chat_id":chat.get("id"),"user_id":msg.get("from",{}).get("id"),"first_name":msg.get("from",{}).get("first_name","")}
+        chat=msg.get("chat",{}); base={"chat_id":chat.get("id"),"user_id":msg.get("from",{}).get("id"),"first_name":msg.get("from",{}).get("first_name",""),"action":""}
         if "text" in msg:
             text=msg["text"]
+            base["action"]=text
             if text in ("/start","/help"):
                 self.send_message(chat["id"],self.controller.help_text()); return
             if text.startswith("/"):
@@ -123,21 +133,21 @@ class TelegramBotClient:
             action=data[8:]; self.send_message(cid,f"⚠️ Подтвердить действие?\n{action}",{"inline_keyboard":[[{"text":"⚠️ Подтвердить","callback_data":"yes:"+action},{"text":"❌ Отмена","callback_data":"cancel"}]]}); return
         if data=="cancel": self.answer_callback(q["id"],"Отменено"); return
         if data.startswith("yes:"):
-            action=data[4:]; ok,reply=self.controller.execute(action); self.send_message(cid,reply,self.keyboard()); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id")} ,ok,reply); return
+            action=data[4:]; ok,reply=self.controller.execute(action); self.send_message(cid,reply,self.keyboard()); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id"),"action":action},ok,reply); return
         if data.startswith("cmd:"):
             cmd=data[4:]; ok,reply=self.controller.execute(cmd)
             if reply=="SCREENSHOT":
                 path,err=self.controller.screenshot()
-                if path:self.send_photo(cid,path); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id")},True,"📸 Скриншот отправлен.")
+                if path:self.send_photo(cid,path); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id"),"action":"/screenshot"},True,"📸 Скриншот отправлен.")
                 else:self.send_message(cid,err)
             elif reply.startswith("DOWNLOAD:"):
                 ok_path, path = self.controller.download_path(reply[9:])
                 if ok_path:
                     self.send_document(cid, Path(path))
-                    self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id")},True,"📤 Файл отправлен.")
+                    self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id"),"action":action},True,"📤 Файл отправлен.")
                 else:
                     self.send_message(cid,path)
-            else:self.send_message(cid,reply,self.keyboard()); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id")},ok,reply)
+            else:self.send_message(cid,reply,self.keyboard()); self._result({"chat_id":cid,"user_id":q.get("from",{}).get("id"),"action":cmd},ok,reply)
 
     def send_photo(self,chat_id,path):
         with open(path,"rb") as f:
