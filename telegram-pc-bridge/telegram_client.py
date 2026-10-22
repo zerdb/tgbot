@@ -39,6 +39,8 @@ class TelegramBotClient:
                 [{"text": "📝 Блокнот"}, {"text": "🧮 Калькулятор"}],
                 [{"text": "📁 Проводник"}, {"text": "🖥 Рабочий стол"}],
                 [{"text": "📥 Загрузки"}, {"text": "📄 Документы"}],
+                [{"text": "📊 Процессы"}, {"text": "⛔ Стоп приложения"}],
+                [{"text": "🔒 Заблокировать"}, {"text": "🖥 Свернуть всё"}],
                 [{"text": "❓ Помощь"}]
             ],
             "resize_keyboard": True,
@@ -138,6 +140,9 @@ class TelegramBotClient:
                 "🖥 Рабочий стол": "/files desktop",
                 "📥 Загрузки": "/files downloads",
                 "📄 Документы": "/files documents",
+                "📊 Процессы": "/processes",
+                "🔒 Заблокировать": "/lock",
+                "🖥 Свернуть всё": "/minimize_all",
                 "❓ Помощь": "/help",
             }
             command = button_commands.get(text, text)
