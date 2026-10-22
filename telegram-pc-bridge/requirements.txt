@@ -4,3 +4,4 @@ pyperclip>=1.9
 pywin32>=308
 pillow>=11.0,<13
 screeninfo>=0.8,<1
+customtkinter>=5.2,<6
