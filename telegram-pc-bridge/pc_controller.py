@@ -885,6 +885,35 @@ class PCController:
                 continue
         return None
 
+    def folder_items(self, key, sort_by="name"):
+        """Return a safe, sorted directory snapshot for Telegram pagination."""
+        target = self.resolve_allowed_path(key, must_exist=True, allow_root=True)
+        if not target or not target.is_dir():
+            return False, "❌ Папка не найдена или доступ запрещён.", []
+        try:
+            items = list(target.iterdir())
+            if sort_by == "date":
+                def sort_key(item):
+                    try:
+                        stamp = item.stat().st_mtime
+                    except OSError:
+                        stamp = 0
+                    return (not item.is_dir(), -stamp, item.name.casefold())
+            elif sort_by == "size":
+                def sort_key(item):
+                    try:
+                        size = item.stat().st_size if item.is_file() else 0
+                    except OSError:
+                        size = 0
+                    return (not item.is_dir(), -size, item.name.casefold())
+            else:
+                def sort_key(item):
+                    return (not item.is_dir(), item.name.casefold())
+            items.sort(key=sort_key)
+            return True, "", items
+        except (OSError, PermissionError) as exc:
+            return False, f"❌ Не удалось открыть папку: {exc}", []
+
     def list_files(self, key):
         folder = self._folder(key.split("/", 1)[0])
         target = self.resolve_allowed_path(key, must_exist=True, allow_root=True)
