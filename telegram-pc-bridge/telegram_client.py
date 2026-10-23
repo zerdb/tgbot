@@ -192,7 +192,7 @@ class TelegramBotClient:
                 self.send_message(
                     self.allowed_user_id,
                     "🔴 PC Bridge остановлен. Прослушивание команд отключено.",
-                    self.keyboard(),
+                    {"remove_keyboard": True},
                 )
             except Exception:
                 pass
