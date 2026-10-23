@@ -185,6 +185,17 @@ class TelegramBotClient:
         self.thread.start()
 
     def stop(self):
+        if not self.running:
+            return
+        if self.allowed_user_id:
+            try:
+                self.send_message(
+                    self.allowed_user_id,
+                    "🔴 PC Bridge остановлен. Прослушивание команд отключено.",
+                    self.keyboard(),
+                )
+            except Exception:
+                pass
         self.running = False
         self.stop_event.set()
         self.on_status("offline", "Прослушивание остановлено")
