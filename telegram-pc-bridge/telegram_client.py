@@ -36,6 +36,9 @@ class TelegramBotClient:
         self.next_alert_check = 0
         self.last_alert_at = 0
         self._state_lock = threading.Lock()
+        self.reconnect_count = 0
+        self._connection_lost = False
+        self.pending_actions = {}
 
     def api(self, method, params=None, timeout=20):
         data = urllib.parse.urlencode(params or {}).encode()
@@ -49,7 +52,7 @@ class TelegramBotClient:
     def keyboard(self):
         return {
             "inline_keyboard": [
-                [{"text": "🖥 Дашборд", "callback_data": "cmd:/status"},
+                [{"text": "🖥 Дашборд", "callback_data": "view:dashboard"},
                  {"text": "📸 Скриншоты", "callback_data": "menu_screenshot"}],
                 [{"text": "📊 Мониторинг", "callback_data": "menu_monitor"},
                  {"text": "⚙️ Система", "callback_data": "menu_system"}],
@@ -70,7 +73,8 @@ class TelegramBotClient:
             "menu_monitor": [
                 [("📊 Процессы", "view:processes"), ("💽 Диски", "cmd:/drives")],
                 [("🌐 Сеть", "cmd:/network"), ("🎮 GPU", "cmd:/gpu")],
-                [("📈 Полный статус", "cmd:/status"), ("⬅️ Назад", "menu:root")],
+                [("📈 Полный статус", "cmd:/status"), ("🖥 Дашборд", "view:dashboard")],
+                [("⬅️ Назад", "menu:root")],
             ],
             "menu_files": [
                 [("🖥 Рабочий стол", "files:desktop"), ("📥 Загрузки", "files:downloads")],
@@ -121,9 +125,10 @@ class TelegramBotClient:
                 [("ℹ️ Статус", "alerts:status"), ("⬅️ Назад", "menu:root")],
             ],
             "menu_control": [
-                [("📸 Скриншот", "menu_screenshot"), ("🖱 Клик", "info:click")],
+                [("🖥 Открыть пульт", "control:screen"), ("🔄 Обновить", "control:screen")],
                 [("⌨️ Ввод текста", "info:type"), ("📋 Буфер", "menu_clip")],
-                [("⬅️ Назад", "menu:root")],
+                [("Esc", "control:key:esc"), ("Enter", "control:key:enter")],
+                [("Alt+Tab", "control:key:alt_tab"), ("⬅️ Назад", "menu:root")],
             ],
             "menu_power": [
                 [("🔒 Заблокировать", "confirm:/lock"), ("🖥 Свернуть всё", "confirm:/minimize_all")],
@@ -206,6 +211,9 @@ class TelegramBotClient:
                     },
                     timeout=3,
                 )
+                if self._connection_lost:
+                    self._connection_lost = False
+                    self.on_status("online", f"Telegram подключён • переподключений: {self.reconnect_count}")
                 for update in updates:
                     self.offset = update["update_id"] + 1
                     if update.get("callback_query"):
@@ -219,13 +227,19 @@ class TelegramBotClient:
                     self.stop_event.wait(0.5)
             except (TimeoutError, socket.timeout):
                 self.stop_event.wait(0.2)
-            except (urllib.error.URLError, ssl.SSLError, ConnectionError, OSError) as exc:
+            except (urllib.error.URLError, ssl.SSLError, ConnectionError, OSError):
                 if self.running:
-                    self.on_status("connecting", "Связь с Telegram временно прервана — переподключение...")
+                    if not self._connection_lost:
+                        self.reconnect_count += 1
+                    self._connection_lost = True
+                    self.on_status("connecting", f"Переподключение к Telegram… попытка {self.reconnect_count}")
                     self.stop_event.wait(2)
-            except Exception as exc:
+            except Exception:
                 if self.running:
-                    self.on_status("connecting", "Временная ошибка связи — переподключение...")
+                    if not self._connection_lost:
+                        self.reconnect_count += 1
+                    self._connection_lost = True
+                    self.on_status("connecting", f"Временная ошибка связи — переподключение {self.reconnect_count}")
                     self.stop_event.wait(2)
 
     def _authorized(self, message):
@@ -267,6 +281,14 @@ class TelegramBotClient:
         if "text" in message:
             text = message["text"].strip()
             base["action"] = text
+            pending = self.pending_actions.pop(base["user_id"], None)
+            if pending and not text.startswith("/"):
+                action, key = pending
+                if action == "rename":
+                    ok, reply = self.controller.rename_file(key, text)
+                    self.send_message(chat["id"], reply, self.keyboard())
+                    self._result(base, ok, reply)
+                    return
             if text in ("/start", "/help"):
                 self.send_message(chat["id"], self.controller.help_text())
                 return
@@ -335,6 +357,18 @@ class TelegramBotClient:
             title = data.replace("menu_", "").replace("_", " ").title()
             self.edit_menu(chat_id, message["message_id"], f"🎛 {title}", self.subkeyboard(data))
             return
+        if data == "view:dashboard":
+            self._render_dashboard(chat_id, message["message_id"])
+            return
+        if data == "control:screen":
+            self._send_control_screen(chat_id)
+            return
+        if data.startswith("control:key:"):
+            key = data.split(":", 2)[2]
+            ok, reply = self.controller.hotkey(key)
+            self.answer_callback(query["id"], "Готово" if ok else "Ошибка")
+            self._audit(user_id, "control key " + key, "SUCCESS" if ok else "FAILED")
+            return
         if data.startswith("cmd:"):
             self._execute_and_edit(chat_id, message["message_id"], user_id, data[4:])
             return
@@ -391,6 +425,32 @@ class TelegramBotClient:
                 ok, reply = self.controller.delete_file(key)
                 self._audit(user_id, "delete " + key, "SUCCESS" if ok else "FAILED")
                 self.edit_menu(chat_id, message["message_id"], reply, self.subkeyboard("menu_files"))
+            return
+        if data.startswith("file_rename:"):
+            key = self.token_map.get(data[12:])
+            if key:
+                self.pending_actions[user_id] = ("rename", key)
+                self.send_message(chat_id, f"✏️ Пришли новое имя для:\n{key}\n\nТолько имя файла, без пути.", self.keyboard())
+            return
+        if data.startswith("file_copy:"):
+            key = self.token_map.get(data[10:])
+            if key:
+                self.edit_menu(chat_id, message["message_id"], f"📋 Куда скопировать?\n\n{key}", {
+                    "inline_keyboard": [
+                        [{"text": "🖥 Desktop", "callback_data": "copy_to:" + self._token((key, "desktop"))},
+                         {"text": "📥 Downloads", "callback_data": "copy_to:" + self._token((key, "downloads"))}],
+                        [{"text": "📄 Documents", "callback_data": "copy_to:" + self._token((key, "documents"))}],
+                        [{"text": "❌ Отмена", "callback_data": "menu_files"}],
+                    ]
+                })
+            return
+        if data.startswith("copy_to:"):
+            pair = self.token_map.get(data[8:])
+            if pair:
+                key, destination = pair
+                ok, reply = self.controller.copy_file(key, destination)
+                self._audit(user_id, f"copy {key} -> {destination}", "SUCCESS" if ok else "FAILED")
+                self.send_message(chat_id, reply, self.keyboard())
             return
         if data.startswith("file_archive:"):
             key = self.token_map.get(data[13:])
@@ -558,6 +618,43 @@ class TelegramBotClient:
             self.token_map.clear()
         return token
 
+    def _render_dashboard(self, chat_id, message_id):
+        markup = {
+            "inline_keyboard": [
+                [{"text": "🔄 Обновить", "callback_data": "view:dashboard"}],
+                [{"text": "📊 Процессы", "callback_data": "view:processes"},
+                 {"text": "💽 Диски", "callback_data": "cmd:/drives"}],
+                [{"text": "🌐 Сеть", "callback_data": "cmd:/network"},
+                 {"text": "🎮 GPU", "callback_data": "cmd:/gpu"}],
+                [{"text": "⬅️ Главное меню", "callback_data": "menu:root"}],
+            ]
+        }
+        self.edit_menu(chat_id, message_id, self.controller.dashboard(), markup)
+
+    def _send_control_screen(self, chat_id):
+        path, error = self.controller.screenshot(mode="full")
+        if not path:
+            self.send_message(chat_id, error, self.subkeyboard("menu_control"))
+            return
+        monitors = self.controller.monitor_records()
+        if monitors:
+            _, _, width, height = monitors[0]
+            caption = f"🎮 ПУЛЬТ ПК · {width}×{height}\nОбнови снимок после действия."
+        else:
+            caption = "🎮 ПУЛЬТ ПК\nОбнови снимок после действия."
+        markup = {
+            "inline_keyboard": [
+                [{"text": "🔄 Обновить", "callback_data": "control:screen"}],
+                [{"text": "⌨️ Ввод текста", "callback_data": "info:type"},
+                 {"text": "📋 Буфер", "callback_data": "menu_clip"}],
+                [{"text": "Esc", "callback_data": "control:key:esc"},
+                 {"text": "Enter", "callback_data": "control:key:enter"},
+                 {"text": "Alt+Tab", "callback_data": "control:key:alt_tab"}],
+                [{"text": "⬅️ Управление", "callback_data": "menu_control"}],
+            ]
+        }
+        self.send_photo(chat_id, path, caption=caption, markup=markup)
+
     def _render_folder(self, chat_id, message_id, key):
         ok, listing = self.controller.list_files(key)
         if not ok:
@@ -587,6 +684,8 @@ class TelegramBotClient:
         markup = {
             "inline_keyboard": [
                 [{"text": "📤 Отправить в Telegram", "callback_data": "file_send:" + self._token(key)}],
+                [{"text": "✏️ Переименовать", "callback_data": "file_rename:" + self._token(key)},
+                 {"text": "📋 Копировать", "callback_data": "file_copy:" + self._token(key)}],
                 [{"text": "📦 Создать ZIP", "callback_data": "file_archive:" + self._token(key)},
                  {"text": "📊 Инфо", "callback_data": "file_stats:" + self._token(key)}],
                 [{"text": "🗑 Удалить", "callback_data": "file_delete:" + self._token(key)}],
@@ -699,20 +798,28 @@ class TelegramBotClient:
         except Exception:
             pass
 
-    def send_photo(self, chat_id, path):
+    def send_photo(self, chat_id, path, caption="", markup=None):
         with open(path, "rb") as file:
-            self._multipart("sendPhoto", chat_id, "photo", Path(path).name, file.read())
+            self._multipart(
+                "sendPhoto", chat_id, "photo", Path(path).name, file.read(),
+                extra={"caption": caption, "reply_markup": json.dumps(markup, ensure_ascii=False) if markup else ""},
+            )
 
     def send_document(self, chat_id, path):
         with open(path, "rb") as file:
             self._multipart("sendDocument", chat_id, "document", Path(path).name, file.read())
 
-    def _multipart(self, method, chat_id, field, filename, content):
+    def _multipart(self, method, chat_id, field, filename, content, extra=None):
         boundary = "----PCBridgeBoundary"
         body = bytearray()
         body.extend(
             f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'.encode()
         )
+        for name, value in (extra or {}).items():
+            if value:
+                body.extend(
+                    f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode("utf-8")
+                )
         body.extend(
             f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
             f"Content-Type: application/octet-stream\r\n\r\n".encode()
