@@ -1,4 +1,5 @@
 import ctypes
+import re
 import getpass
 import os
 import platform
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import time
 import zipfile
+import winreg
 from pathlib import Path
 
 try:
@@ -92,6 +94,89 @@ class PCController:
                 "finder": ["open", str(Path.home())],
             }
         return {"files": ["xdg-open", str(Path.home())]}
+
+    def installed_apps(self):
+        """Return launchable Windows apps discovered from Start Menu shortcuts and App Paths."""
+        if os.name != "nt":
+            return []
+
+        apps = {}
+        start_roots = [
+            Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+            Path(os.environ.get("PROGRAMDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+        ]
+        ignored = {"uninstall", "readme", "help", "website", "license"}
+
+        for root in start_roots:
+            if not root.exists():
+                continue
+            try:
+                for shortcut in root.rglob("*.lnk"):
+                    name = shortcut.stem.strip()
+                    if not name or any(word in name.lower() for word in ignored):
+                        continue
+                    key = name.casefold()
+                    apps.setdefault(key, {"name": name, "kind": "shortcut", "target": str(shortcut)})
+            except OSError:
+                pass
+
+        registry_roots = [
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+        ]
+        for hive, base in registry_roots:
+            try:
+                with winreg.OpenKey(hive, base) as parent:
+                    count = winreg.QueryInfoKey(parent)[0]
+                    for index in range(count):
+                        try:
+                            sub = winreg.EnumKey(parent, index)
+                            with winreg.OpenKey(parent, sub) as item:
+                                target, _ = winreg.QueryValueEx(item, None)
+                            target = str(target).strip().strip('"')
+                            if not target or not Path(target).exists():
+                                continue
+                            name = Path(target).stem
+                            key = name.casefold()
+                            apps.setdefault(key, {"name": name, "kind": "exe", "target": target})
+                        except OSError:
+                            continue
+            except OSError:
+                pass
+
+        return sorted(apps.values(), key=lambda item: item["name"].casefold())
+
+    def launch_installed_app(self, target, kind):
+        if os.name != "nt":
+            return False, "⛔ Каталог приложений сейчас поддерживается только в Windows."
+        try:
+            target_path = Path(target)
+            if kind == "shortcut":
+                allowed_roots = [
+                    Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+                    Path(os.environ.get("PROGRAMDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+                ]
+                resolved = target_path.resolve()
+                if not target_path.exists() or not any(
+                    root.exists() and (resolved == root.resolve() or root.resolve() in resolved.parents)
+                    for root in allowed_roots
+                ):
+                    return False, "⛔ Ярлык больше не найден в меню Пуск."
+                os.startfile(str(target_path))
+                return True, f"✅ {target_path.stem} запущено."
+
+            discovered = {
+                str(Path(app["target"]).resolve()).casefold()
+                for app in self.installed_apps()
+                if app["kind"] == "exe"
+            }
+            resolved = str(target_path.resolve()).casefold()
+            if resolved not in discovered:
+                return False, "⛔ Приложение больше не найдено в системном каталоге."
+            subprocess.Popen([str(target_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True, f"✅ {target_path.stem} запущено."
+        except Exception as exc:
+            return False, f"❌ Не удалось запустить приложение: {exc}"
 
     def _find_projects(self):
         root = Path(__file__).resolve().parents[1]
