@@ -79,7 +79,7 @@ class TelegramBotClient:
             "menu_files": [
                 [("🖥 Рабочий стол", "files:desktop"), ("📥 Загрузки", "files:downloads")],
                 [("📄 Документы", "files:documents"), ("⬆️ Файл → ПК", "info:upload")],
-                [("🔎 Поиск", "info:search"), ("⬅️ Назад", "menu:root")],
+                [("🔎 Поиск", "files_search:downloads"), ("⬅️ Назад", "menu:root")],
             ],
             "menu_windows": [
                 [("🪟 Список окон", "view:windows"), ("🖥 Свернуть всё", "confirm:/minimize_all")],
@@ -252,10 +252,22 @@ class TelegramBotClient:
                     self.on_status("online", f"Telegram подключён • переподключений: {self.reconnect_count}")
                 for update in updates:
                     self.offset = update["update_id"] + 1
-                    if update.get("callback_query"):
-                        self._callback(update["callback_query"])
-                    elif update.get("message"):
-                        self._message(update["message"])
+                    try:
+                        if update.get("callback_query"):
+                            self._callback(update["callback_query"])
+                        elif update.get("message"):
+                            self._message(update["message"])
+                    except Exception as exc:
+                        self._audit(None, "update handler", "FAILED")
+                        if self.allowed_user_id:
+                            try:
+                                self.send_message(
+                                    self.allowed_user_id,
+                                    f"❌ Действие не выполнено: {type(exc).__name__}. Bridge продолжает работу.",
+                                    {"inline_keyboard": []},
+                                )
+                            except Exception:
+                                pass
                 if self.alerts_enabled and time.time() >= self.next_alert_check:
                     self._check_alerts()
                     self.next_alert_check = time.time() + 60
@@ -322,8 +334,17 @@ class TelegramBotClient:
                 action, key = pending
                 if action == "rename":
                     ok, reply = self.controller.rename_file(key, text)
-                    self.send_message(chat["id"], reply, self.keyboard())
+                    parent = "/".join(key.split("/")[:-1]) or key.split("/", 1)[0]
+                    self.send_message(
+                        chat["id"],
+                        reply,
+                        {"inline_keyboard": [[{"text": "📂 Вернуться в папку", "callback_data": "files_view:" + self._token((parent, 0, "name"))}]]},
+                    )
                     self._result(base, ok, reply)
+                    return
+                if action == "file_search":
+                    root_key = key or "downloads"
+                    self._send_file_search(chat["id"], root_key, text)
                     return
                 if action == "type":
                     ok, reply = self.controller.type_text(text)
@@ -404,7 +425,7 @@ class TelegramBotClient:
         self.answer_callback(query["id"])
 
         if data in ("menu:root", "menu_root"):
-            self.edit_menu(chat_id, message["message_id"], "🎛 PC BRIDGE v3\nВыбери раздел:", self.keyboard())
+            self.edit_menu(chat_id, message["message_id"], "🎛 PC BRIDGE v4\nВыбери раздел:", self.keyboard())
             return
         if data.startswith("menu_"):
             title = data.replace("menu_", "").replace("_", " ").title()
@@ -470,12 +491,33 @@ class TelegramBotClient:
             self._execute_and_edit(chat_id, message["message_id"], user_id, action)
             return
         if data.startswith("files:"):
-            self._render_folder(chat_id, message["message_id"], data.split(":", 1)[1])
+            self._render_folder(chat_id, message["message_id"], data.split(":", 1)[1], 0, "name")
+            return
+        if data.startswith("files_view:"):
+            state = self.token_map.get(data[11:])
+            if state:
+                key, page, sort_by = state
+                self._render_folder(chat_id, message["message_id"], key, page, sort_by)
+            return
+        if data.startswith("files_sort:"):
+            state = self.token_map.get(data[11:])
+            if state:
+                key, sort_by = state
+                self._render_folder(chat_id, message["message_id"], key, 0, sort_by)
+            return
+        if data.startswith("files_search:"):
+            key = data.split(":", 1)[1] or "downloads"
+            self.pending_actions[user_id] = ("file_search", key)
+            self.show_info_below_menu(
+                chat_id, message["message_id"],
+                f"🔎 Пришли часть имени файла или папки.\nОбласть поиска: {key}",
+                {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "files_view:" + self._token((key, 0, "name"))}]]},
+            )
             return
         if data.startswith("nav:"):
             key = self.token_map.get(data[4:])
             if key:
-                self._render_folder(chat_id, message["message_id"], key)
+                self._render_folder(chat_id, message["message_id"], key, 0, "name")
             return
         if data.startswith("file:"):
             key = self.token_map.get(data[5:])
@@ -496,7 +538,7 @@ class TelegramBotClient:
                     f"🗑 Удалить?\n\n{key}",
                     {"inline_keyboard": [[
                         {"text": "🗑 Да, удалить", "callback_data": "delete_yes:" + self._token(key)},
-                        {"text": "❌ Отмена", "callback_data": "menu:root"},
+                        {"text": "❌ Отмена", "callback_data": "file:" + self._token(key)},
                     ]]},
                 )
             return
@@ -505,13 +547,21 @@ class TelegramBotClient:
             if key:
                 ok, reply = self.controller.delete_file(key)
                 self._audit(user_id, "delete " + key, "SUCCESS" if ok else "FAILED")
-                self.edit_menu(chat_id, message["message_id"], reply, self.subkeyboard("menu_files"))
+                parent = "/".join(key.split("/")[:-1]) or key.split("/", 1)[0]
+                self.edit_menu(
+                    chat_id, message["message_id"], reply,
+                    {"inline_keyboard": [[{"text": "📂 Вернуться в папку", "callback_data": "files_view:" + self._token((parent, 0, "name"))}]]},
+                )
             return
         if data.startswith("file_rename:"):
             key = self.token_map.get(data[12:])
             if key:
                 self.pending_actions[user_id] = ("rename", key)
-                self.send_message(chat_id, f"✏️ Пришли новое имя для:\n{key}\n\nТолько имя файла, без пути.", self.keyboard())
+                self.show_info_below_menu(
+                    chat_id, message["message_id"],
+                    f"✏️ Пришли новое имя для:\n{key}\n\nТолько имя файла, без пути.",
+                    {"inline_keyboard": [[{"text": "❌ Отмена", "callback_data": "file:" + self._token(key)}]]},
+                )
             return
         if data.startswith("file_copy:"):
             key = self.token_map.get(data[10:])
@@ -531,20 +581,30 @@ class TelegramBotClient:
                 key, destination = pair
                 ok, reply = self.controller.copy_file(key, destination)
                 self._audit(user_id, f"copy {key} -> {destination}", "SUCCESS" if ok else "FAILED")
-                self.send_message(chat_id, reply, self.keyboard())
+                parent = "/".join(key.split("/")[:-1]) or key.split("/", 1)[0]
+                self.edit_menu(
+                    chat_id, message["message_id"], reply,
+                    {"inline_keyboard": [[{"text": "📂 Вернуться в папку", "callback_data": "files_view:" + self._token((parent, 0, "name"))}]]},
+                )
             return
         if data.startswith("file_archive:"):
             key = self.token_map.get(data[13:])
             if key:
                 ok, reply = self.controller.archive_file(key)
                 self._audit(user_id, "archive " + key, "SUCCESS" if ok else "FAILED")
-                self.send_message(chat_id, reply, self.keyboard())
+                self.edit_menu(
+                    chat_id, message["message_id"], reply,
+                    {"inline_keyboard": [[{"text": "⬅️ К файлу", "callback_data": "file:" + self._token(key)}]]},
+                )
             return
         if data.startswith("file_stats:"):
             key = self.token_map.get(data[11:])
             if key:
                 ok, reply = self.controller.path_info(key)
-                self.send_message(chat_id, reply, self.keyboard())
+                self.edit_menu(
+                    chat_id, message["message_id"], reply,
+                    {"inline_keyboard": [[{"text": "⬅️ К файлу", "callback_data": "file:" + self._token(key)}]]},
+                )
             return
         if data.startswith("window:"):
             key = self.token_map.get(data[7:])
@@ -640,7 +700,12 @@ class TelegramBotClient:
             self.show_info_below_menu(chat_id, message["message_id"], "⬆️ Просто отправь файл как документ. Он будет атомарно сохранён в Windows Downloads.", self.keyboard())
             return
         if data == "info:search":
-            self.show_info_below_menu(chat_id, message["message_id"], "🔎 Поиск: /find downloads имя_файла\nМожно искать в desktop, downloads или documents. Результат можно открыть через кнопки.", self.keyboard())
+            self.pending_actions[user_id] = ("file_search", "downloads")
+            self.show_info_below_menu(
+                chat_id, message["message_id"],
+                "🔎 Пришли часть имени файла или папки.\nПоиск начнётся в Downloads.",
+                self.subkeyboard("menu_files"),
+            )
             return
         if data == "info:stop":
             self.show_info_below_menu(chat_id, message["message_id"], "⛔ Доступны только allow-list приложения: /stop notepad, /stop calculator, /stop explorer.", self.keyboard())
@@ -788,32 +853,93 @@ class TelegramBotClient:
         }
         self.send_photo(chat_id, path, caption=caption, markup=markup)
 
-    def _render_folder(self, chat_id, message_id, key):
-        ok, listing = self.controller.list_files(key)
+    def _render_folder(self, chat_id, message_id, key, page=0, sort_by="name"):
+        ok, error, items = self.controller.folder_items(key, sort_by)
         if not ok:
-            self.edit_menu(chat_id, message_id, listing, self.subkeyboard("menu_files"))
+            self.edit_menu(
+                chat_id, message_id, error,
+                {"inline_keyboard": [[{"text": "⬅️ Файлы", "callback_data": "menu_files"}]]},
+            )
             return
-        target = self.controller.resolve_allowed_path(key, must_exist=True, allow_root=True)
+
+        page_size = 10
+        pages = max(1, (len(items) + page_size - 1) // page_size)
+        page = min(max(0, int(page)), pages - 1)
+        current = self.controller.resolve_allowed_path(key, must_exist=True, allow_root=True)
         buttons = []
-        parent = "/".join(key.split("/")[:-1])
-        if parent:
-            buttons.append([{"text": "⬅️ Вверх", "callback_data": "nav:" + self._token(parent)}])
-        try:
-            items = sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
-            for item in items[:80]:
-                item_key = self.controller.relative_key(item)
-                if not item_key:
-                    continue
-                if item.is_dir():
-                    buttons.append([{"text": ("📁 " + item.name)[:55], "callback_data": "nav:" + self._token(item_key)}])
-                else:
-                    buttons.append([{"text": ("📄 " + item.name)[:55], "callback_data": "file:" + self._token(item_key)}])
-        except OSError:
-            pass
-        buttons.append([{"text": "🔎 Поиск", "callback_data": "info:search"}, {"text": "⬅️ Файлы", "callback_data": "menu_files"}])
-        self.edit_menu(chat_id, message_id, listing + "\n\n👇 Выбери папку или файл:", {"inline_keyboard": buttons})
+
+        parts = key.split("/")
+        if len(parts) > 1:
+            parent = "/".join(parts[:-1])
+            buttons.append([{"text": "⬆️ Выше", "callback_data": "files_view:" + self._token((parent, 0, sort_by))}])
+
+        for item in items[page * page_size:(page + 1) * page_size]:
+            item_key = self.controller.relative_key(item)
+            if not item_key:
+                continue
+            icon = "📁" if item.is_dir() else "📄"
+            callback = (
+                "files_view:" + self._token((item_key, 0, sort_by))
+                if item.is_dir()
+                else "file:" + self._token(item_key)
+            )
+            buttons.append([{"text": (icon + " " + item.name)[:55], "callback_data": callback}])
+
+        nav = []
+        if page > 0:
+            nav.append({"text": "⬅️", "callback_data": "files_view:" + self._token((key, page - 1, sort_by))})
+        nav.append({"text": f"{page + 1}/{pages}", "callback_data": "files_view:" + self._token((key, page, sort_by))})
+        if page + 1 < pages:
+            nav.append({"text": "➡️", "callback_data": "files_view:" + self._token((key, page + 1, sort_by))})
+        buttons.append(nav)
+
+        buttons.append([
+            {"text": "🔤 Имя" + (" ✓" if sort_by == "name" else ""), "callback_data": "files_sort:" + self._token((key, "name"))},
+            {"text": "🕒 Дата" + (" ✓" if sort_by == "date" else ""), "callback_data": "files_sort:" + self._token((key, "date"))},
+            {"text": "📦 Размер" + (" ✓" if sort_by == "size" else ""), "callback_data": "files_sort:" + self._token((key, "size"))},
+        ])
+        buttons.append([
+            {"text": "🔎 Поиск", "callback_data": "files_search:" + key},
+            {"text": "⬅️ Файлы", "callback_data": "menu_files"},
+        ])
+
+        path_text = self.controller.relative_key(current) if current else key
+        text = (
+            f"📂 {path_text}\n"
+            f"Объектов: {len(items)} · Страница {page + 1}/{pages}\n"
+            f"Сортировка: {{'name': 'имя', 'date': 'дата', 'size': 'размер'}.get(sort_by, 'имя')}\n\n"
+            "👇 Выбери папку или файл:"
+        )
+        self.edit_menu(chat_id, message_id, text, {"inline_keyboard": buttons})
+
+    def _send_file_search(self, chat_id, root_key, query):
+        found = self.controller.search_files(root_key, query, limit=30)
+        buttons = []
+        for item in found[:20]:
+            key = self.controller.relative_key(item)
+            if not key:
+                continue
+            if item.is_dir():
+                callback = "files_view:" + self._token((key, 0, "name"))
+                icon = "📁"
+            else:
+                callback = "file:" + self._token(key)
+                icon = "📄"
+            buttons.append([{"text": (icon + " " + item.name)[:55], "callback_data": callback}])
+        buttons.append([
+            {"text": "🔎 Новый поиск", "callback_data": "files_search:" + root_key},
+            {"text": "⬅️ В папку", "callback_data": "files_view:" + self._token((root_key, 0, "name"))},
+        ])
+        prefix = "✅" if found else "ℹ️"
+        self.send_message(
+            chat_id,
+            f"{prefix} Поиск «{query}» · найдено: {len(found)}",
+            {"inline_keyboard": buttons},
+        )
+
 
     def _render_file_actions(self, chat_id, message_id, key):
+        parent = "/".join(key.split("/")[:-1]) or key.split("/", 1)[0]
         markup = {
             "inline_keyboard": [
                 [{"text": "📤 Отправить в Telegram", "callback_data": "file_send:" + self._token(key)}],
@@ -822,7 +948,7 @@ class TelegramBotClient:
                 [{"text": "📦 Создать ZIP", "callback_data": "file_archive:" + self._token(key)},
                  {"text": "📊 Инфо", "callback_data": "file_stats:" + self._token(key)}],
                 [{"text": "🗑 Удалить", "callback_data": "file_delete:" + self._token(key)}],
-                [{"text": "⬅️ Назад", "callback_data": "menu_files"}],
+                [{"text": "⬅️ Назад", "callback_data": "files_view:" + self._token((parent, 0, "name"))}],
             ]
         }
         self.edit_menu(chat_id, message_id, f"📄 {key}\n\nВыбери действие:", markup)
