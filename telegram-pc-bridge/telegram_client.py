@@ -173,6 +173,19 @@ class TelegramBotClient:
             timeout=10,
         )
 
+    def show_info_below_menu(self, chat_id, message_id, text, markup):
+        """Keep the active inline menu above and place its hint/result below it."""
+        try:
+            self.api(
+                "deleteMessage",
+                {"chat_id": chat_id, "message_id": message_id},
+                timeout=5,
+            )
+        except Exception:
+            pass
+        self.send_message(chat_id, "🎛 Выбери действие:", markup)
+        self.send_message(chat_id, text, {"inline_keyboard": []})
+
     def test(self):
         return self.api("getMe", timeout=10)
 
@@ -594,24 +607,24 @@ class TelegramBotClient:
             self.send_message(chat_id, self.controller.audit_summary(self.audit_file), self.keyboard())
             return
         if data == "info:upload":
-            self.send_message(chat_id, "⬆️ Просто отправь файл как документ. Он будет атомарно сохранён в Windows Downloads.", self.keyboard())
+            self.show_info_below_menu(chat_id, message["message_id"], "⬆️ Просто отправь файл как документ. Он будет атомарно сохранён в Windows Downloads.", self.keyboard())
             return
         if data == "info:search":
-            self.send_message(chat_id, "🔎 Поиск: /find downloads имя_файла\nМожно искать в desktop, downloads или documents. Результат можно открыть через кнопки.", self.keyboard())
+            self.show_info_below_menu(chat_id, message["message_id"], "🔎 Поиск: /find downloads имя_файла\nМожно искать в desktop, downloads или documents. Результат можно открыть через кнопки.", self.keyboard())
             return
         if data == "info:stop":
-            self.send_message(chat_id, "⛔ Доступны только allow-list приложения: /stop notepad, /stop calculator, /stop explorer.", self.keyboard())
+            self.show_info_below_menu(chat_id, message["message_id"], "⛔ Доступны только allow-list приложения: /stop notepad, /stop calculator, /stop explorer.", self.keyboard())
             return
         if data == "info:clipset":
-            self.send_message(chat_id, "✏️ Используй /clip_set <текст>. Лимит 4000 символов.", self.keyboard())
+            self.show_info_below_menu(chat_id, message["message_id"], "✏️ Используй /clip_set <текст>. Лимит 4000 символов.", self.keyboard())
             return
         if data == "info:click":
             self.pending_actions[user_id] = ("click", None)
-            self.send_message(chat_id, "🖱 Пришли координаты клика следующим сообщением.\nНапример: 500 300", self.subkeyboard("menu_control"))
+            self.show_info_below_menu(chat_id, message["message_id"], "🖱 Пришли координаты клика следующим сообщением.\nНапример: 500 300", self.subkeyboard("menu_control"))
             return
         if data == "info:type":
             self.pending_actions[user_id] = ("type", None)
-            self.send_message(chat_id, "⌨️ Пришли текст следующим сообщением — он будет введён в активное окно.", self.subkeyboard("menu_control"))
+            self.show_info_below_menu(chat_id, message["message_id"], "⌨️ Пришли текст следующим сообщением — он будет введён в активное окно.", self.subkeyboard("menu_control"))
             return
         if data.startswith("alerts:"):
             action = data.split(":", 1)[1]
