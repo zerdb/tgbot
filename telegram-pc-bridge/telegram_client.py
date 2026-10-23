@@ -289,6 +289,20 @@ class TelegramBotClient:
                     self.send_message(chat["id"], reply, self.keyboard())
                     self._result(base, ok, reply)
                     return
+                if action == "type":
+                    ok, reply = self.controller.type_text(text)
+                    self.send_message(chat["id"], reply, self.subkeyboard("menu_control"))
+                    self._result(base, ok, reply)
+                    return
+                if action == "click":
+                    parts = text.replace(",", " ").split()
+                    if len(parts) == 2 and all(part.lstrip("-").isdigit() for part in parts):
+                        ok, reply = self.controller.mouse_click(int(parts[0]), int(parts[1]))
+                    else:
+                        ok, reply = False, "❌ Пришли координаты в формате: 500 300"
+                    self.send_message(chat["id"], reply, self.subkeyboard("menu_control"))
+                    self._result(base, ok, reply)
+                    return
             if text in ("/start", "/help"):
                 self.send_message(chat["id"], self.controller.help_text())
                 return
@@ -568,10 +582,12 @@ class TelegramBotClient:
             self.send_message(chat_id, "✏️ Используй /clip_set <текст>. Лимит 4000 символов.", self.keyboard())
             return
         if data == "info:click":
-            self.send_message(chat_id, "🖱 Управление: /click X Y — клик по координатам основного экрана.", self.keyboard())
+            self.pending_actions[user_id] = ("click", None)
+            self.send_message(chat_id, "🖱 Пришли координаты клика следующим сообщением.\nНапример: 500 300", self.subkeyboard("menu_control"))
             return
         if data == "info:type":
-            self.send_message(chat_id, "⌨️ Управление: /type текст — ввод текста в активное окно, максимум 1000 символов.", self.keyboard())
+            self.pending_actions[user_id] = ("type", None)
+            self.send_message(chat_id, "⌨️ Пришли текст следующим сообщением — он будет введён в активное окно.", self.subkeyboard("menu_control"))
             return
         if data.startswith("alerts:"):
             action = data.split(":", 1)[1]
@@ -645,8 +661,9 @@ class TelegramBotClient:
         markup = {
             "inline_keyboard": [
                 [{"text": "🔄 Обновить", "callback_data": "control:screen"}],
-                [{"text": "⌨️ Ввод текста", "callback_data": "info:type"},
-                 {"text": "📋 Буфер", "callback_data": "menu_clip"}],
+                [{"text": "🖱 Клик", "callback_data": "info:click"},
+                 {"text": "⌨️ Ввод текста", "callback_data": "info:type"}],
+                [{"text": "📋 Буфер", "callback_data": "menu_clip"}],
                 [{"text": "Esc", "callback_data": "control:key:esc"},
                  {"text": "Enter", "callback_data": "control:key:enter"},
                  {"text": "Alt+Tab", "callback_data": "control:key:alt_tab"}],
