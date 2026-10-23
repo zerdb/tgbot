@@ -82,8 +82,9 @@ if __name__ == "__main__":
 
     from app import TelegramBridgeApp
 
+    # Create the main window normally. Keeping a CTk root withdrawn while a
+    # separate Tk root owns the event loop can leave it hidden on Windows.
     root = ctk.CTk()
-    root.withdraw()
     app = TelegramBridgeApp(root)
     root.update_idletasks()
 
@@ -92,7 +93,6 @@ if __name__ == "__main__":
     splash.update()
 
     splash.destroy()
-    root.deiconify()
-    root.lift()
-    root.focus_force()
+    root.after(20, root.lift)
+    root.after(40, root.focus_force)
     root.mainloop()
