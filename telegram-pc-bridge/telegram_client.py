@@ -173,17 +173,8 @@ class TelegramBotClient:
         )
 
     def show_info_below_menu(self, chat_id, message_id, text, markup):
-        """Keep the active inline menu above and place its hint/result below it."""
-        try:
-            self.api(
-                "deleteMessage",
-                {"chat_id": chat_id, "message_id": message_id},
-                timeout=5,
-            )
-        except Exception:
-            pass
-        self.send_message(chat_id, "🎛 Выбери действие:", markup)
-        self.send_message(chat_id, text, {"inline_keyboard": []})
+        """Use the current menu message for transient hints so navigation leaves no chat debris."""
+        self.edit_menu(chat_id, message_id, text, markup)
 
     def test(self):
         return self.api("getMe", timeout=10)
@@ -258,16 +249,15 @@ class TelegramBotClient:
                         elif update.get("message"):
                             self._message(update["message"])
                     except Exception as exc:
-                        self._audit(None, "update handler", "FAILED")
-                        if self.allowed_user_id:
-                            try:
-                                self.send_message(
-                                    self.allowed_user_id,
-                                    f"❌ Действие не выполнено: {type(exc).__name__}. Bridge продолжает работу.",
-                                    {"inline_keyboard": []},
-                                )
-                            except Exception:
-                                pass
+                        detail = f"{type(exc).__name__}: {exc}"
+                        self._audit(None, "update handler", "FAILED | " + detail)
+                        self.on_message({
+                            "type": "result",
+                            "text": "FAILED: " + detail,
+                            "chat_id": None,
+                            "user_id": None,
+                            "first_name": "Bridge",
+                        })
                 if self.alerts_enabled and time.time() >= self.next_alert_check:
                     self._check_alerts()
                     self.next_alert_check = time.time() + 60
@@ -343,8 +333,11 @@ class TelegramBotClient:
                     self._result(base, ok, reply)
                     return
                 if action == "file_search":
-                    root_key = key or "downloads"
-                    self._send_file_search(chat["id"], root_key, text)
+                    if isinstance(key, (tuple, list)):
+                        root_key, menu_message_id = key
+                    else:
+                        root_key, menu_message_id = key or "downloads", None
+                    self._send_file_search(chat["id"], root_key, text, menu_message_id)
                     return
                 if action == "type":
                     ok, reply = self.controller.type_text(text)
@@ -361,7 +354,7 @@ class TelegramBotClient:
                     self._result(base, ok, reply)
                     return
                 if action == "app_search":
-                    self._send_app_search(chat["id"], text)
+                    self._send_app_search(chat["id"], text, key)
                     return
             if text in ("/start", "/help"):
                 self.send_message(chat["id"], self.controller.help_text())
@@ -439,7 +432,7 @@ class TelegramBotClient:
             self._render_apps(chat_id, message["message_id"], page)
             return
         if data == "apps_search":
-            self.pending_actions[user_id] = ("app_search", None)
+            self.pending_actions[user_id] = ("app_search", message["message_id"])
             self.show_info_below_menu(
                 chat_id,
                 message["message_id"],
@@ -507,7 +500,7 @@ class TelegramBotClient:
             return
         if data.startswith("files_search_token:"):
             key = self.token_map.get(data[19:]) or "downloads"
-            self.pending_actions[user_id] = ("file_search", key)
+            self.pending_actions[user_id] = ("file_search", (key, message["message_id"]))
             self.show_info_below_menu(
                 chat_id, message["message_id"],
                 f"🔎 Пришли часть имени файла или папки.\nОбласть поиска: {key}",
@@ -516,7 +509,7 @@ class TelegramBotClient:
             return
         if data.startswith("files_search:"):
             key = data.split(":", 1)[1] or "downloads"
-            self.pending_actions[user_id] = ("file_search", key)
+            self.pending_actions[user_id] = ("file_search", (key, message["message_id"]))
             self.show_info_below_menu(
                 chat_id, message["message_id"],
                 f"🔎 Пришли часть имени файла или папки.\nОбласть поиска: {key}",
@@ -709,7 +702,7 @@ class TelegramBotClient:
             self.show_info_below_menu(chat_id, message["message_id"], "⬆️ Просто отправь файл как документ. Он будет атомарно сохранён в Windows Downloads.", self.keyboard())
             return
         if data == "info:search":
-            self.pending_actions[user_id] = ("file_search", "downloads")
+            self.pending_actions[user_id] = ("file_search", ("downloads", message["message_id"]))
             self.show_info_below_menu(
                 chat_id, message["message_id"],
                 "🔎 Пришли часть имени файла или папки.\nПоиск начнётся в Downloads.",
@@ -802,7 +795,7 @@ class TelegramBotClient:
         text = f"{title}\n\nНайдено: {len(apps)}\nНажми приложение, чтобы запустить."
         self.edit_menu(chat_id, message_id, text, {"inline_keyboard": buttons})
 
-    def _send_app_search(self, chat_id, query):
+    def _send_app_search(self, chat_id, query, message_id=None):
         query = query.strip().casefold()
         apps = [
             app for app in self.controller.installed_apps()
@@ -818,11 +811,15 @@ class TelegramBotClient:
             {"text": "📱 Все приложения", "callback_data": "apps:0"},
             {"text": "⬅️ Главное меню", "callback_data": "menu:root"},
         ])
-        self.send_message(
-            chat_id,
-            f"🔎 Результаты поиска: {len(apps)}\nНажми приложение, чтобы запустить.",
-            {"inline_keyboard": buttons},
-        )
+        result_text = f"🔎 Результаты поиска: {len(apps)}\nНажми приложение, чтобы запустить."
+        markup = {"inline_keyboard": buttons}
+        if message_id:
+            try:
+                self.edit_menu(chat_id, message_id, result_text, markup)
+                return
+            except Exception:
+                pass
+        self.send_message(chat_id, result_text, markup)
 
     def _render_dashboard(self, chat_id, message_id):
         markup = {
@@ -922,7 +919,7 @@ class TelegramBotClient:
         )
         self.edit_menu(chat_id, message_id, text, {"inline_keyboard": buttons})
 
-    def _send_file_search(self, chat_id, root_key, query):
+    def _send_file_search(self, chat_id, root_key, query, message_id=None):
         found = self.controller.search_files(root_key, query, limit=30)
         buttons = []
         for item in found[:20]:
@@ -941,11 +938,15 @@ class TelegramBotClient:
             {"text": "⬅️ В папку", "callback_data": "files_view:" + self._token((root_key, 0, "name"))},
         ])
         prefix = "✅" if found else "ℹ️"
-        self.send_message(
-            chat_id,
-            f"{prefix} Поиск «{query}» · найдено: {len(found)}",
-            {"inline_keyboard": buttons},
-        )
+        result_text = f"{prefix} Поиск «{query}» · найдено: {len(found)}"
+        markup = {"inline_keyboard": buttons}
+        if message_id:
+            try:
+                self.edit_menu(chat_id, message_id, result_text, markup)
+                return
+            except Exception:
+                pass
+        self.send_message(chat_id, result_text, markup)
 
 
     def _render_file_actions(self, chat_id, message_id, key):
@@ -1132,7 +1133,7 @@ class TelegramBotClient:
                             break
                         output.write(chunk)
             temp.replace(destination)
-            self.send_message(chat_id, f"✅ Файл загружен в Downloads: {destination.name}", self.keyboard())
+            self.send_message(chat_id, f"✅ Файл загружен в Downloads: {destination.name}", {"inline_keyboard": []})
             self._audit(base.get("user_id"), "upload " + destination.name, "SUCCESS")
             self.on_message({**base, "type": "result", "text": f"⬆️ Загружен: {destination.name}"})
         except Exception as exc:
@@ -1142,4 +1143,4 @@ class TelegramBotClient:
             except OSError:
                 pass
             self._audit(base.get("user_id"), "upload", "FAILED")
-            self.send_message(chat_id, f"❌ Upload: {exc}", self.keyboard())
+            self.send_message(chat_id, f"❌ Upload: {exc}", {"inline_keyboard": []})
