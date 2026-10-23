@@ -102,27 +102,17 @@ class TelegramBridgeApp:
 
         buttons = ctk.CTkFrame(connection, fg_color="transparent")
         buttons.grid(row=1, column=2, rowspan=2, padx=(8, 18), pady=7)
-        ctk.CTkButton(
+        self.connection_button = ctk.CTkButton(
             buttons,
             text="▶  Запустить",
-            width=130,
+            width=150,
             height=40,
             corner_radius=10,
             fg_color="#2563EB",
             hover_color="#1D4ED8",
-            command=self.start,
-        ).pack(side="left", padx=4)
-        ctk.CTkButton(
-            buttons,
-            text="■  Стоп",
-            width=100,
-            height=40,
-            corner_radius=10,
-            fg_color="#E2E8F0",
-            hover_color="#CBD5E1",
-            text_color="#334155",
-            command=self.stop,
-        ).pack(side="left", padx=4)
+            command=self.toggle_connection,
+        )
+        self.connection_button.pack(side="left", padx=4)
         connection.columnconfigure(1, weight=1)
 
         cards = ctk.CTkFrame(shell, fg_color="transparent")
@@ -244,6 +234,12 @@ class TelegramBridgeApp:
             encoding="utf-8",
         )
 
+    def toggle_connection(self):
+        if self.client and self.client.running:
+            self.stop()
+        else:
+            self.start()
+
     def auto_connect(self):
         """Подключается автоматически, если локальная конфигурация уже заполнена."""
         token = self.token.get().strip()
@@ -302,6 +298,21 @@ class TelegramBridgeApp:
         }
         self.status_dot.configure(text_color=colors.get(state, "#94A3B8"))
         self.status.set(text)
+
+        if state in ("online", "connecting"):
+            self.connection_button.configure(
+                text="■  Стоп",
+                fg_color="#DC2626",
+                hover_color="#B91C1C",
+                text_color="#FFFFFF",
+            )
+        else:
+            self.connection_button.configure(
+                text="▶  Запустить",
+                fg_color="#2563EB",
+                hover_color="#1D4ED8",
+                text_color="#FFFFFF",
+            )
 
     def add_message(self, msg):
         name = msg.get("first_name") or msg.get("username") or str(msg.get("user_id"))
