@@ -31,6 +31,7 @@ class TelegramBridgeApp:
         self.status = ctk.StringVar(value="Остановлен")
         self.build_ui()
         self.root.after(100, self.process_events)
+        self.root.after(350, self.auto_connect)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def build_ui(self):
@@ -242,6 +243,13 @@ class TelegramBridgeApp:
             ),
             encoding="utf-8",
         )
+
+    def auto_connect(self):
+        """Подключается автоматически, если локальная конфигурация уже заполнена."""
+        token = self.token.get().strip()
+        uid = self.allowed_user.get().strip()
+        if token and (not uid or uid.lstrip("-").isdigit()):
+            self.start()
 
     def start(self):
         token = self.token.get().strip()
