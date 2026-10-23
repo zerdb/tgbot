@@ -126,7 +126,8 @@ class TelegramBotClient:
             ],
             "menu_control": [
                 [("🖥 Открыть пульт", "control:screen"), ("🔄 Обновить", "control:screen")],
-                [("⌨️ Ввод текста", "info:type"), ("📋 Буфер", "menu_clip")],
+                [("🖱 Клик", "info:click"), ("⌨️ Ввод текста", "info:type")],
+                [("📋 Буфер", "menu_clip")],
                 [("Esc", "control:key:esc"), ("Enter", "control:key:enter")],
                 [("Alt+Tab", "control:key:alt_tab"), ("⬅️ Назад", "menu:root")],
             ],
@@ -190,15 +191,27 @@ class TelegramBotClient:
 
     def _poll(self):
         self.on_status("connecting", "Подключение к Telegram...")
-        try:
-            me = self.test()
-            self.on_status("online", f"Бот @{me.get('username', '')} подключён")
-            if self.allowed_user_id:
-                self.send_message(self.allowed_user_id, "🟢 PC Bridge v3 запущен.", self.keyboard())
-        except Exception as exc:
-            self.running = False
-            self.on_status("error", f"Ошибка подключения: {exc}")
-            return
+        while self.running and not self.stop_event.is_set():
+            try:
+                me = self.test()
+                self._connection_lost = False
+                self.on_status("online", f"Бот @{me.get('username', '')} подключён")
+                if self.allowed_user_id:
+                    self.send_message(self.allowed_user_id, "🟢 PC Bridge v4 запущен.", self.keyboard())
+                break
+            except urllib.error.HTTPError as exc:
+                self.running = False
+                self.on_status("error", f"Telegram отклонил подключение: HTTP {exc.code}")
+                return
+            except (urllib.error.URLError, ssl.SSLError, ConnectionError, OSError):
+                self.reconnect_count += 1
+                self._connection_lost = True
+                self.on_status("connecting", f"Telegram недоступен — переподключение {self.reconnect_count}")
+                self.stop_event.wait(2)
+            except Exception as exc:
+                self.running = False
+                self.on_status("error", f"Ошибка подключения: {exc}")
+                return
 
         while self.running and not self.stop_event.is_set():
             try:
