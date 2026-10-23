@@ -226,6 +226,37 @@ class PCController:
             return True, "ALERTS_OFF"
         return False, "❌ Неизвестная команда. /help"
 
+    def dashboard(self):
+        """Compact status card for the Telegram inline dashboard."""
+        root = Path.home().anchor or "/"
+        usage = shutil.disk_usage(root)
+        uptime = max(0, int(time.time() - STARTED_AT))
+        cpu = psutil.cpu_percent(0.25) if psutil else 0
+        mem = psutil.virtual_memory().percent if psutil else 0
+        disk = usage.used / usage.total * 100 if usage.total else 0
+        hours, rem = divmod(uptime, 3600)
+        minutes = rem // 60
+        gpu = ""
+        if os.name == "nt":
+            try:
+                result = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
+                    capture_output=True, text=True, timeout=3, check=True,
+                )
+                temp = result.stdout.splitlines()[0].strip()
+                if temp:
+                    gpu = f" · GPU {temp}°C"
+            except Exception:
+                pass
+        return (
+            "🟢 PC BRIDGE ONLINE\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            f"⚡ CPU {cpu:.0f}% · 🧠 RAM {mem:.0f}%\n"
+            f"💽 {root} {disk:.0f}%{gpu}\n"
+            f"⏱ Uptime {hours}h {minutes:02d}m\n"
+            f"💻 {socket.gethostname()} · {self._local_ip()}"
+        )
+
     def status(self):
         root = Path.home().anchor or "/"
         usage = shutil.disk_usage(root)
