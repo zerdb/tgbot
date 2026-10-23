@@ -63,6 +63,8 @@ class PCController:
             "ctrl_w": ("ctrl", "w"),
             "ctrl_a": ("ctrl", "a"),
             "ctrl_f": ("ctrl", "f"),
+            "esc": ("esc",),
+            "enter": ("enter",),
         }
         self.allowed_services = {
             "spooler": "Spooler",
