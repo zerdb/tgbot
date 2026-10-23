@@ -505,6 +505,15 @@ class TelegramBotClient:
                 key, sort_by = state
                 self._render_folder(chat_id, message["message_id"], key, 0, sort_by)
             return
+        if data.startswith("files_search_token:"):
+            key = self.token_map.get(data[19:]) or "downloads"
+            self.pending_actions[user_id] = ("file_search", key)
+            self.show_info_below_menu(
+                chat_id, message["message_id"],
+                f"🔎 Пришли часть имени файла или папки.\nОбласть поиска: {key}",
+                {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "files_view:" + self._token((key, 0, "name"))}]]},
+            )
+            return
         if data.startswith("files_search:"):
             key = data.split(":", 1)[1] or "downloads"
             self.pending_actions[user_id] = ("file_search", key)
@@ -899,15 +908,16 @@ class TelegramBotClient:
             {"text": "📦 Размер" + (" ✓" if sort_by == "size" else ""), "callback_data": "files_sort:" + self._token((key, "size"))},
         ])
         buttons.append([
-            {"text": "🔎 Поиск", "callback_data": "files_search:" + key},
+            {"text": "🔎 Поиск", "callback_data": "files_search_token:" + self._token(key)},
             {"text": "⬅️ Файлы", "callback_data": "menu_files"},
         ])
 
         path_text = self.controller.relative_key(current) if current else key
+        sort_label = {"name": "имя", "date": "дата", "size": "размер"}.get(sort_by, "имя")
         text = (
             f"📂 {path_text}\n"
             f"Объектов: {len(items)} · Страница {page + 1}/{pages}\n"
-            f"Сортировка: {{'name': 'имя', 'date': 'дата', 'size': 'размер'}.get(sort_by, 'имя')}\n\n"
+            f"Сортировка: {sort_label}\n\n"
             "👇 Выбери папку или файл:"
         )
         self.edit_menu(chat_id, message_id, text, {"inline_keyboard": buttons})
@@ -927,7 +937,7 @@ class TelegramBotClient:
                 icon = "📄"
             buttons.append([{"text": (icon + " " + item.name)[:55], "callback_data": callback}])
         buttons.append([
-            {"text": "🔎 Новый поиск", "callback_data": "files_search:" + root_key},
+            {"text": "🔎 Новый поиск", "callback_data": "files_search_token:" + self._token(root_key)},
             {"text": "⬅️ В папку", "callback_data": "files_view:" + self._token((root_key, 0, "name"))},
         ])
         prefix = "✅" if found else "ℹ️"
@@ -959,9 +969,17 @@ class TelegramBotClient:
             self.send_message(chat_id, path, self.keyboard())
             return
         file_path = Path(path)
-        size = file_path.stat().st_size
+        try:
+            size = file_path.stat().st_size
+        except (OSError, FileNotFoundError):
+            self.send_message(
+                chat_id,
+                "ℹ️ Файл уже недоступен. Обнови папку и выбери его снова.",
+                self.subkeyboard("menu_files"),
+            )
+            return
         if size > MAX_SEND_MB * 1024 * 1024:
-            self.send_message(chat_id, f"❌ Файл {self.controller._size(size)} больше безопасного лимита отправки {MAX_SEND_MB} MB.", self.keyboard())
+            self.send_message(chat_id, f"❌ Файл {self.controller._size(size)} больше безопасного лимита отправки {MAX_SEND_MB} MB.", self.subkeyboard("menu_files"))
             return
         try:
             self.send_document(chat_id, file_path)
