@@ -8,7 +8,6 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
-from telegram_client import TelegramBotClient
 
 CONFIG = Path(__file__).with_name("config.json")
 
@@ -260,13 +259,30 @@ class TelegramBridgeApp:
         if self.client and self.client.running:
             return
         self.save_config()
-        self.client = TelegramBotClient(
-            token,
-            self.queue_message,
-            self.queue_status,
-            uid or None,
-        )
-        self.client.start()
+        # Heavy Telegram/PC-control modules are imported only after the GUI is visible.
+        self.set_status("connecting", "Загрузка модулей и подключение к Telegram...")
+        self.connection_button.configure(state="disabled")
+        import threading
+        threading.Thread(
+            target=self._start_client_background,
+            args=(token, uid or None),
+            daemon=True,
+        ).start()
+
+    def _start_client_background(self, token, uid):
+        try:
+            from telegram_client import TelegramBotClient
+            client = TelegramBotClient(
+                token,
+                self.queue_message,
+                self.queue_status,
+                uid,
+            )
+            self.client = client
+            self.events.put(("client_ready",))
+            client.start()
+        except Exception as exc:
+            self.events.put(("start_error", str(exc)))
 
     def stop(self):
         if self.client:
@@ -284,8 +300,14 @@ class TelegramBridgeApp:
                 event = self.events.get_nowait()
                 if event[0] == "message":
                     self.add_message(event[1])
-                else:
+                elif event[0] == "status":
                     self.set_status(event[1], event[2])
+                elif event[0] == "client_ready":
+                    self.connection_button.configure(state="normal")
+                elif event[0] == "start_error":
+                    self.client = None
+                    self.connection_button.configure(state="normal")
+                    self.set_status("error", f"Ошибка запуска: {event[1]}")
         except queue.Empty:
             pass
         self.root.after(100, self.process_events)
