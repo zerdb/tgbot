@@ -92,6 +92,9 @@ if __name__ == "__main__":
     splash_progress.place_configure(width=290)
     splash.update()
 
+    # Let CTk finish initializing its variables/widgets before destroying
+    # the temporary Tk interpreter used by the splash screen.
+    root.update()
     splash.destroy()
     root.after(20, root.lift)
     root.after(40, root.focus_force)
