@@ -86,9 +86,8 @@ class TelegramBotClient:
                 [("📸 Активное окно", "cmd:/screenshot active"), ("⬅️ Назад", "menu:root")],
             ],
             "menu_apps": [
-                [("📝 Блокнот", "cmd:/run notepad"), ("🧮 Калькулятор", "cmd:/run calculator")],
-                [("📁 Проводник", "cmd:/run explorer"), ("⛔ Остановить", "info:stop")],
-                [("⬅️ Назад", "menu:root")],
+                [("📱 Все приложения", "apps:0"), ("🔄 Обновить список", "apps:0")],
+                [("🔎 Поиск", "apps_search"), ("⬅️ Назад", "menu:root")],
             ],
             "menu_projects": [
                 [("📦 Список", "cmd:/projects")],
@@ -340,6 +339,9 @@ class TelegramBotClient:
                     self.send_message(chat["id"], reply, self.subkeyboard("menu_control"))
                     self._result(base, ok, reply)
                     return
+                if action == "app_search":
+                    self._send_app_search(chat["id"], text)
+                    return
             if text in ("/start", "/help"):
                 self.send_message(chat["id"], self.controller.help_text())
                 return
@@ -407,6 +409,34 @@ class TelegramBotClient:
         if data.startswith("menu_"):
             title = data.replace("menu_", "").replace("_", " ").title()
             self.edit_menu(chat_id, message["message_id"], f"🎛 {title}", self.subkeyboard(data))
+            return
+        if data.startswith("apps:"):
+            try:
+                page = max(0, int(data.split(":", 1)[1]))
+            except ValueError:
+                page = 0
+            self._render_apps(chat_id, message["message_id"], page)
+            return
+        if data == "apps_search":
+            self.pending_actions[user_id] = ("app_search", None)
+            self.show_info_below_menu(
+                chat_id,
+                message["message_id"],
+                "🔎 Пришли часть названия приложения следующим сообщением.",
+                self.subkeyboard("menu_apps"),
+            )
+            return
+        if data.startswith("app_run:"):
+            app = self.token_map.get(data[8:])
+            if app:
+                ok, reply = self.controller.launch_installed_app(app["target"], app["kind"])
+                self._audit(user_id, "launch app " + app["name"], "SUCCESS" if ok else "FAILED")
+                self.show_info_below_menu(
+                    chat_id,
+                    message["message_id"],
+                    reply,
+                    self.subkeyboard("menu_apps"),
+                )
             return
         if data == "view:dashboard":
             self._render_dashboard(chat_id, message["message_id"])
@@ -670,6 +700,55 @@ class TelegramBotClient:
         if len(self.token_map) > 500:
             self.token_map.clear()
         return token
+
+    def _render_apps(self, chat_id, message_id, page=0, apps=None, title="📱 Установленные приложения"):
+        apps = list(apps if apps is not None else self.controller.installed_apps())
+        page_size = 8
+        pages = max(1, (len(apps) + page_size - 1) // page_size)
+        page = min(max(0, page), pages - 1)
+        start = page * page_size
+        buttons = []
+        for app in apps[start:start + page_size]:
+            buttons.append([{
+                "text": ("▶️ " + app["name"])[:55],
+                "callback_data": "app_run:" + self._token(app),
+            }])
+        nav = []
+        if page > 0:
+            nav.append({"text": "⬅️", "callback_data": f"apps:{page - 1}"})
+        nav.append({"text": f"{page + 1}/{pages}", "callback_data": "apps_search"})
+        if page + 1 < pages:
+            nav.append({"text": "➡️", "callback_data": f"apps:{page + 1}"})
+        if nav:
+            buttons.append(nav)
+        buttons.append([
+            {"text": "🔎 Поиск", "callback_data": "apps_search"},
+            {"text": "⬅️ Назад", "callback_data": "menu:root"},
+        ])
+        text = f"{title}\n\nНайдено: {len(apps)}\nНажми приложение, чтобы запустить."
+        self.edit_menu(chat_id, message_id, text, {"inline_keyboard": buttons})
+
+    def _send_app_search(self, chat_id, query):
+        query = query.strip().casefold()
+        apps = [
+            app for app in self.controller.installed_apps()
+            if query in app["name"].casefold()
+        ]
+        buttons = []
+        for app in apps[:12]:
+            buttons.append([{
+                "text": ("▶️ " + app["name"])[:55],
+                "callback_data": "app_run:" + self._token(app),
+            }])
+        buttons.append([
+            {"text": "📱 Все приложения", "callback_data": "apps:0"},
+            {"text": "⬅️ Главное меню", "callback_data": "menu:root"},
+        ])
+        self.send_message(
+            chat_id,
+            f"🔎 Результаты поиска: {len(apps)}\nНажми приложение, чтобы запустить.",
+            {"inline_keyboard": buttons},
+        )
 
     def _render_dashboard(self, chat_id, message_id):
         markup = {
