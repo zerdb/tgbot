@@ -9,12 +9,12 @@ ROOT = Path(__file__).resolve().parent
 HIDE_CONSOLE = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 PROJECTS = [
-    ("🤖  Telegram Bot", ROOT / "telegram-bot" / "main.py"),
-    ("🖼  Image Downloader", ROOT / "image-downloader" / "downloader.py"),
-    ("💻  Telegram PC Bridge", ROOT / "telegram-pc-bridge" / "main.py"),
-    ("📁  File Sorter", ROOT / "tkinter-file-sorter" / "tkinter_file_sorter.py"),
-    ("📋  Life Manager", ROOT / "tkinter-life-manager" / "main.py"),
-    ("🎮  Tetris", ROOT / "tkinter-tetris" / "tetris.py"),
+    ("🤖", "Telegram Bot", ROOT / "telegram-bot" / "main.py"),
+    ("🖼", "Image Downloader", ROOT / "image-downloader" / "downloader.py"),
+    ("💻", "Telegram PC Bridge", ROOT / "telegram-pc-bridge" / "main.py"),
+    ("📁", "File Sorter", ROOT / "tkinter-file-sorter" / "tkinter_file_sorter.py"),
+    ("📋", "Life Manager", ROOT / "tkinter-life-manager" / "main.py"),
+    ("🎮", "Tetris", ROOT / "tkinter-tetris" / "tetris.py"),
 ]
 
 
@@ -46,16 +46,16 @@ def main() -> None:
     root = tk.Tk()
     root.title("TGBOT • Project Launcher")
     root.geometry("520x560")
-    root.minsize(480, 520)
+    root.minsize(480, 500)
     root.configure(bg="#111827")
 
     header = tk.Frame(root, bg="#111827")
-    header.pack(fill="x", padx=30, pady=(28, 10))
+    header.pack(fill="x", padx=28, pady=(24, 8))
 
     tk.Label(
         header,
         text="TGBOT",
-        font=("Segoe UI", 28, "bold"),
+        font=("Segoe UI", 25, "bold"),
         fg="white",
         bg="#111827",
     ).pack(anchor="w")
@@ -63,28 +63,64 @@ def main() -> None:
     tk.Label(
         header,
         text="Главное окно проектов",
-        font=("Segoe UI", 12),
+        font=("Segoe UI", 11),
         fg="#9ca3af",
         bg="#111827",
-    ).pack(anchor="w", pady=(2, 0))
+    ).pack(anchor="w", pady=(1, 0))
 
     card = tk.Frame(root, bg="#1f2937")
-    card.pack(fill="both", expand=True, padx=30, pady=(15, 30))
+    card.pack(fill="both", expand=True, padx=28, pady=(12, 22))
 
     tk.Label(
         card,
         text="Запустить проект",
-        font=("Segoe UI", 15, "bold"),
+        font=("Segoe UI", 13, "bold"),
         fg="white",
         bg="#1f2937",
-    ).pack(anchor="w", padx=22, pady=(22, 12))
+    ).pack(anchor="w", padx=18, pady=(16, 9))
 
-    for name, path in PROJECTS:
+    list_area = tk.Frame(card, bg="#1f2937")
+    list_area.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+
+    canvas = tk.Canvas(
+        list_area,
+        bg="#1f2937",
+        highlightthickness=0,
+        bd=0,
+    )
+    scrollbar = tk.Scrollbar(
+        list_area,
+        orient="vertical",
+        command=canvas.yview,
+    )
+    project_frame = tk.Frame(canvas, bg="#1f2937")
+
+    window_id = canvas.create_window((0, 0), window=project_frame, anchor="nw")
+
+    def update_scroll_region(_event=None):
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    def resize_project_frame(event):
+        canvas.itemconfigure(window_id, width=event.width)
+
+    project_frame.bind("<Configure>", update_scroll_region)
+    canvas.bind("<Configure>", resize_project_frame)
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    def scroll(event):
+        canvas.yview_scroll(int(-event.delta / 120), "units")
+
+    canvas.bind_all("<MouseWheel>", scroll)
+
+    for icon, name, path in PROJECTS:
         button = tk.Button(
-            card,
-            text=name,
+            project_frame,
+            text=f"  {icon}   {name}",
             command=lambda p=path: launch(p),
-            font=("Segoe UI", 11),
+            font=("Segoe UI", 10),
             fg="white",
             bg="#374151",
             activeforeground="white",
@@ -93,10 +129,10 @@ def main() -> None:
             bd=0,
             cursor="hand2",
             anchor="w",
-            padx=18,
-            height=2,
+            padx=10,
+            height=1,
         )
-        button.pack(fill="x", padx=22, pady=5)
+        button.pack(fill="x", pady=3)
 
     tk.Label(
         root,
@@ -104,7 +140,7 @@ def main() -> None:
         font=("Segoe UI", 9),
         fg="#6b7280",
         bg="#111827",
-    ).pack(pady=(0, 15))
+    ).pack(pady=(0, 12))
 
     root.mainloop()
 
