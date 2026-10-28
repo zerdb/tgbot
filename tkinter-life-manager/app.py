@@ -25,10 +25,10 @@ class LifeManagerApp:
         s.configure("TLabel",background=BG,foreground=TEXT,font=("Segoe UI",10))
         s.configure("Title.TLabel",background=BG,foreground=TEXT,font=("Segoe UI",24,"bold"))
         s.configure("Muted.TLabel",background=BG,foreground=MUTED)
-        s.configure("TButton",font=("Segoe UI",10),padding=(12,8))
-        s.configure("Accent.TButton",font=("Segoe UI",10,"bold"),padding=(14,9))
+        s.configure("TButton",background=CARD,foreground=TEXT,font=("Segoe UI",10),padding=(12,8)); s.map("TButton",background=[("active","#e5e7eb"),("pressed","#d1d5db")])
+        s.configure("Accent.TButton",background=ACCENT,foreground="#ffffff",font=("Segoe UI",10,"bold"),padding=(14,9)); s.map("Accent.TButton",background=[("active","#1d4ed8"),("pressed","#1e40af")])
         s.configure("Treeview",background="#ffffff",fieldbackground="#ffffff",foreground=TEXT,rowheight=31,borderwidth=0)
-        s.configure("Treeview.Heading",font=("Segoe UI",10,"bold"),padding=8)
+        s.configure("Treeview.Heading",background="#f3f4f6",foreground=TEXT,font=("Segoe UI",10,"bold"),padding=8); s.configure("TEntry",fieldbackground=CARD,foreground=TEXT); s.configure("TCombobox",fieldbackground=CARD,background=CARD,foreground=TEXT,arrowcolor=TEXT); s.map("TCombobox",fieldbackground=[("readonly",CARD)],foreground=[("readonly",TEXT)]); s.configure("TScrollbar",background=CARD,troughcolor="#f3f4f6",arrowcolor=MUTED)
         s.map("Treeview",background=[("selected",ACCENT)])
 
     def build(self):
