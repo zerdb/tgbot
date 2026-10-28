@@ -47,44 +47,44 @@ def main() -> None:
     root.title("TGBOT • Project Launcher")
     root.geometry("520x560")
     root.minsize(480, 500)
-    root.configure(bg="#111827")
+    root.configure(bg="#ffffff")
 
-    header = tk.Frame(root, bg="#111827")
+    header = tk.Frame(root, bg="#ffffff")
     header.pack(fill="x", padx=28, pady=(24, 8))
 
     tk.Label(
         header,
         text="TGBOT",
         font=("Segoe UI", 25, "bold"),
-        fg="white",
-        bg="#111827",
+        fg="#111827",
+        bg="#ffffff",
     ).pack(anchor="w")
 
     tk.Label(
         header,
         text="Главное окно проектов",
         font=("Segoe UI", 11),
-        fg="#9ca3af",
-        bg="#111827",
+        fg="#6b7280",
+        bg="#ffffff",
     ).pack(anchor="w", pady=(1, 0))
 
-    card = tk.Frame(root, bg="#1f2937")
+    card = tk.Frame(root, bg="#f3f4f6")
     card.pack(fill="both", expand=True, padx=28, pady=(12, 22))
 
     tk.Label(
         card,
         text="Запустить проект",
         font=("Segoe UI", 13, "bold"),
-        fg="white",
-        bg="#1f2937",
+        fg="#111827",
+        bg="#f3f4f6",
     ).pack(anchor="w", padx=18, pady=(16, 9))
 
-    list_area = tk.Frame(card, bg="#1f2937")
+    list_area = tk.Frame(card, bg="#f3f4f6")
     list_area.pack(fill="both", expand=True, padx=14, pady=(0, 14))
 
     canvas = tk.Canvas(
         list_area,
-        bg="#1f2937",
+        bg="#f3f4f6",
         highlightthickness=0,
         bd=0,
     )
@@ -177,10 +177,10 @@ def main() -> None:
             text=f"  {icon}   {name}",
             command=lambda p=path: launch(p),
             font=("Segoe UI", 10),
-            fg="white",
+            fg="#111827",
             bg="#374151",
-            activeforeground="white",
-            activebackground="#4b5563",
+            activeforeground="#111827",
+            activebackground="#374151",
             relief="flat",
             bd=0,
             cursor="hand2",
@@ -205,7 +205,7 @@ def main() -> None:
         text="Выбери приложение — оно запустится в отдельном окне",
         font=("Segoe UI", 9),
         fg="#6b7280",
-        bg="#111827",
+        bg="#ffffff",
     ).pack(pady=(0, 12))
 
     root.after_idle(place_buttons)
