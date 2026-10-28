@@ -3,13 +3,18 @@ import base64
 import mimetypes
 import os
 import re
+import threading
 import time
+import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
 
 PAGE_URL = "https://smtp.bz/"
 SAVE_DIR = "downloaded_images"
@@ -24,8 +29,10 @@ SRC_PRIORITY = [
     "data-src", "data-lazy-src", "data-image", "data-original-src",
     "srcset", "data-srcset", "src",
 ]
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp",
-                    ".svg", ".avif", ".tif", ".tiff", ".ico"}
+IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp",
+    ".svg", ".avif", ".tif", ".tiff", ".ico",
+}
 
 
 def pick_best_url(tag):
@@ -128,7 +135,10 @@ def unique_path(path):
 def build_session(referer):
     session = requests.Session()
     retry = Retry(
-        total=3, connect=3, read=3, backoff_factor=1,
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=frozenset({"GET", "HEAD"}),
         respect_retry_after_header=True,
@@ -143,8 +153,10 @@ def build_session(referer):
             "Chrome/120.0.0.0 Safari/537.36"
         ),
         "Referer": referer,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                  "image/avif,image/webp,*/*;q=0.8",
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            "image/avif,image/webp,*/*;q=0.8"
+        ),
         "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
     })
     if not USE_PROXY:
@@ -175,29 +187,45 @@ def save_base64(data_uri, save_path, index):
 def is_image_response(response, url):
     content_type = response.headers.get("Content-Type", "").lower()
     ext = os.path.splitext(urlparse(url).path)[1].lower()
-    return content_type.startswith("image/") or "octet-stream" in content_type or ext in IMAGE_EXTENSIONS
+    return (
+        content_type.startswith("image/")
+        or "octet-stream" in content_type
+        or ext in IMAGE_EXTENSIONS
+    )
 
 
 def download_one(session, url, save_path, index, referer):
     candidates = [upgrade_url(url)]
     if candidates[0] != url:
         candidates.append(url)
+
     last_error = None
 
     for candidate in candidates:
         try:
             response = session.get(
-                candidate, timeout=(5, 30), stream=True,
+                candidate,
+                timeout=(5, 30),
+                stream=True,
                 headers={"Referer": referer},
             )
             response.raise_for_status()
+
             if not is_image_response(response, candidate):
                 response.close()
                 continue
 
-            path = unique_path(os.path.join(
-                save_path, safe_filename(candidate, index, response.headers.get("Content-Type", ""))
-            ))
+            path = unique_path(
+                os.path.join(
+                    save_path,
+                    safe_filename(
+                        candidate,
+                        index,
+                        response.headers.get("Content-Type", ""),
+                    ),
+                )
+            )
+
             size = 0
             with open(path, "wb") as file:
                 for chunk in response.iter_content(16384):
@@ -212,7 +240,9 @@ def download_one(session, url, save_path, index, referer):
                 except OSError:
                     pass
                 continue
+
             return os.path.basename(path), size
+
         except (requests.RequestException, OSError) as error:
             last_error = error
 
@@ -223,14 +253,18 @@ def download_one(session, url, save_path, index, referer):
 
 def collect_urls(soup, base_url):
     raw_urls = []
+
     for img in soup.find_all("img"):
         raw = pick_best_url(img)
         if raw:
             raw_urls.append(raw)
+
     raw_urls.extend(extract_picture_urls(soup))
     raw_urls.extend(extract_css_urls(soup))
 
-    result, seen = [], set()
+    result = []
+    seen = set()
+
     for raw in raw_urls:
         if raw.startswith("data:"):
             key = raw
@@ -239,9 +273,11 @@ def collect_urls(soup, base_url):
             if urlparse(full).scheme not in {"http", "https"}:
                 continue
             key = full
+
         if key not in seen:
             seen.add(key)
             result.append(key)
+
     return result
 
 
@@ -253,98 +289,474 @@ def site_folder_name(url):
     return host or "unknown_site"
 
 
+def download_images(
+    page_url,
+    output_dir,
+    limit=MAX_IMAGES,
+    delay=DELAY,
+    save_html=True,
+    no_upgrade=False,
+    log=None,
+    progress=None,
+):
+    parsed = urlparse(page_url)
+
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"Некорректный URL: {page_url}")
+
+    global UPGRADE_URLS
+    old_upgrade = UPGRADE_URLS
+    UPGRADE_URLS = not no_upgrade
+
+    max_images = None if limit == 0 else max(limit, 0)
+    delay = max(delay, 0)
+    base_url = f"{parsed.scheme}://{parsed.netloc}/"
+    save_path = os.path.join(output_dir, site_folder_name(page_url))
+    os.makedirs(save_path, exist_ok=True)
+
+    session = build_session(page_url)
+
+    def write_log(text):
+        if log:
+            log(text)
+
+    try:
+        write_log(f"🌐 Загружаем страницу: {page_url}")
+        response = session.get(page_url, timeout=(10, 30))
+        response.raise_for_status()
+
+        if not response.encoding or response.encoding.lower() == "iso-8859-1":
+            response.encoding = response.apparent_encoding or "utf-8"
+
+        html = response.text
+        write_log(f"✅ HTML получен: {len(html)} символов")
+
+        if save_html:
+            with open(
+                os.path.join(save_path, "page.html"),
+                "w",
+                encoding="utf-8",
+            ) as file:
+                file.write(html)
+
+        soup = BeautifulSoup(html, "html.parser")
+        urls = collect_urls(soup, base_url)
+
+        if max_images is not None:
+            urls = urls[:max_images]
+
+        total = len(urls)
+        write_log(f"🔍 Найдено уникальных источников: {total}")
+        write_log(f"📂 Папка: {os.path.abspath(save_path)}")
+
+        downloaded = 0
+        failed = 0
+
+        for index, raw_url in enumerate(urls, 1):
+            try:
+                if raw_url.startswith("data:"):
+                    filename, size = save_base64(raw_url, save_path, index)
+                else:
+                    filename, size = download_one(
+                        session,
+                        raw_url,
+                        save_path,
+                        index,
+                        page_url,
+                    )
+
+                if filename:
+                    downloaded += 1
+                    write_log(
+                        f"✅ [{index}/{total}] {filename} "
+                        f"({size // 1024} КБ)"
+                    )
+                else:
+                    failed += 1
+                    write_log(f"⚠️ [{index}/{total}] Не удалось скачать")
+
+            except (requests.RequestException, OSError) as error:
+                failed += 1
+                write_log(
+                    f"⚠️ [{index}/{total}] "
+                    f"{type(error).__name__}: {error}"
+                )
+
+            if progress:
+                progress(index, total)
+
+            if delay:
+                time.sleep(delay)
+
+        write_log("")
+        write_log("📊 Итог:")
+        write_log(f"   ✅ Скачано: {downloaded}")
+        write_log(f"   ⚠️ Ошибок: {failed}")
+        write_log(f"   📂 {os.path.abspath(save_path)}")
+
+        return downloaded, failed, save_path
+
+    finally:
+        UPGRADE_URLS = old_upgrade
+        session.close()
+
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="Скачивание изображений со страницы")
+    parser = argparse.ArgumentParser(
+        description="Скачивание изображений со страницы"
+    )
     parser.add_argument("url", nargs="?", default=PAGE_URL)
     parser.add_argument("--output", default=SAVE_DIR)
-    parser.add_argument("--limit", type=int, default=MAX_IMAGES,
-                        help="0 = без лимита")
+    parser.add_argument("--limit", type=int, default=MAX_IMAGES)
     parser.add_argument("--delay", type=float, default=DELAY)
     parser.add_argument("--no-html", action="store_true")
     parser.add_argument("--no-upgrade", action="store_true")
     return parser.parse_args()
 
 
-def download_images():
+class ImageDownloaderApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("TGBOT • Image Downloader")
+        self.root.geometry("760x620")
+        self.root.minsize(680, 520)
+        self.root.configure(bg="#111827")
+        self.running = False
+
+        self.url_var = tk.StringVar(value=PAGE_URL)
+        self.output_var = tk.StringVar(
+            value=str(Path.cwd() / SAVE_DIR)
+        )
+        self.limit_var = tk.StringVar(value=str(MAX_IMAGES))
+        self.delay_var = tk.StringVar(value=str(DELAY))
+        self.status_var = tk.StringVar(value="Готово к скачиванию")
+
+        self.build_ui()
+
+    def build_ui(self):
+        header = tk.Frame(self.root, bg="#111827")
+        header.pack(fill="x", padx=28, pady=(24, 14))
+
+        tk.Label(
+            header,
+            text="IMAGE DOWNLOADER",
+            font=("Segoe UI", 22, "bold"),
+            fg="white",
+            bg="#111827",
+        ).pack(anchor="w")
+
+        tk.Label(
+            header,
+            text="Скачать изображения со страницы",
+            font=("Segoe UI", 10),
+            fg="#9ca3af",
+            bg="#111827",
+        ).pack(anchor="w", pady=(2, 0))
+
+        card = tk.Frame(self.root, bg="#1f2937")
+        card.pack(fill="both", expand=True, padx=28, pady=(0, 24))
+
+        fields = tk.Frame(card, bg="#1f2937")
+        fields.pack(fill="x", padx=22, pady=(20, 10))
+
+        self.add_entry(fields, "URL страницы", self.url_var, 0)
+
+        output_row = tk.Frame(fields, bg="#1f2937")
+        output_row.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        output_row.columnconfigure(1, weight=1)
+
+        tk.Label(
+            output_row,
+            text="Папка",
+            width=14,
+            anchor="w",
+            fg="#d1d5db",
+            bg="#1f2937",
+            font=("Segoe UI", 10),
+        ).grid(row=0, column=0)
+
+        tk.Entry(
+            output_row,
+            textvariable=self.output_var,
+            font=("Segoe UI", 10),
+            bg="#374151",
+            fg="white",
+            insertbackground="white",
+            relief="flat",
+        ).grid(row=0, column=1, sticky="ew", padx=8)
+
+        tk.Button(
+            output_row,
+            text="Обзор",
+            command=self.choose_folder,
+            font=("Segoe UI", 9),
+            fg="white",
+            bg="#4b5563",
+            activebackground="#6b7280",
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            padx=12,
+        ).grid(row=0, column=2)
+
+        options = tk.Frame(fields, bg="#1f2937")
+        options.grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
+
+        self.add_small_entry(options, "Лимит", self.limit_var, 0)
+        self.add_small_entry(options, "Задержка", self.delay_var, 1)
+
+        tk.Label(
+            options,
+            text="0 = без лимита",
+            fg="#9ca3af",
+            bg="#1f2937",
+            font=("Segoe UI", 9),
+        ).grid(row=0, column=4, padx=(8, 0))
+
+        fields.columnconfigure(1, weight=1)
+
+        actions = tk.Frame(card, bg="#1f2937")
+        actions.pack(fill="x", padx=22, pady=(4, 12))
+
+        self.start_button = tk.Button(
+            actions,
+            text="⬇  Скачать изображения",
+            command=self.start_download,
+            font=("Segoe UI", 10, "bold"),
+            fg="white",
+            bg="#2563eb",
+            activebackground="#3b82f6",
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            padx=18,
+            pady=8,
+        )
+        self.start_button.pack(side="left")
+
+        tk.Button(
+            actions,
+            text="Очистить лог",
+            command=self.clear_log,
+            font=("Segoe UI", 9),
+            fg="white",
+            bg="#374151",
+            activebackground="#4b5563",
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            padx=14,
+            pady=8,
+        ).pack(side="left", padx=8)
+
+        self.progress = ttk.Progressbar(
+            actions,
+            mode="determinate",
+            length=220,
+        )
+        self.progress.pack(side="right", padx=(10, 0))
+
+        log_frame = tk.Frame(card, bg="#111827")
+        log_frame.pack(fill="both", expand=True, padx=22, pady=(0, 14))
+
+        self.log = tk.Text(
+            log_frame,
+            bg="#111827",
+            fg="#d1d5db",
+            insertbackground="white",
+            relief="flat",
+            bd=0,
+            font=("Consolas", 9),
+            wrap="word",
+            padx=12,
+            pady=10,
+        )
+        log_scroll = tk.Scrollbar(
+            log_frame,
+            orient="vertical",
+            command=self.log.yview,
+        )
+        self.log.configure(yscrollcommand=log_scroll.set)
+
+        self.log.pack(side="left", fill="both", expand=True)
+        log_scroll.pack(side="right", fill="y")
+
+        tk.Label(
+            self.root,
+            textvariable=self.status_var,
+            font=("Segoe UI", 9),
+            fg="#6b7280",
+            bg="#111827",
+        ).pack(pady=(0, 12))
+
+    def add_entry(self, parent, label, variable, row):
+        parent.columnconfigure(1, weight=1)
+
+        tk.Label(
+            parent,
+            text=label,
+            width=14,
+            anchor="w",
+            fg="#d1d5db",
+            bg="#1f2937",
+            font=("Segoe UI", 10),
+        ).grid(row=row, column=0, sticky="w")
+
+        tk.Entry(
+            parent,
+            textvariable=variable,
+            font=("Segoe UI", 10),
+            bg="#374151",
+            fg="white",
+            insertbackground="white",
+            relief="flat",
+        ).grid(row=row, column=1, columnspan=2, sticky="ew", padx=(8, 0))
+
+    def add_small_entry(self, parent, label, variable, column):
+        tk.Label(
+            parent,
+            text=label,
+            fg="#d1d5db",
+            bg="#1f2937",
+            font=("Segoe UI", 9),
+        ).grid(row=0, column=column * 2)
+
+        tk.Entry(
+            parent,
+            textvariable=variable,
+            width=9,
+            font=("Segoe UI", 9),
+            bg="#374151",
+            fg="white",
+            insertbackground="white",
+            relief="flat",
+        ).grid(row=0, column=column * 2 + 1, padx=(5, 12))
+
+    def choose_folder(self):
+        folder = filedialog.askdirectory(
+            title="Выберите папку для скачивания"
+        )
+        if folder:
+            self.output_var.set(folder)
+
+    def append_log(self, text):
+        self.root.after(0, self._append_log, text)
+
+    def _append_log(self, text):
+        self.log.insert("end", text + "\n")
+        self.log.see("end")
+
+    def update_progress(self, current, total):
+        self.root.after(
+            0,
+            lambda: self.progress.configure(
+                maximum=max(total, 1),
+                value=current,
+            ),
+        )
+
+    def clear_log(self):
+        self.log.delete("1.0", "end")
+
+    def start_download(self):
+        if self.running:
+            return
+
+        url = self.url_var.get().strip()
+        output = self.output_var.get().strip()
+
+        try:
+            limit = int(self.limit_var.get())
+            delay = float(self.delay_var.get())
+            if limit < 0 or delay < 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror(
+                "Ошибка",
+                "Лимит должен быть целым числом >= 0, "
+                "задержка — числом >= 0.",
+            )
+            return
+
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            messagebox.showerror(
+                "Ошибка",
+                "Введите корректный URL, например https://example.com",
+            )
+            return
+
+        if not output:
+            messagebox.showerror("Ошибка", "Выберите папку для сохранения.")
+            return
+
+        self.running = True
+        self.start_button.configure(
+            text="⏳  Скачивание...",
+            state="disabled",
+        )
+        self.progress.configure(value=0, maximum=1)
+        self.status_var.set("Загрузка страницы...")
+
+        worker = threading.Thread(
+            target=self.run_worker,
+            args=(url, output, limit, delay),
+            daemon=True,
+        )
+        worker.start()
+
+    def run_worker(self, url, output, limit, delay):
+        try:
+            downloaded, failed, save_path = download_images(
+                page_url=url,
+                output_dir=output,
+                limit=limit,
+                delay=delay,
+                log=self.append_log,
+                progress=self.update_progress,
+            )
+            self.root.after(
+                0,
+                lambda: self.finish(
+                    f"Готово: скачано {downloaded}, ошибок {failed}\n"
+                    f"Папка: {os.path.abspath(save_path)}"
+                ),
+            )
+        except Exception as error:
+            self.append_log(f"❌ Критическая ошибка: {type(error).__name__}: {error}")
+            self.root.after(
+                0,
+                lambda: self.finish("Ошибка скачивания"),
+            )
+
+    def finish(self, status):
+        self.running = False
+        self.start_button.configure(
+            text="⬇  Скачать изображения",
+            state="normal",
+        )
+        self.status_var.set(status)
+
+
+def run_cli():
     args = parse_args()
-    page_url = args.url
-    parsed = urlparse(page_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError(f"Некорректный URL: {page_url}")
-
-    global UPGRADE_URLS
-    old_upgrade = UPGRADE_URLS
-    UPGRADE_URLS = not args.no_upgrade
-
-    max_images = None if args.limit == 0 else max(args.limit, 0)
-    delay = max(args.delay, 0)
-    base_url = f"{parsed.scheme}://{parsed.netloc}/"
-    save_path = os.path.join(args.output, site_folder_name(page_url))
-    os.makedirs(save_path, exist_ok=True)
-    session = build_session(page_url)
-
-    try:
-        print(f"🌐 Загружаем страницу: {page_url}")
-        response = session.get(page_url, timeout=(10, 30))
-        response.raise_for_status()
-        if not response.encoding or response.encoding.lower() == "iso-8859-1":
-            response.encoding = response.apparent_encoding or "utf-8"
-        html = response.text
-        print(f"✅ HTML получен: {len(html)} символов")
-
-        if SAVE_HTML and not args.no_html:
-            with open(os.path.join(save_path, "page.html"), "w", encoding="utf-8") as file:
-                file.write(html)
-
-        soup = BeautifulSoup(html, "html.parser")
-        urls = collect_urls(soup, base_url)
-        print(f"🔍 Найдено уникальных источников: {len(urls)}")
-        print(f"📂 Папка: {save_path}")
-        print(f"🎯 Лимит: {max_images if max_images is not None else '∞'}")
-
-        downloaded = failed = 0
-        for index, raw_url in enumerate(urls, 1):
-            if max_images is not None and downloaded >= max_images:
-                break
-
-            if raw_url.startswith("data:"):
-                filename, size = save_base64(raw_url, save_path, index)
-                if filename:
-                    downloaded += 1
-                    print(f"✅ [{downloaded}/{max_images or '∞'}] {filename} ({size // 1024} КБ)")
-                else:
-                    failed += 1
-                continue
-
-            try:
-                filename, size = download_one(session, raw_url, save_path, index, page_url)
-                if filename:
-                    downloaded += 1
-                    print(f"✅ [{downloaded}/{max_images or '∞'}] {filename} ({size // 1024} КБ)")
-                else:
-                    failed += 1
-            except (requests.RequestException, OSError) as error:
-                failed += 1
-                print(f"⚠️ {raw_url[:100]}... → {type(error).__name__}: {error}")
-
-            if delay:
-                time.sleep(delay)
-
-        files = [
-            name for name in os.listdir(save_path)
-            if os.path.isfile(os.path.join(save_path, name))
-            and not name.lower().endswith((".html", ".htm", ".txt"))
-            and os.path.getsize(os.path.join(save_path, name)) > 0
-        ]
-        print("\n📊 Итог:")
-        print(f"   ✅ Новых скачано: {downloaded}")
-        print(f"   ⚠️ Ошибок: {failed}")
-        print(f"   📦 Всего файлов: {len(files)}")
-        print(f"   📂 {os.path.abspath(save_path)}")
-    finally:
-        UPGRADE_URLS = old_upgrade
-        session.close()
+    download_images(
+        page_url=args.url,
+        output_dir=args.output,
+        limit=args.limit,
+        delay=args.delay,
+        save_html=not args.no_html,
+        no_upgrade=args.no_upgrade,
+        log=print,
+    )
 
 
 if __name__ == "__main__":
-    download_images()
+    # Без аргументов запускаем удобное Tkinter-окно.
+    # Аргументы сохраняют старый CLI-режим.
+    if len(sys.argv) == 1:
+        root = tk.Tk()
+        ImageDownloaderApp(root)
+        root.mainloop()
+    else:
+        run_cli()
