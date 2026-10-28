@@ -98,7 +98,7 @@ class CategoryEditor(tk.Toplevel):
 
         list_frame = ttk.Frame(left)
         list_frame.pack(fill="both", expand=True)
-        self.listbox = tk.Listbox(list_frame, exportselection=False, font=("TkDefaultFont", 11), activestyle="dotbox")
+        self.listbox = tk.Listbox(list_frame, exportselection=False, font=("TkDefaultFont", 11), activestyle="dotbox", bg="#ffffff", fg="#111827", selectbackground="#2563eb", selectforeground="#ffffff", highlightbackground="#e5e7eb", highlightcolor="#2563eb", insertbackground="#111827", relief="flat", bd=0)
         scroll = ttk.Scrollbar(list_frame, command=self.listbox.yview)
         self.listbox.configure(yscrollcommand=scroll.set)
         self.listbox.pack(side="left", fill="both", expand=True)
@@ -117,7 +117,7 @@ class CategoryEditor(tk.Toplevel):
         self.category_title.pack(anchor="w")
         ttk.Label(right, text="Введите расширения через запятую, например: .jpg, .png, .webp").pack(anchor="w", pady=(3, 8))
 
-        self.extensions = tk.Text(right, height=14, wrap="word", font=("TkFixedFont", 10), relief="solid", borderwidth=1)
+        self.extensions = tk.Text(right, height=14, wrap="word", font=("TkFixedFont", 10), bg="#ffffff", fg="#111827", insertbackground="#111827", selectbackground="#dbeafe", selectforeground="#111827", highlightbackground="#e5e7eb", highlightcolor="#2563eb", relief="solid", borderwidth=1)
         self.extensions.pack(fill="both", expand=True)
 
         actions = ttk.Frame(right)
@@ -230,12 +230,22 @@ class FileSorterApp(tk.Tk):
         style = ttk.Style(self)
         if "clam" in style.theme_names():
             style.theme_use("clam")
-        style.configure("TButton", padding=(12, 7), font=("TkDefaultFont", 10))
-        style.configure("Accent.TButton", padding=(14, 8), font=("TkDefaultFont", 10, "bold"))
-        style.configure("Title.TLabel", font=("TkDefaultFont", 20, "bold"))
-        style.configure("Status.TLabel", padding=(8, 6))
-        style.configure("TLabelframe", padding=4)
-        style.configure("TLabelframe.Label", font=("TkDefaultFont", 10, "bold"))
+        style.configure(".", background="#ffffff", foreground="#111827", fieldbackground="#ffffff")
+        style.configure("TFrame", background="#ffffff")
+        style.configure("TLabel", background="#ffffff", foreground="#111827")
+        style.configure("TButton", background="#ffffff", foreground="#111827", padding=(12, 7), font=("TkDefaultFont", 10))
+        style.map("TButton", background=[("active", "#f3f4f6"), ("pressed", "#e5e7eb")], foreground=[("disabled", "#9ca3af")])
+        style.configure("Accent.TButton", background="#2563eb", foreground="#ffffff", padding=(14, 8), font=("TkDefaultFont", 10, "bold"))
+        style.map("Accent.TButton", background=[("active", "#1d4ed8"), ("pressed", "#1e40af")], foreground=[("disabled", "#e5e7eb")])
+        style.configure("Title.TLabel", background="#ffffff", foreground="#111827", font=("TkDefaultFont", 20, "bold"))
+        style.configure("Status.TLabel", background="#ffffff", foreground="#6b7280", padding=(8, 6))
+        style.configure("TLabelframe", background="#ffffff", foreground="#111827", padding=4)
+        style.configure("TLabelframe.Label", background="#ffffff", foreground="#111827", font=("TkDefaultFont", 10, "bold"))
+        style.configure("TEntry", fieldbackground="#ffffff", foreground="#111827", insertcolor="#111827")
+        style.configure("TCombobox", fieldbackground="#ffffff", background="#ffffff", foreground="#111827", arrowcolor="#111827")
+        style.map("TCombobox", fieldbackground=[("readonly", "#ffffff")], foreground=[("readonly", "#111827")], background=[("active", "#f3f4f6")])
+        style.configure("TScrollbar", background="#ffffff", troughcolor="#f3f4f6", bordercolor="#f3f4f6", arrowcolor="#6b7280")
+        self.configure(bg="#ffffff")
 
     def build_ui(self):
         frame = ttk.Frame(self, padding=20)
@@ -259,7 +269,7 @@ class FileSorterApp(tk.Tk):
 
         log_box = ttk.LabelFrame(frame, text="  📋 Журнал операций  ", padding=8)
         log_box.pack(fill="both", expand=True)
-        self.log = tk.Text(log_box, wrap="word", state="disabled", font=("TkFixedFont", 10), relief="flat")
+        self.log = tk.Text(log_box, wrap="word", state="disabled", font=("TkFixedFont", 10), bg="#ffffff", fg="#374151", insertbackground="#111827", selectbackground="#dbeafe", selectforeground="#111827", relief="flat", highlightthickness=0)
         scroll = ttk.Scrollbar(log_box, command=self.log.yview)
         self.log.configure(yscrollcommand=scroll.set)
         self.log.pack(side="left", fill="both", expand=True)
