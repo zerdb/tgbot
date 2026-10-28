@@ -91,6 +91,11 @@ def main() -> None:
     scrollbar = tk.Scrollbar(
         list_area,
         orient="vertical",
+        bg="#ffffff",
+        activebackground="#e5e7eb",
+        troughcolor="#f3f4f6",
+        highlightthickness=0,
+        bd=0,
     )
 
     canvas.pack(side="left", fill="both", expand=True)
