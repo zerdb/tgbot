@@ -144,7 +144,10 @@ def main() -> None:
         if event.delta == 0:
             return
 
-        direction = -1 if event.delta > 0 else 1
+        # Windows: positive delta means wheel up.
+        # Canvas yview_scroll(positive) moves the viewport down,
+        # which moves the project list upward as expected.
+        direction = 1 if event.delta > 0 else -1
         canvas.yview_scroll(direction, "units")
 
     def enable_wheel(_event):
