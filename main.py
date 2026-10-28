@@ -93,31 +93,24 @@ def main() -> None:
         orient="vertical",
         command=canvas.yview,
     )
-    project_frame = tk.Frame(canvas, bg="#1f2937")
-
-    window_id = canvas.create_window((0, 0), window=project_frame, anchor="nw")
-
-    def update_scroll_region(_event=None):
-        canvas.configure(scrollregion=canvas.bbox("all"))
-
-    def resize_project_frame(event):
-        canvas.itemconfigure(window_id, width=event.width)
-
-    project_frame.bind("<Configure>", update_scroll_region)
-    canvas.bind("<Configure>", resize_project_frame)
     canvas.configure(yscrollcommand=scrollbar.set)
 
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
 
-    def scroll(event):
-        canvas.yview_scroll(int(-event.delta / 120), "units")
+    buttons = []
 
-    canvas.bind_all("<MouseWheel>", scroll)
+    def resize_buttons(event):
+        width = max(event.width - 2, 1)
+        for item_id in buttons:
+            canvas.itemconfigure(item_id, width=width)
 
+    canvas.bind("<Configure>", resize_buttons)
+
+    y = 0
     for icon, name, path in PROJECTS:
         button = tk.Button(
-            project_frame,
+            canvas,
             text=f"  {icon}   {name}",
             command=lambda p=path: launch(p),
             font=("Segoe UI", 10),
@@ -132,7 +125,22 @@ def main() -> None:
             padx=10,
             height=1,
         )
-        button.pack(fill="x", pady=3)
+        item_id = canvas.create_window(
+            (0, y),
+            window=button,
+            anchor="nw",
+            width=450,
+            height=26,
+        )
+        buttons.append(item_id)
+        y += 29
+
+    canvas.configure(scrollregion=(0, 0, 0, max(y, 1)))
+
+    def scroll(event):
+        canvas.yview_scroll(int(-event.delta / 120), "units")
+
+    canvas.bind_all("<MouseWheel>", scroll)
 
     tk.Label(
         root,
