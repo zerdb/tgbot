@@ -3,6 +3,7 @@ import base64
 import mimetypes
 import os
 import re
+import sys
 import threading
 import time
 import tkinter as tk
