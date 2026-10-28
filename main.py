@@ -87,30 +87,91 @@ def main() -> None:
         bg="#1f2937",
         highlightthickness=0,
         bd=0,
-        yscrollincrement=29,
     )
     scrollbar = tk.Scrollbar(
         list_area,
         orient="vertical",
-        command=canvas.yview,
     )
-    canvas.configure(yscrollcommand=scrollbar.set)
 
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
 
-    buttons = []
     button_height = 26
     button_gap = 3
+    item_step = button_height + button_gap
+    buttons = []
+    scroll_offset = 0
+    viewport_height = 1
 
-    def resize_buttons(event):
+    def max_scroll():
+        content_height = len(buttons) * item_step
+        return max(0, content_height - viewport_height)
+
+    def update_scrollbar():
+        maximum = max_scroll()
+        if maximum <= 0:
+            scrollbar.set(0, 1)
+        else:
+            first = scroll_offset / (maximum + viewport_height)
+            last = (scroll_offset + viewport_height) / (maximum + viewport_height)
+            scrollbar.set(first, min(last, 1))
+
+    def place_buttons():
+        for index, item_id in enumerate(buttons):
+            canvas.coords(
+                item_id,
+                0,
+                index * item_step - scroll_offset,
+            )
+        update_scrollbar()
+
+    def on_resize(event):
+        nonlocal viewport_height
+        viewport_height = max(event.height, 1)
         width = max(event.width - 2, 1)
+
         for item_id in buttons:
             canvas.itemconfigure(item_id, width=width)
 
-    canvas.bind("<Configure>", resize_buttons)
+        nonlocal scroll_offset
+        scroll_offset = min(scroll_offset, max_scroll())
+        place_buttons()
 
-    for index, (icon, name, path) in enumerate(PROJECTS):
+    canvas.bind("<Configure>", on_resize)
+
+    def scroll_units(units):
+        nonlocal scroll_offset
+        scroll_offset = max(
+            0,
+            min(scroll_offset + units * item_step, max_scroll()),
+        )
+        place_buttons()
+
+    def on_wheel(event):
+        if event.delta:
+            units = -1 if event.delta > 0 else 1
+            scroll_units(units)
+
+    def on_scrollbar(*args):
+        nonlocal scroll_offset
+
+        maximum = max_scroll()
+        if maximum <= 0:
+            scroll_offset = 0
+            place_buttons()
+            return
+
+        if args[0] == "moveto":
+            fraction = max(0.0, min(float(args[1]), 1.0))
+            scroll_offset = round(fraction * maximum)
+            place_buttons()
+        elif args[0] == "scroll":
+            amount = int(args[1])
+            scroll_units(amount)
+
+    scrollbar.configure(command=on_scrollbar)
+
+    for icon, name, path in PROJECTS:
         button = tk.Button(
             canvas,
             text=f"  {icon}   {name}",
@@ -127,9 +188,8 @@ def main() -> None:
             padx=10,
             height=1,
         )
-
         item_id = canvas.create_window(
-            (0, index * (button_height + button_gap)),
+            (0, 0),
             window=button,
             anchor="nw",
             width=450,
@@ -137,27 +197,8 @@ def main() -> None:
         )
         buttons.append(item_id)
 
-    content_height = len(PROJECTS) * (button_height + button_gap)
-    canvas.configure(scrollregion=(0, 0, 0, max(content_height, 1)))
-
-    def scroll(event):
-        if event.delta == 0:
-            return
-
-        # Windows: positive delta means wheel up.
-        # Canvas yview_scroll(positive) moves the viewport down,
-        # which moves the project list upward as expected.
-        direction = 1 if event.delta > 0 else -1
-        canvas.yview_scroll(direction, "units")
-
-    def enable_wheel(_event):
-        canvas.bind_all("<MouseWheel>", scroll)
-
-    def disable_wheel(_event):
-        canvas.unbind_all("<MouseWheel>")
-
-    canvas.bind("<Enter>", enable_wheel)
-    canvas.bind("<Leave>", disable_wheel)
+    canvas.bind("<MouseWheel>", on_wheel)
+    canvas.bind("<Enter>", lambda _event: canvas.focus_set())
 
     tk.Label(
         root,
@@ -167,6 +208,7 @@ def main() -> None:
         bg="#111827",
     ).pack(pady=(0, 12))
 
+    root.after_idle(place_buttons)
     root.mainloop()
 
 
