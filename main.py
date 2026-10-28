@@ -87,6 +87,7 @@ def main() -> None:
         bg="#1f2937",
         highlightthickness=0,
         bd=0,
+        yscrollincrement=29,
     )
     scrollbar = tk.Scrollbar(
         list_area,
@@ -99,6 +100,8 @@ def main() -> None:
     scrollbar.pack(side="right", fill="y")
 
     buttons = []
+    button_height = 26
+    button_gap = 3
 
     def resize_buttons(event):
         width = max(event.width - 2, 1)
@@ -107,8 +110,7 @@ def main() -> None:
 
     canvas.bind("<Configure>", resize_buttons)
 
-    y = 0
-    for icon, name, path in PROJECTS:
+    for index, (icon, name, path) in enumerate(PROJECTS):
         button = tk.Button(
             canvas,
             text=f"  {icon}   {name}",
@@ -125,22 +127,34 @@ def main() -> None:
             padx=10,
             height=1,
         )
+
         item_id = canvas.create_window(
-            (0, y),
+            (0, index * (button_height + button_gap)),
             window=button,
             anchor="nw",
             width=450,
-            height=26,
+            height=button_height,
         )
         buttons.append(item_id)
-        y += 29
 
-    canvas.configure(scrollregion=(0, 0, 0, max(y, 1)))
+    content_height = len(PROJECTS) * (button_height + button_gap)
+    canvas.configure(scrollregion=(0, 0, 0, max(content_height, 1)))
 
     def scroll(event):
-        canvas.yview_scroll(int(-event.delta / 120), "units")
+        if event.delta == 0:
+            return
 
-    canvas.bind_all("<MouseWheel>", scroll)
+        direction = -1 if event.delta > 0 else 1
+        canvas.yview_scroll(direction, "units")
+
+    def enable_wheel(_event):
+        canvas.bind_all("<MouseWheel>", scroll)
+
+    def disable_wheel(_event):
+        canvas.unbind_all("<MouseWheel>")
+
+    canvas.bind("<Enter>", enable_wheel)
+    canvas.bind("<Leave>", disable_wheel)
 
     tk.Label(
         root,
