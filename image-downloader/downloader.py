@@ -550,8 +550,13 @@ class ImageDownloaderApp:
             pady=8,
         ).pack(side="left", padx=8)
 
+        style = ttk.Style(self.root)
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+        style.configure("Light.Horizontal.TProgressbar", troughcolor="#e5e7eb", background="#2563eb", bordercolor="#e5e7eb", lightcolor="#2563eb", darkcolor="#2563eb")
         self.progress = ttk.Progressbar(
             actions,
+            style="Light.Horizontal.TProgressbar",
             mode="determinate",
             length=220,
         )
@@ -576,6 +581,7 @@ class ImageDownloaderApp:
             log_frame,
             orient="vertical",
             command=self.log.yview,
+            bg="#ffffff", activebackground="#e5e7eb", troughcolor="#f3f4f6", highlightthickness=0, bd=0,
         )
         self.log.configure(yscrollcommand=log_scroll.set)
 
