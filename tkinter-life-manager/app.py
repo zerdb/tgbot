@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 from datetime import date
 from database import Database
 
-BG="#111827"; PANEL="#182235"; CARD="#202c42"; TEXT="#eef2ff"; MUTED="#9aa8bf"; ACCENT="#5b8cff"; GREEN="#44c98a"; RED="#ff667a"
+BG="#ffffff"; PANEL="#f3f4f6"; CARD="#ffffff"; TEXT="#111827"; MUTED="#6b7280"; ACCENT="#2563eb"; GREEN="#16a34a"; RED="#dc2626"
 
 class LifeManagerApp:
     def __init__(self, root):
@@ -27,7 +27,7 @@ class LifeManagerApp:
         s.configure("Muted.TLabel",background=BG,foreground=MUTED)
         s.configure("TButton",font=("Segoe UI",10),padding=(12,8))
         s.configure("Accent.TButton",font=("Segoe UI",10,"bold"),padding=(14,9))
-        s.configure("Treeview",background=PANEL,fieldbackground=PANEL,foreground=TEXT,rowheight=31,borderwidth=0)
+        s.configure("Treeview",background="#ffffff",fieldbackground="#ffffff",foreground=TEXT,rowheight=31,borderwidth=0)
         s.configure("Treeview.Heading",font=("Segoe UI",10,"bold"),padding=8)
         s.map("Treeview",background=[("selected",ACCENT)])
 
@@ -36,7 +36,7 @@ class LifeManagerApp:
         nav=tk.Frame(shell,bg=PANEL,width=210); nav.pack(side="left",fill="y"); nav.pack_propagate(False)
         tk.Label(nav,text="◈ LIFE MANAGER",bg=PANEL,fg=TEXT,font=("Segoe UI",16,"bold"),pady=24).pack(fill="x")
         for text,cmd in [("⌂  Обзор",self.show_dashboard),("✓  Задачи",self.show_tasks),("★  Привычки",self.show_habits),("▤  Заметки",self.show_notes)]:
-            tk.Button(nav,text=text,command=cmd,anchor="w",bg=PANEL,fg=TEXT,activebackground=CARD,activeforeground=TEXT,relief="flat",bd=0,font=("Segoe UI",11),padx=22,pady=13,cursor="hand2").pack(fill="x")
+            tk.Button(nav,text=text,command=cmd,anchor="w",bg=PANEL,fg=TEXT,activebackground="#e5e7eb",activeforeground=TEXT,relief="flat",bd=0,font=("Segoe UI",11),padx=22,pady=13,cursor="hand2").pack(fill="x")
         tk.Label(nav,text="Python • Tkinter • SQLite",bg=PANEL,fg=MUTED,font=("Segoe UI",8)).pack(side="bottom",pady=16)
         self.content=ttk.Frame(shell,padding=26); self.content.pack(side="left",fill="both",expand=True)
         self.show_dashboard()
