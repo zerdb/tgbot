@@ -421,7 +421,7 @@ class ImageDownloaderApp:
         self.root.title("TGBOT • Image Downloader")
         self.root.geometry("760x620")
         self.root.minsize(680, 520)
-        self.root.configure(bg="#111827")
+        self.root.configure(bg="#ffffff")
         self.running = False
 
         self.url_var = tk.StringVar(value=PAGE_URL)
@@ -435,34 +435,34 @@ class ImageDownloaderApp:
         self.build_ui()
 
     def build_ui(self):
-        header = tk.Frame(self.root, bg="#111827")
+        header = tk.Frame(self.root, bg="#ffffff")
         header.pack(fill="x", padx=28, pady=(24, 14))
 
         tk.Label(
             header,
             text="IMAGE DOWNLOADER",
             font=("Segoe UI", 22, "bold"),
-            fg="white",
-            bg="#111827",
+            fg="#111827",
+            bg="#ffffff",
         ).pack(anchor="w")
 
         tk.Label(
             header,
             text="Скачать изображения со страницы",
             font=("Segoe UI", 10),
-            fg="#9ca3af",
-            bg="#111827",
+            fg="#6b7280",
+            bg="#ffffff",
         ).pack(anchor="w", pady=(2, 0))
 
-        card = tk.Frame(self.root, bg="#1f2937")
+        card = tk.Frame(self.root, bg="#f3f4f6")
         card.pack(fill="both", expand=True, padx=28, pady=(0, 24))
 
-        fields = tk.Frame(card, bg="#1f2937")
+        fields = tk.Frame(card, bg="#f3f4f6")
         fields.pack(fill="x", padx=22, pady=(20, 10))
 
         self.add_entry(fields, "URL страницы", self.url_var, 0)
 
-        output_row = tk.Frame(fields, bg="#1f2937")
+        output_row = tk.Frame(fields, bg="#f3f4f6")
         output_row.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(10, 0))
         output_row.columnconfigure(1, weight=1)
 
@@ -471,8 +471,8 @@ class ImageDownloaderApp:
             text="Папка",
             width=14,
             anchor="w",
-            fg="#d1d5db",
-            bg="#1f2937",
+            fg="#374151",
+            bg="#f3f4f6",
             font=("Segoe UI", 10),
         ).grid(row=0, column=0)
 
@@ -481,7 +481,7 @@ class ImageDownloaderApp:
             textvariable=self.output_var,
             font=("Segoe UI", 10),
             bg="#374151",
-            fg="white",
+            fg="#111827",
             insertbackground="white",
             relief="flat",
         ).grid(row=0, column=1, sticky="ew", padx=8)
@@ -491,8 +491,8 @@ class ImageDownloaderApp:
             text="Обзор",
             command=self.choose_folder,
             font=("Segoe UI", 9),
-            fg="white",
-            bg="#4b5563",
+            fg="#111827",
+            bg="#374151",
             activebackground="#6b7280",
             relief="flat",
             bd=0,
@@ -500,7 +500,7 @@ class ImageDownloaderApp:
             padx=12,
         ).grid(row=0, column=2)
 
-        options = tk.Frame(fields, bg="#1f2937")
+        options = tk.Frame(fields, bg="#f3f4f6")
         options.grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.add_small_entry(options, "Лимит", self.limit_var, 0)
@@ -509,14 +509,14 @@ class ImageDownloaderApp:
         tk.Label(
             options,
             text="0 = без лимита",
-            fg="#9ca3af",
-            bg="#1f2937",
+            fg="#6b7280",
+            bg="#f3f4f6",
             font=("Segoe UI", 9),
         ).grid(row=0, column=4, padx=(8, 0))
 
         fields.columnconfigure(1, weight=1)
 
-        actions = tk.Frame(card, bg="#1f2937")
+        actions = tk.Frame(card, bg="#f3f4f6")
         actions.pack(fill="x", padx=22, pady=(4, 12))
 
         self.start_button = tk.Button(
@@ -524,7 +524,7 @@ class ImageDownloaderApp:
             text="⬇  Скачать изображения",
             command=self.start_download,
             font=("Segoe UI", 10, "bold"),
-            fg="white",
+            fg="#111827",
             bg="#2563eb",
             activebackground="#3b82f6",
             relief="flat",
@@ -540,9 +540,9 @@ class ImageDownloaderApp:
             text="Очистить лог",
             command=self.clear_log,
             font=("Segoe UI", 9),
-            fg="white",
+            fg="#111827",
             bg="#374151",
-            activebackground="#4b5563",
+            activebackground="#374151",
             relief="flat",
             bd=0,
             cursor="hand2",
@@ -557,13 +557,13 @@ class ImageDownloaderApp:
         )
         self.progress.pack(side="right", padx=(10, 0))
 
-        log_frame = tk.Frame(card, bg="#111827")
+        log_frame = tk.Frame(card, bg="#ffffff")
         log_frame.pack(fill="both", expand=True, padx=22, pady=(0, 14))
 
         self.log = tk.Text(
             log_frame,
-            bg="#111827",
-            fg="#d1d5db",
+            bg="#ffffff",
+            fg="#374151",
             insertbackground="white",
             relief="flat",
             bd=0,
@@ -587,7 +587,7 @@ class ImageDownloaderApp:
             textvariable=self.status_var,
             font=("Segoe UI", 9),
             fg="#6b7280",
-            bg="#111827",
+            bg="#ffffff",
         ).pack(pady=(0, 12))
 
     def add_entry(self, parent, label, variable, row):
@@ -598,8 +598,8 @@ class ImageDownloaderApp:
             text=label,
             width=14,
             anchor="w",
-            fg="#d1d5db",
-            bg="#1f2937",
+            fg="#374151",
+            bg="#f3f4f6",
             font=("Segoe UI", 10),
         ).grid(row=row, column=0, sticky="w")
 
@@ -608,7 +608,7 @@ class ImageDownloaderApp:
             textvariable=variable,
             font=("Segoe UI", 10),
             bg="#374151",
-            fg="white",
+            fg="#111827",
             insertbackground="white",
             relief="flat",
         ).grid(row=row, column=1, columnspan=2, sticky="ew", padx=(8, 0))
@@ -617,8 +617,8 @@ class ImageDownloaderApp:
         tk.Label(
             parent,
             text=label,
-            fg="#d1d5db",
-            bg="#1f2937",
+            fg="#374151",
+            bg="#f3f4f6",
             font=("Segoe UI", 9),
         ).grid(row=0, column=column * 2)
 
@@ -628,7 +628,7 @@ class ImageDownloaderApp:
             width=9,
             font=("Segoe UI", 9),
             bg="#374151",
-            fg="white",
+            fg="#111827",
             insertbackground="white",
             relief="flat",
         ).grid(row=0, column=column * 2 + 1, padx=(5, 12))
