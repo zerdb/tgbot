@@ -29,8 +29,8 @@ class Tetris(tk.Tk):
         super().__init__()
         self.title("Tkinter Tetris")
         self.resizable(False, False)
-        self.configure(bg="#171923")
-        self.canvas = tk.Canvas(self, width=WIDTH + SIDE, height=HEIGHT, bg="#11131a", highlightthickness=0)
+        self.configure(bg="#ffffff")
+        self.canvas = tk.Canvas(self, width=WIDTH + SIDE, height=HEIGHT, bg="#f3f4f6", highlightthickness=0)
         self.canvas.pack()
         self.bind_all("<Key>", self.on_key)
         self.after_id = None
@@ -172,7 +172,7 @@ class Tetris(tk.Tk):
             self.drop()
         self.draw()
 
-    def block(self, x, y, color, outline="#252938"):
+    def block(self, x, y, color, outline="#cbd5e1"):
         px, py = x * CELL, y * CELL
         self.canvas.create_rectangle(px + 2, py + 2, px + CELL - 2, py + CELL - 2, fill=color, outline=outline, width=2)
         self.canvas.create_line(px + 5, py + 5, px + CELL - 6, py + 5, fill="#ffffff", stipple="gray50")
@@ -182,7 +182,7 @@ class Tetris(tk.Tk):
         for y in range(ROWS):
             for x in range(COLS):
                 x1, y1 = x * CELL, y * CELL
-                self.canvas.create_rectangle(x1, y1, x1 + CELL, y1 + CELL, outline="#20232e")
+                self.canvas.create_rectangle(x1, y1, x1 + CELL, y1 + CELL, outline="#d1d5db")
                 if self.board[y][x]:
                     self.block(x, y, COLORS[self.board[y][x]])
 
@@ -191,33 +191,33 @@ class Tetris(tk.Tk):
             for x, y in self.cells(self.x, gy, self.rotation):
                 if y >= 0:
                     px, py = x * CELL, y * CELL
-                    self.canvas.create_rectangle(px + 5, py + 5, px + CELL - 5, py + CELL - 5, outline="#72798d", width=2)
+                    self.canvas.create_rectangle(px + 5, py + 5, px + CELL - 5, py + CELL - 5, outline="#9ca3af", width=2)
             for x, y in self.cells():
                 if y >= 0:
                     self.block(x, y, COLORS[self.kind])
 
         sx = WIDTH + 22
-        self.canvas.create_text(sx, 28, text="TETRIS", anchor="nw", fill="#f5f7ff", font=("TkDefaultFont", 22, "bold"))
-        self.canvas.create_text(sx, 86, text=f"Счёт\n{self.score}", anchor="nw", fill="#e6e8f0", font=("TkDefaultFont", 12, "bold"))
-        self.canvas.create_text(sx, 145, text=f"Линии  {self.lines}\nУровень {self.level}\nРекорд  {self.best}", anchor="nw", fill="#b8bdcc", font=("TkDefaultFont", 11))
-        self.canvas.create_text(sx, 225, text="Следующая", anchor="nw", fill="#e6e8f0", font=("TkDefaultFont", 11, "bold"))
+        self.canvas.create_text(sx, 28, text="TETRIS", anchor="nw", fill="#111827", font=("TkDefaultFont", 22, "bold"))
+        self.canvas.create_text(sx, 86, text=f"Счёт\n{self.score}", anchor="nw", fill="#374151", font=("TkDefaultFont", 12, "bold"))
+        self.canvas.create_text(sx, 145, text=f"Линии  {self.lines}\nУровень {self.level}\nРекорд  {self.best}", anchor="nw", fill="#6b7280", font=("TkDefaultFont", 11))
+        self.canvas.create_text(sx, 225, text="Следующая", anchor="nw", fill="#374151", font=("TkDefaultFont", 11, "bold"))
 
         shape = SHAPES[self.next_kind][0]
         for dx, dy in shape:
             px = sx + dx * 22
             py = 258 + dy * 22
-            self.canvas.create_rectangle(px, py, px + 19, py + 19, fill=COLORS[self.next_kind], outline="#252938")
+            self.canvas.create_rectangle(px, py, px + 19, py + 19, fill=COLORS[self.next_kind], outline="#cbd5e1")
 
-        self.canvas.create_text(sx, 355, text="Управление", anchor="nw", fill="#e6e8f0", font=("TkDefaultFont", 11, "bold"))
+        self.canvas.create_text(sx, 355, text="Управление", anchor="nw", fill="#374151", font=("TkDefaultFont", 11, "bold"))
         controls = "← → / A D   движение\n↓ / S       вниз\n↑ / W / X   поворот\nSpace       сброс\nP / Esc     пауза\nR           заново"
-        self.canvas.create_text(sx, 382, text=controls, anchor="nw", fill="#9fa6b8", font=("TkFixedFont", 9))
+        self.canvas.create_text(sx, 382, text=controls, anchor="nw", fill="#6b7280", font=("TkFixedFont", 9))
 
         if self.paused or self.game_over:
-            self.canvas.create_rectangle(28, 230, WIDTH - 28, 370, fill="#171923", outline="#555d73", width=2)
+            self.canvas.create_rectangle(28, 230, WIDTH - 28, 370, fill="#ffffff", outline="#cbd5e1", width=2)
             title = "ПАУЗА" if self.paused else "ИГРА ОКОНЧЕНА"
             hint = "P / Esc — продолжить" if self.paused else "R — новая игра"
-            self.canvas.create_text(WIDTH / 2, 275, text=title, fill="white", font=("TkDefaultFont", 18, "bold"))
-            self.canvas.create_text(WIDTH / 2, 320, text=hint, fill="#b8bdcc", font=("TkDefaultFont", 11))
+            self.canvas.create_text(WIDTH / 2, 275, text=title, fill="#111827", font=("TkDefaultFont", 18, "bold"))
+            self.canvas.create_text(WIDTH / 2, 320, text=hint, fill="#6b7280", font=("TkDefaultFont", 11))
 
 if __name__ == "__main__":
     Tetris().mainloop()
