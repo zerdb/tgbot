@@ -21,10 +21,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 TOKEN_FILE = Path(__file__).resolve().parent.parent / "token.txt"
 DB_FILE = Path(__file__).resolve().parent / "sueta05.db"
 
-CITIES = ("Весь Дагестан", "Махачкала", "Буйнакск", "Дербент", "Каспийск", "Хасавюрт", "Избербаш", "Кизляр")
-ALIASES = (\n    "Барс",\n    "Чебурек",\n    "Лезгинский Самовар",\n    "Горный Орёл",\n    "Суетолог",\n    "Каспийский Кот",\n    "Дербентский Ветер",\n    "Буйнакский Шаман",\n    "Махачкалинский Фанат",\n    "Хинкал",\n    "Аулский Ниндзя",\n    "Горный Кабан",\n    "Каспийский Шторм",\n    "Горный Енот",\n    "Хинкальный Босс",\n    "Дербентский Лис",\n    "Махачкалинский Кекс",\n    "Буйнакский Беркут",\n    "Каспийский Пацан",\n    "Аульный Философ",\n    "Суетной Барон",\n    "Хан Хинкала",\n    "Горный Пельмень",\n    "Чайный Авторитет",\n    "Кот с Перевала",\n    "Легенда Аула",\n    "Шашлычный Магистр",\n    "Самоварный Рейдер",\n    "Орёл с Балкона",\n    "Хинкальный Ниндзя",\n    "Каспийский Пират",\n    "Буйнакский Турист",\n    "Дербентский Гром",\n    "Махачкалинский Сокол",\n    "Горный Краб",\n    "Аульный Командир",\n    "Суетный Медведь",\n    "Чебуречный Философ",\n    "Каспийский Шериф",\n    "Дагестанский Дрифт",\n    "Горный Бродяга",\n    "Хинкальный Бандит",\n    "Самоварный Капитан",\n    "Кот из Дербента",\n    "Суетолог Максимум",\n    "Горный Дядька",\n    "Аульный Рок-н-ролл",\n    "Каспийский Дракон",\n    "Буйнакский Ракетчик",\n    "Дербентский Романтик",\n    "Махачкалинский Тигр",\n    "Хинкалозавр",\n    "Горный Сапёр",\n    "Суетной Профессор",\n    "Каспийский Краб",\n    "Чайный Терминатор",\n    "Ауловый Штурман",\n    "Дербентский Кот",\n    "Махачкалинский Метеор",\n    "Горный Гопник",\n    "Хинкальный Инженер",\n    "Каспийский Воробей",\n    "Суетной Пилот",\n    "Буйнакский Медведь",\n    "Самоварный Шаман",\n    "Дагестанский Пингвин",\n    "Горный Таксист",\n    "Чебуречный Рейнджер",\n    "Каспийский Вихрь",\n    "Дербентский Хулиган",\n    "Махачкалинский Бум",\n    "Аульный Барс",\n    "Хинкальный Космонавт",\n    "Суетной Депутат",\n    "Горный Кот",\n    "Каспийский Громила",\n    "Буйнакский Фокусник",\n    "Самоварный Босс",\n    "Дербентский Штурман",\n    "Махачкалинский Кабан",\n    "Аульный Кот",\n    "Хинкальный Самурай",\n    "Суетной Десантник",\n    "Горный Ветер",\n    "Каспийский Бегемот",\n    "Буйнакский Орёл",\n    "Чайный Барон",\n    "Дербентский Пельмень",\n    "Махачкалинский Ниндзя",\n    "Аульный Космонавт",\n    "Хинкальный Барс",\n    "Суетной Капитан",\n    "Горный Фанат",\n    "Каспийский Самовар",\n    "Дербентский Сокол",\n    "Каспийский Хулиган",\n    "Горный Шахматист",\n    "Махачкалинский Барс",\n    "Аульный Босс",\n    "Чебуречный Барон",\n    "Дербентский Пацан",\n    "Суетной Орёл",\n    "Горный Рыцарь",\n    "Каспийский Фанат",\n    "Хинкальный Профессор",\n    "Махачкалинский Гром",\n)\n
-SUETA_NAMES = ("После шести", "Кто куда?", "Город шумит", "На связи", "Пятничная суета", "Без паники", "Есть разговор")
-
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 dp = Dispatcher()
@@ -50,49 +46,50 @@ def db():
 def init_db():
     with db() as conn:
         conn.executescript("""
+        PRAGMA foreign_keys = ON;
         CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            first_name TEXT,
-            phone TEXT,
-            alias TEXT,
-            city TEXT,
-            joined_at TEXT NOT NULL
+            user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, phone TEXT,
+            alias TEXT, city TEXT, joined_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            text TEXT,
-            media_type TEXT,
-            media_id TEXT,
-            media_caption TEXT,
-            city TEXT NOT NULL DEFAULT 'Весь Дагестан',
-            created_at TEXT NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, text TEXT,
+            media_type TEXT, media_id TEXT, media_caption TEXT,
+            city TEXT NOT NULL DEFAULT 'Весь Дагестан', created_at TEXT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(user_id)
         );
         CREATE TABLE IF NOT EXISTS likes (
-            post_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
+            post_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
             PRIMARY KEY(post_id, user_id)
         );
         CREATE TABLE IF NOT EXISTS suetas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            city TEXT NOT NULL,
-            creator_id INTEGER NOT NULL,
-            created_at TEXT NOT NULL
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, city TEXT NOT NULL,
+            creator_id INTEGER NOT NULL, created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS sueta_members (
-            sueta_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
+            sueta_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
             PRIMARY KEY(sueta_id, user_id)
         );
         CREATE TABLE IF NOT EXISTS sueta_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sueta_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            text TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            id INTEGER PRIMARY KEY AUTOINCREMENT, sueta_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            text TEXT NOT NULL, created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS cities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+            sort_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS alias_bases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+            sort_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+            user_id INTEGER UNIQUE, created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(user_id)
+        );
+        CREATE TABLE IF NOT EXISTS sueta_name_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+            sort_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1,
+            used_count INTEGER NOT NULL DEFAULT 0
         );
         """)
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
@@ -107,13 +104,66 @@ def init_db():
             if name not in post_columns:
                 conn.execute(f"ALTER TABLE posts ADD COLUMN {name} {definition}")
 
+        cities = ("Весь Дагестан", "Махачкала", "Буйнакск", "Дербент", "Каспийск", "Хасавюрт", "Избербаш", "Кизляр")
+        alias_bases = (
+            "Барс", "Чебурек", "Лезгинский Самовар", "Горный Орёл", "Суетолог", "Каспийский Кот",
+            "Дербентский Ветер", "Буйнакский Шаман", "Махачкалинский Фанат", "Хинкал", "Аулский Ниндзя",
+            "Горный Кабан", "Каспийский Шторм", "Горный Енот", "Хинкальный Босс", "Дербентский Лис",
+            "Махачкалинский Кекс", "Буйнакский Беркут", "Каспийский Пацан", "Аульный Философ", "Суетной Барон",
+            "Хан Хинкала", "Горный Пельмень", "Чайный Авторитет", "Кот с Перевала", "Легенда Аула",
+            "Шашлычный Магистр", "Самоварный Рейдер", "Орёл с Балкона", "Хинкальный Ниндзя", "Каспийский Пират",
+            "Буйнакский Турист", "Дербентский Гром", "Махачкалинский Сокол", "Горный Краб", "Аульный Командир",
+            "Суетный Медведь", "Чебуречный Философ", "Каспийский Шериф", "Дагестанский Дрифт", "Горный Бродяга",
+            "Хинкальный Бандит", "Самоварный Капитан", "Кот из Дербента", "Суетолог Максимум", "Горный Дядька",
+            "Аульный Рок-н-ролл", "Каспийский Дракон", "Буйнакский Ракетчик", "Дербентский Романтик",
+            "Махачкалинский Тигр", "Хинкалозавр", "Горный Сапёр", "Суетной Профессор", "Каспийский Краб",
+            "Чайный Терминатор", "Ауловый Штурман", "Дербентский Кот", "Махачкалинский Метеор", "Горный Гопник",
+            "Хинкальный Инженер", "Каспийский Воробей", "Суетной Пилот", "Буйнакский Медведь", "Самоварный Шаман",
+            "Дагестанский Пингвин", "Горный Таксист", "Чебуречный Рейнджер", "Каспийский Вихрь", "Дербентский Хулиган",
+            "Махачкалинский Бум", "Аульный Барс", "Хинкальный Космонавт", "Суетной Депутат", "Горный Кот",
+            "Каспийский Громила", "Буйнакский Фокусник", "Самоварный Босс", "Дербентский Штурман", "Махачкалинский Кабан",
+            "Аульный Кот", "Хинкальный Самурай", "Суетной Десантник", "Горный Ветер", "Каспийский Бегемот",
+            "Буйнакский Орёл", "Чайный Барон", "Дербентский Пельмень", "Махачкалинский Ниндзя", "Аульный Космонавт",
+            "Хинкальный Барс", "Суетной Капитан", "Горный Фанат", "Каспийский Самовар", "Дербентский Сокол",
+            "Каспийский Хулиган", "Горный Шахматист", "Махачкалинский Барс", "Аульный Босс", "Чебуречный Барон",
+            "Дербентский Пацан", "Суетной Орёл", "Горный Рыцарь", "Каспийский Фанат", "Хинкальный Профессор",
+            "Махачкалинский Гром"
+        )
+        sueta_templates = ("После шести", "Кто куда?", "Город шумит", "На связи", "Пятничная суета", "Без паники", "Есть разговор")
+        now = datetime.now().isoformat(timespec="seconds")
+        conn.executemany("INSERT OR IGNORE INTO cities(name, sort_order) VALUES (?, ?)", [(v, i) for i, v in enumerate(cities)])
+        conn.executemany("INSERT OR IGNORE INTO alias_bases(name, sort_order) VALUES (?, ?)", [(v, i) for i, v in enumerate(alias_bases)])
+        conn.executemany("INSERT OR IGNORE INTO sueta_name_templates(name, sort_order) VALUES (?, ?)", [(v, i) for i, v in enumerate(sueta_templates)])
+        for row in conn.execute("SELECT user_id, alias FROM users WHERE alias IS NOT NULL AND alias != ''"):
+            conn.execute("INSERT OR IGNORE INTO aliases(name, user_id, created_at) VALUES (?, ?, ?)", (row["alias"], row["user_id"], now))
 
-def make_alias(user_id: int, username: str | None, phone: str | None) -> str:
-    # Телефон/username используются только как внутренний вход для детерминированного псевдонима.
-    # Сам телефон и username никогда не выводятся пользователям.
+
+def get_cities() -> list[str]:
+    with db() as conn:
+        return [r["name"] for r in conn.execute("SELECT name FROM cities WHERE active=1 ORDER BY sort_order, id").fetchall()]
+
+
+def allocate_alias(conn, user_id: int, username: str | None, phone: str | None) -> str:
+    existing = conn.execute("SELECT name FROM aliases WHERE user_id=?", (user_id,)).fetchone()
+    if existing:
+        return existing["name"]
+    bases = conn.execute("SELECT name FROM alias_bases WHERE active=1 ORDER BY sort_order, id").fetchall()
+    if not bases:
+        raise RuntimeError("В базе нет доступных основ для анонимных имён.")
     seed = f"{phone or ''}|{username or ''}|{user_id}".encode("utf-8")
     digest = hashlib.sha256(seed).hexdigest()
-    return f"{ALIASES[int(digest[:8], 16) % len(ALIASES)]} {digest[8:14].upper()}"
+    start = int(digest[:8], 16) % len(bases)
+    for salt in range(len(bases) + 100):
+        base = bases[(start + salt) % len(bases)]["name"]
+        suffix = hashlib.sha256(f"{digest}|{salt}".encode("utf-8")).hexdigest()[:6].upper()
+        candidate = f"{base} {suffix}"
+        try:
+            conn.execute("INSERT INTO aliases(name, user_id, created_at) VALUES (?, ?, ?)",
+                         (candidate, user_id, datetime.now().isoformat(timespec="seconds")))
+            return candidate
+        except sqlite3.IntegrityError:
+            continue
+    raise RuntimeError("Не удалось выдать уникальное анонимное имя.")
 
 
 def register_user(user, phone: str | None = None) -> None:
@@ -122,8 +172,13 @@ def register_user(user, phone: str | None = None) -> None:
     with db() as conn:
         old = conn.execute("SELECT phone, alias, city FROM users WHERE user_id=?", (user.id,)).fetchone()
         stored_phone = phone or (old["phone"] if old else None)
-        alias = old["alias"] if old and old["alias"] else make_alias(user.id, user.username, stored_phone)
-        city = old["city"] if old and old["city"] else "Весь Дагестан"
+        if old and old["alias"]:
+            alias = old["alias"]
+            conn.execute("INSERT OR IGNORE INTO aliases(name, user_id, created_at) VALUES (?, ?, ?)",
+                         (alias, user.id, datetime.now().isoformat(timespec="seconds")))
+        else:
+            alias = allocate_alias(conn, user.id, user.username, stored_phone)
+        city = old["city"] if old and old["city"] else get_cities()[0]
         conn.execute(
             """INSERT INTO users(user_id, username, first_name, phone, alias, city, joined_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -224,7 +279,7 @@ def nav_keyboard(kind: str, offset: int, has_next: bool):
 
 def city_keyboard():
     b = InlineKeyboardBuilder()
-    for city in CITIES:
+    for city in get_cities():
         b.button(text=f"📍 {city}", callback_data=f"city:{city}")
     b.adjust(2)
     b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
@@ -246,7 +301,7 @@ def sueta_keyboard(rows):
 
 def sueta_city_keyboard():
     b = InlineKeyboardBuilder()
-    for city in CITIES:
+    for city in get_cities():
         b.button(text=f"📍 {city}", callback_data=f"suetacity:{city}")
     b.adjust(2)
     b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
@@ -266,7 +321,7 @@ def get_home_text() -> str:
 
 async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
     rows = feed(offset=offset, city=city, hot=hot)
-    title = "🔥 <b>Горячее за час</b>" if hot else "🔥 <b>Лента</b>"
+    title = "🔥 <b>Горячее</b>" if hot else "🔥 <b>Лента</b>"
     if city and city != "Весь Дагестан":
         title += f" · 📍 {html.escape(city)}"
     if not rows:
@@ -410,7 +465,7 @@ async def save_post(message: Message, state: FSMContext):
     if len(text or "") > 1000:
         await message.answer("Слишком много суеты 😄 Максимум 1000 символов.")
         return
-    await state.update_data(media_type=media_type, media_id=media_id, text=text or "", city="Весь Дагестан")
+    await state.update_data(media_type=media_type, media_id=media_id, text=text or "", city=get_cities()[0])
     await state.set_state(PostStates.waiting_city)
     await message.answer("📍 <b>Где эта суета?</b>\n\nМожно выбрать город или весь Дагестан:", reply_markup=city_keyboard())
 
