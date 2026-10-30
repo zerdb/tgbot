@@ -152,16 +152,29 @@ def load_token() -> str:
     if token:
         return token
 
-    if not TOKEN_FILE.exists():
-        raise RuntimeError(
-            "Не найден токен. Создайте token.txt в корне проекта "
-            "или задайте переменную окружения BOT_TOKEN."
-        )
+    candidates = [
+        TOKEN_FILE,
+        Path.cwd() / "token.txt",
+        Path(__file__).resolve().parent / "token.txt",
+    ]
 
-    token = TOKEN_FILE.read_text(encoding="utf-8").strip()
-    if not token:
-        raise RuntimeError("Файл token.txt пуст.")
-    return token
+    checked = []
+    for path in dict.fromkeys(candidates):
+        checked.append(str(path))
+        if not path.is_file():
+            continue
+
+        raw = path.read_text(encoding="utf-8-sig")
+        token = raw.strip().strip('"').strip("'").strip()
+        if token:
+            logger.info("Токен загружен из %s", path)
+            return token
+
+    raise RuntimeError(
+        "Не удалось прочитать непустой токен. Проверены файлы: "
+        + ", ".join(checked)
+        + ". Токен должен быть обычным текстом без BOT_TOKEN=."
+    )
 
 
 async def main() -> None:
