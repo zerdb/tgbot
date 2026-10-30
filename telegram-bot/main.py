@@ -407,28 +407,23 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
                 )
             )
 
-        keyboard.row(
-            *[
+        nav_buttons = []
+        if offset > 0:
+            nav_buttons.append(
                 InlineKeyboardButton(
-                    text=button.text,
-                    callback_data=button.callback_data,
+                    text="⬅️ Новее",
+                    callback_data=f"{'hot' if hot else 'feed'}:{max(0, offset-page_size)}",
                 )
-                for button in (
-                    ([] if offset <= 0 else [
-                        InlineKeyboardButton(
-                            text="⬅️ Новее",
-                            callback_data=f"{'hot' if hot else 'feed'}:{max(0, offset-page_size)}",
-                        )
-                    ])
-                    + ([] if len(rows) < page_size else [
-                        InlineKeyboardButton(
-                            text="Старее ➡️",
-                            callback_data=f"{'hot' if hot else 'feed'}:{offset+page_size}",
-                        )
-                    ])
+            )
+        if len(rows) == page_size:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="Старее ➡️",
+                    callback_data=f"{'hot' if hot else 'feed'}:{offset+page_size}",
                 )
-            ]
-        )
+            )
+        if nav_buttons:
+            keyboard.row(*nav_buttons)
         keyboard.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
 
         msg = await bot.send_message(
@@ -474,8 +469,8 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
             )
         sent_ids.append(msg.message_id)
 
-    # Если в странице есть медиа, навигацию оставляем отдельным компактным сообщением.
-    if media_rows:
+    # Если в странице только медиа, навигацию показываем отдельным компактным сообщением.
+    if media_rows and not text_rows:
         nav = await bot.send_message(
             chat_id,
             "Лента",
