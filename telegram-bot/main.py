@@ -20,7 +20,7 @@ TOKEN_FILE = Path(__file__).resolve().parent.parent / "token.txt"
 
 MORNING_WAKEUP_HOUR = 7
 MORNING_WAKEUP_MINUTE = 30
-AFTERNOON_CLOSE_HOUR = 14
+AFTERNOON_CLOSE_HOUR = 99  # Временно работаем круглосуточно до завершения бота
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -93,9 +93,36 @@ def get_morning_digest() -> str:
 def get_main_keyboard():
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="🔄 Обновить данные", callback_data="refresh")
+        InlineKeyboardButton(text="🌤 Сводка", callback_data="refresh"),
+        InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="📋 Меню", callback_data="menu"),
     )
     return builder.as_markup()
+
+
+def get_menu_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="🌤 Сводка", callback_data="refresh"),
+        InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🏠 Главная", callback_data="home"),
+        InlineKeyboardButton(text="❌ Закрыть", callback_data="close"),
+    )
+    return builder.as_markup()
+
+
+def get_home_text() -> str:
+    return (
+        f"🤖 <b>Утренняя суета</b>\n"
+        f"📍 {CITY}\n\n"
+        "Добро пожаловать! Здесь можно получить свежую сводку, "
+        "обновить данные или открыть меню управления.\n\n"
+        "⏰ <i>Временный режим: бот работает весь день.</i>"
+    )
 
 
 @dp.message(Command("start"))
@@ -103,9 +130,47 @@ async def cmd_start(message: Message) -> None:
     if message.from_user:
         save_user(message.from_user.id)
     await message.answer(
-        f"👋 Привет! Я бот «Утренняя суета» для города {CITY}.\n"
-        "Нажми кнопку ниже, чтобы получить сводку.",
+        get_home_text(),
         reply_markup=get_main_keyboard(),
+    )
+
+
+@dp.callback_query(F.data == "menu")
+async def process_menu(callback: types.CallbackQuery) -> None:
+    await callback.answer()
+    if callback.message:
+        await callback.message.edit_text(
+            "⚙️ <b>Меню</b>\n\n"
+            "Выберите действие:",
+            reply_markup=get_menu_keyboard(),
+        )
+
+
+@dp.callback_query(F.data == "home")
+async def process_home(callback: types.CallbackQuery) -> None:
+    await callback.answer()
+    if callback.message:
+        await callback.message.edit_text(
+            get_home_text(),
+            reply_markup=get_main_keyboard(),
+        )
+
+
+@dp.callback_query(F.data == "close")
+async def process_close(callback: types.CallbackQuery) -> None:
+    await callback.answer()
+    if callback.message:
+        await callback.message.edit_text(
+            "👋 <b>Меню закрыто.</b>\n\n"
+            "Нажмите /start, чтобы снова открыть бота.",
+        )
+
+
+@dp.message(Command("menu"))
+async def cmd_menu(message: Message) -> None:
+    await message.answer(
+        "⚙️ <b>Меню</b>\n\nВыберите действие:",
+        reply_markup=get_menu_keyboard(),
     )
 
 
