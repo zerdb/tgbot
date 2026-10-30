@@ -258,16 +258,45 @@ def post_text(row) -> str:
 def main_keyboard():
     b = InlineKeyboardBuilder()
     b.row(
-        InlineKeyboardButton(text="🔥 Дагестанская суета", callback_data="feed:0"),
         InlineKeyboardButton(text="🔥 Горячее", callback_data="hot:0"),
-    )
-    b.row(
         InlineKeyboardButton(text="➕ Запостить", callback_data="post"),
-        InlineKeyboardButton(text="💬 Суеты", callback_data="suitas"),
     )
     b.row(
         InlineKeyboardButton(text="👤 Профиль", callback_data="profile"),
     )
+    return b.as_markup()
+
+
+def load_suetas(limit=15):
+    with db() as conn:
+        return conn.execute(
+            """SELECT s.*,
+                      (SELECT COUNT(*) FROM sueta_members sm WHERE sm.sueta_id=s.id) members,
+                      (SELECT COUNT(*) FROM sueta_messages sx WHERE sx.sueta_id=s.id) messages_count
+               FROM suetas s
+               ORDER BY s.id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+
+
+def suetas_screen_text(rows):
+    if rows:
+        return (
+            "💬 <b>Суеты</b>\n\n"
+            "Выбирай разговор и заходи."
+        )
+    return (
+        "💬 <b>Суеты</b>\n\n"
+        "Пока никто не создал ни одной суеты.\n"
+        "Будь первым."
+    )
+
+
+def suetas_screen_keyboard(rows):
+    if rows:
+        return sueta_keyboard(rows)
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="➕ Создать суету", callback_data="new_sueta"))
     return b.as_markup()
 
 
@@ -489,12 +518,23 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
     }
 
 
+async def show_suetas_screen(target):
+    rows = load_suetas()
+    text = suetas_screen_text(rows)
+    markup = suetas_screen_keyboard(rows)
+
+    if isinstance(target, types.CallbackQuery):
+        await target.message.edit_text(text, reply_markup=markup)
+    else:
+        await target.answer(text, reply_markup=markup)
+
+
 @dp.message(Command("start"))
 async def start(message: Message, state: FSMContext):
     try:
         register_user(message.from_user)
         await state.clear()
-        await message.answer(get_home_text(), reply_markup=main_keyboard())
+        await show_suetas_screen(message)
     except Exception:
         logger.exception("Ошибка обработки /start для user_id=%s", message.from_user.id)
         await message.answer("⚠️ Не удалось открыть SUETA 05. Ошибка уже записана в лог.")
@@ -504,7 +544,7 @@ async def start(message: Message, state: FSMContext):
 async def menu(message: Message, state: FSMContext):
     await state.clear()
     register_user(message.from_user)
-    await message.answer(get_home_text(), reply_markup=main_keyboard())
+    await show_suetas_screen(message)
 
 
 @dp.callback_query(F.data == "home")
@@ -512,7 +552,7 @@ async def home(callback: types.CallbackQuery, state: FSMContext):
     active_feeds.pop(callback.from_user.id, None)
     await callback.answer()
     await state.clear()
-    await callback.message.edit_text(get_home_text(), reply_markup=main_keyboard())
+    await show_suetas_screen(callback)
 
 
 @dp.callback_query(F.data == "feed:0")
@@ -660,21 +700,8 @@ async def profile(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "suitas")
 async def suitas(callback: types.CallbackQuery):
-    with db() as conn:
-        rows = conn.execute(
-            """SELECT s.*,
-                      (SELECT COUNT(*) FROM sueta_members sm WHERE sm.sueta_id=s.id) members,
-                      (SELECT COUNT(*) FROM sueta_messages sx WHERE sx.sueta_id=s.id) messages_count
-               FROM suetas s
-               ORDER BY s.id DESC LIMIT 15"""
-        ).fetchall()
     await callback.answer()
-    await callback.message.edit_text(
-        "💬 <b>Суеты пользователей</b>\n\n"
-        "Здесь отдельные разговоры, которые создают сами пользователи.\n"
-        "Выбирай суету или создай свою.",
-        reply_markup=sueta_keyboard(rows),
-    )
+    await show_suetas_screen(callback)
 
 
 @dp.callback_query(F.data == "new_sueta")
