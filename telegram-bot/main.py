@@ -25,6 +25,12 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 dp = Dispatcher()
 
+# Пользователи, которые сейчас находятся в ленте. Ключ — Telegram user_id,
+# значение — параметры открытой ленты. Используется для мгновенного обновления
+# ленты после публикации нового поста без спама всем подряд.
+active_feeds: dict[int, dict] = {}
+
+
 
 class PostStates(StatesGroup):
     waiting_content = State()
@@ -266,6 +272,44 @@ def main_keyboard():
     return b.as_markup()
 
 
+async def push_new_post_to_active_feeds(bot: Bot, author_id: int):
+    """Мгновенно показывает новый пост пользователям, которые сейчас в ленте."""
+    with db() as conn:
+        row = conn.execute(
+            """SELECT p.*, u.alias,
+                      (SELECT COUNT(*) FROM likes l WHERE l.post_id=p.id) likes
+               FROM posts p JOIN users u ON u.user_id=p.user_id
+               WHERE p.id=(SELECT MAX(id) FROM posts WHERE user_id=? )""",
+            (author_id,),
+        ).fetchone()
+    if not row:
+        return
+
+    recipients = list(active_feeds.items())
+    for user_id, view in recipients:
+        if user_id == author_id:
+            continue
+        city = view.get("city")
+        if city and city != "Весь Дагестан" and row["city"] != city:
+            continue
+        try:
+            with db() as conn:
+                liked = conn.execute(
+                    "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
+                    (row["id"], user_id),
+                ).fetchone()
+            await bot.send_message(
+                user_id,
+                "🆕 <b>Новая суета в ленте</b>\n\n" + post_text(row),
+                reply_markup=post_keyboard(row["id"], bool(liked)),
+            )
+        except Exception:
+            # Пользователь мог заблокировать бота/закрыть чат — просто убираем
+            # его из списка активных подписчиков.
+            logger.warning("Не удалось обновить ленту user_id=%s", user_id, exc_info=True)
+            active_feeds.pop(user_id, None)
+
+
 def post_keyboard(post_id: int, liked=False):
     b = InlineKeyboardBuilder()
     b.row(InlineKeyboardButton(text="❤️" if not liked else "💔", callback_data=f"like:{post_id}"))
@@ -329,6 +373,14 @@ def get_home_text() -> str:
 
 
 async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
+    # Запоминаем, кто сейчас смотрит ленту. Новые посты будут автоматически
+    # доставляться этим пользователям, если они подходят под фильтр города.
+    active_feeds[user_id] = {
+        "city": city,
+        "hot": hot,
+        "offset": offset,
+        "message_id": target.message.message_id if isinstance(target, types.CallbackQuery) else None,
+    }
     rows = feed(offset=offset, city=city, hot=hot)
     title = "🔥 <b>Горячее</b>" if hot else "🔥 <b>Лента</b>"
     if city and city != "Весь Дагестан":
@@ -395,6 +447,7 @@ async def menu(message: Message, state: FSMContext):
 
 @dp.callback_query(F.data == "home")
 async def home(callback: types.CallbackQuery, state: FSMContext):
+    active_feeds.pop(callback.from_user.id, None)
     await callback.answer()
     await state.clear()
     await callback.message.edit_text(get_home_text(), reply_markup=main_keyboard())
@@ -454,6 +507,7 @@ async def choose_city(callback: types.CallbackQuery, state: FSMContext):
             "🔥 <b>Суета опубликована.</b>",
             reply_markup=main_keyboard(),
         )
+        await push_new_post_to_active_feeds(callback.bot, callback.from_user.id)
         return
 
     register_user(callback.from_user)
@@ -465,6 +519,7 @@ async def choose_city(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "post")
 async def create_post(callback: types.CallbackQuery, state: FSMContext):
+    active_feeds.pop(callback.from_user.id, None)
     await callback.answer()
     await state.set_state(PostStates.waiting_content)
     await callback.message.answer(
