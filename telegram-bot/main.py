@@ -345,8 +345,22 @@ def get_home_text() -> str:
     )
 
 
+def compact_post_text(row) -> str:
+    body = html.escape(row["text"] or row["media_caption"] or "")
+    if not body:
+        body = {
+            "voice": "🎙 Голосовое сообщение",
+            "location": "📍 Геолокация",
+        }.get(row["media_type"], "")
+    return (
+        f"👤 <b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n"
+        f"{body}\n"
+        f"❤️ {row['likes']}"
+    )
+
+
 async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
-    """Показывает компактную страницу ленты и удаляет старую."""
+    """Показывает ленту как компактный поток сообщений, сохраняя порядок."""
     previous = active_feeds.get(user_id, {})
     previous_ids = previous.get("message_ids", [])
 
@@ -361,40 +375,31 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
 
     page_size = 6
     rows = feed(limit=page_size, offset=offset, city=city, hot=hot)
-    title = "🔥 <b>Горячее</b>" if hot else "🔥 <b>Лента</b>"
     sent_ids = []
 
     if not rows:
         msg = await bot.send_message(
             chat_id,
-            f"{title}\n\nПока пусто. Устрой первую суету.",
+            "🔥 <b>Дагестан</b>\n\nПока пусто. Устрой первую суету.",
             reply_markup=main_keyboard(),
         )
         sent_ids.append(msg.message_id)
         active_feeds[user_id] = {
-            "city": city,
-            "hot": hot,
-            "offset": offset,
-            "message_ids": sent_ids,
+            "city": city, "hot": hot, "offset": offset, "message_ids": sent_ids,
         }
         return
 
-    # Текстовые посты объединяем в одно сообщение с общей клавиатурой.
-    # Так лента не превращается в десяток огромных Telegram-пузырей.
-    text_rows = []
-    media_rows = []
-    for row in rows:
-        if row["media_type"] in ("photo", "video", "voice", "location"):
-            media_rows.append(row)
-        else:
-            text_rows.append(row)
+    # Не сортируем медиа отдельно: иначе фото/видео уезжают от сообщения,
+    # к которому они относятся. Собираем только соседние текстовые сообщения.
+    text_chunk = []
 
-    if text_rows:
-        blocks = [title]
+    async def flush_text_chunk():
+        nonlocal text_chunk
+        if not text_chunk:
+            return
+
         keyboard = InlineKeyboardBuilder()
-
-        for row in text_rows:
-            blocks.append(post_text(row))
+        for row in text_chunk:
             with db() as conn:
                 liked = conn.execute(
                     "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
@@ -407,80 +412,74 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
                 )
             )
 
-        nav_buttons = []
-        if offset > 0:
-            nav_buttons.append(
-                InlineKeyboardButton(
-                    text="⬅️ Новее",
-                    callback_data=f"{'hot' if hot else 'feed'}:{max(0, offset-page_size)}",
-                )
-            )
-        if len(rows) == page_size:
-            nav_buttons.append(
-                InlineKeyboardButton(
-                    text="Старее ➡️",
-                    callback_data=f"{'hot' if hot else 'feed'}:{offset+page_size}",
-                )
-            )
-        if nav_buttons:
-            keyboard.row(*nav_buttons)
-        keyboard.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
-
         msg = await bot.send_message(
             chat_id,
-            "\n\n".join(blocks),
+            "\n\n".join(compact_post_text(row) for row in text_chunk),
             reply_markup=keyboard.as_markup(),
         )
         sent_ids.append(msg.message_id)
-    else:
-        # Если страница состоит только из медиа, заголовок всё равно показываем отдельно.
-        header = await bot.send_message(chat_id, title)
-        sent_ids.append(header.message_id)
+        text_chunk = []
 
-    for row in media_rows:
+    for row in rows:
+        media_type = row["media_type"]
+
+        if media_type not in ("photo", "video", "voice", "location"):
+            text_chunk.append(row)
+            continue
+
+        await flush_text_chunk()
+
         with db() as conn:
             liked = conn.execute(
                 "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
                 (row["id"], user_id),
             ).fetchone()
+
         markup = post_keyboard(row["id"], bool(liked))
 
-        if row["media_type"] == "photo":
+        if media_type == "photo":
             msg = await bot.send_photo(
-                chat_id, row["media_id"], caption=post_text(row), reply_markup=markup
+                chat_id, row["media_id"], caption=compact_post_text(row),
+                reply_markup=markup,
             )
-        elif row["media_type"] == "video":
+            sent_ids.append(msg.message_id)
+
+        elif media_type == "video":
             msg = await bot.send_video(
-                chat_id, row["media_id"], caption=post_text(row), reply_markup=markup
+                chat_id, row["media_id"], caption=compact_post_text(row),
+                reply_markup=markup,
             )
-        elif row["media_type"] == "voice":
+            sent_ids.append(msg.message_id)
+
+        elif media_type == "voice":
             msg = await bot.send_voice(
-                chat_id, row["media_id"], caption=post_text(row), reply_markup=markup
+                chat_id, row["media_id"], caption=compact_post_text(row),
+                reply_markup=markup,
             )
-        elif row["media_type"] == "location":
+            sent_ids.append(msg.message_id)
+
+        elif media_type == "location":
             msg = await bot.send_location(
                 chat_id,
                 float(row["media_id"].split(",")[0]),
                 float(row["media_id"].split(",")[1]),
+                reply_markup=markup,
             )
             sent_ids.append(msg.message_id)
-            msg = await bot.send_message(
-                chat_id, post_text(row), reply_markup=markup
-            )
-        sent_ids.append(msg.message_id)
 
-    # Если в странице только медиа, навигацию показываем отдельным компактным сообщением.
-    if media_rows and not text_rows:
-        nav = await bot.send_message(
-            chat_id,
-            "Лента",
-            reply_markup=nav_keyboard(
-                "hot" if hot else "feed",
-                offset,
-                len(rows) == page_size,
-            ),
-        )
-        sent_ids.append(nav.message_id)
+    await flush_text_chunk()
+
+    # Навигация отдельным коротким сообщением только внизу страницы.
+    nav = await bot.send_message(
+        chat_id,
+        "🔥 Дагестан" if not hot else "🔥 Горячее",
+        reply_markup=nav_keyboard(
+            "hot" if hot else "feed",
+            offset,
+            len(rows) == page_size,
+        ),
+    )
+    sent_ids.append(nav.message_id)
 
     active_feeds[user_id] = {
         "city": city,
