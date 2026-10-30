@@ -576,7 +576,7 @@ async def profile(callback: types.CallbackQuery):
     await callback.message.edit_text(
         f"👤 <b>Профиль</b>\n\n"
         f"🌀 Имя: <b>{display_name(user)}</b>\n"
-        f"📍 Город: <b>{html.escape(user['city'])}</b>\n"
+
         f"🔥 Постов: <b>{posts}</b>\n"
         f"❤️ Лайков на твоих постах: <b>{likes}</b>",
         reply_markup=InlineKeyboardBuilder().button(text="🏠 Меню", callback_data="home").as_markup(),
