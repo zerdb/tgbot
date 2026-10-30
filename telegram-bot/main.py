@@ -29,6 +29,7 @@ dp = Dispatcher()
 # значение — параметры открытой ленты. Используется для мгновенного обновления
 # ленты после публикации нового поста без спама всем подряд.
 active_feeds: dict[int, dict] = {}
+active_suetas: dict[int, int] = {}
 
 
 
@@ -550,6 +551,7 @@ async def menu(message: Message, state: FSMContext):
 @dp.callback_query(F.data == "home")
 async def home(callback: types.CallbackQuery, state: FSMContext):
     active_feeds.pop(callback.from_user.id, None)
+    active_suetas.pop(callback.from_user.id, None)
     await callback.answer()
     await state.clear()
     await show_suetas_screen(callback)
@@ -755,104 +757,127 @@ async def save_sueta_name(message: Message, state: FSMContext):
 @dp.callback_query(F.data.startswith("sueta:"))
 async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
     sueta_id = int(callback.data.split(":")[1])
+    register_user(callback.from_user)
+
     with db() as conn:
         sueta = conn.execute("SELECT * FROM suetas WHERE id=?", (sueta_id,)).fetchone()
         if not sueta:
             await callback.answer("Суета не найдена.", show_alert=True)
             return
-        members = conn.execute("SELECT COUNT(*) c FROM sueta_members WHERE sueta_id=?", (sueta_id,)).fetchone()["c"]
-        messages_count = conn.execute("SELECT COUNT(*) c FROM sueta_messages WHERE sueta_id=?", (sueta_id,)).fetchone()["c"]
-        joined = conn.execute("SELECT 1 FROM sueta_members WHERE sueta_id=? AND user_id=?", (sueta_id, callback.from_user.id)).fetchone()
+
+        # Выбор суеты сразу делает её активной и автоматически добавляет пользователя.
+        conn.execute(
+            "INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)",
+            (sueta_id, callback.from_user.id),
+        )
+        members = conn.execute(
+            "SELECT COUNT(*) c FROM sueta_members WHERE sueta_id=?", (sueta_id,)
+        ).fetchone()["c"]
+        messages_count = conn.execute(
+            "SELECT COUNT(*) c FROM sueta_messages WHERE sueta_id=?", (sueta_id,)
+        ).fetchone()["c"]
         messages = conn.execute(
             """SELECT m.*, u.alias FROM sueta_messages m JOIN users u ON u.user_id=m.user_id
-               WHERE m.sueta_id=? ORDER BY m.id DESC LIMIT 15""", (sueta_id,)
+               WHERE m.sueta_id=? ORDER BY m.id DESC LIMIT 15""",
+            (sueta_id,),
         ).fetchall()
-    await callback.answer()
+
+    active_suetas[callback.from_user.id] = sueta_id
+    active_feeds.pop(callback.from_user.id, None)
+    await state.clear()
+    await callback.answer("Суета закреплена 🔥")
+
     lines = [
-        f"💬 <b>{html.escape(sueta['name'])}</b>",
-        "",
-        f"👥 {members} {'участник' if members == 1 else 'участников'}",
-        f"🔥 {messages_count} сообщений",
+        f"📌 <b>{html.escape(sueta['name'])}</b>",
+        f"👥 {members} · 💬 {messages_count}",
         "",
     ]
-    if joined:
-        if messages:
-            for row in reversed(messages):
-                lines.append(f"<b>{display_name(row)}</b>: {html.escape(row['text'])}")
-        else:
-            lines.append("Пока тихо. Начни разговор.")
-        lines.append("")
-        lines.append("Нажми «✍️ Написать», чтобы добавить сообщение.")
+    if messages:
+        for row in reversed(messages):
+            lines.append(
+                f"<b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n"
+                f"{html.escape(row['text'])}"
+            )
     else:
-        lines.append("Войди в суету, чтобы участвовать в разговоре.")
+        lines.append("Пока тихо. Напиши первое сообщение прямо из строки Telegram.")
+
     b = InlineKeyboardBuilder()
-    if not joined:
-        b.row(InlineKeyboardButton(text="💬 Войти в суету", callback_data=f"join_sueta:{sueta_id}"))
-    else:
-        b.row(InlineKeyboardButton(text="✍️ Написать", callback_data=f"suetawrite:{sueta_id}"))
-        b.row(InlineKeyboardButton(text="🚪 Выйти", callback_data=f"leave_sueta:{sueta_id}"))
-    b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
-    await callback.message.edit_text("\n".join(lines), reply_markup=b.as_markup())
+    b.row(InlineKeyboardButton(text="🚪 Выйти из суеты", callback_data=f"leave_sueta:{sueta_id}"))
+    b.row(InlineKeyboardButton(text="💬 Сменить суету", callback_data="suitas"))
+    await callback.message.edit_text("\n\n".join(lines), reply_markup=b.as_markup())
 
 
 @dp.callback_query(F.data.startswith("join_sueta:"))
 async def join_sueta(callback: types.CallbackQuery):
+    # Старые кнопки совместимости: теперь вход происходит сразу при выборе суеты.
     sueta_id = int(callback.data.split(":")[1])
-    register_user(callback.from_user)
-    with db() as conn:
-        sueta = conn.execute("SELECT id FROM suetas WHERE id=?", (sueta_id,)).fetchone()
-        if not sueta:
-            await callback.answer("Суета не найдена.", show_alert=True)
-            return
-        conn.execute("INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)", (sueta_id, callback.from_user.id))
-    await callback.answer("Ты в суете 🔥")
-    await open_sueta(callback, None)
+    callback.data = f"sueta:{sueta_id}"
+    await open_sueta(callback, FSMContext)
 
 
 @dp.callback_query(F.data.startswith("leave_sueta:"))
-async def leave_sueta(callback: types.CallbackQuery):
+async def leave_sueta(callback: types.CallbackQuery, state: FSMContext):
     sueta_id = int(callback.data.split(":")[1])
     with db() as conn:
-        conn.execute("DELETE FROM sueta_members WHERE sueta_id=? AND user_id=?", (sueta_id, callback.from_user.id))
+        conn.execute(
+            "DELETE FROM sueta_members WHERE sueta_id=? AND user_id=?",
+            (sueta_id, callback.from_user.id),
+        )
+    active_suetas.pop(callback.from_user.id, None)
+    await state.clear()
     await callback.answer("Ты вышел из суеты.")
-    await open_sueta(callback, None)
+    await show_suetas_screen(callback)
 
 
-@dp.callback_query(F.data.startswith("suetawrite:"))
-async def sueta_write(callback: types.CallbackQuery, state: FSMContext):
-    sueta_id = int(callback.data.split(":")[1])
-    await state.update_data(sueta_id=sueta_id)
-    await state.set_state(SuetaStates.waiting_text)
-    await callback.answer()
-    await callback.message.answer("✍️ Напиши сообщение в суету. До 500 символов.")
-
-
-@dp.message(SuetaStates.waiting_text)
-async def save_sueta_message(message: Message, state: FSMContext):
-    if not message.text:
-        await message.answer("В мини-суетах пока только текст.")
+@dp.message()
+async def active_sueta_message(message: Message, state: FSMContext):
+    """Любое обычное сообщение идёт в закреплённую суету."""
+    if message.text and message.text.startswith("/"):
         return
+
+    sueta_id = active_suetas.get(message.from_user.id)
+    if not sueta_id:
+        return
+
+    register_user(message.from_user)
+
+    if not message.text:
+        await message.answer("В суете пока принимаю сообщения только текстом.")
+        return
+
     text = message.text.strip()
     if not text or len(text) > 500:
         await message.answer("Сообщение: от 1 до 500 символов.")
         return
-    data = await state.get_data()
-    register_user(message.from_user)
+
     with db() as conn:
         member = conn.execute(
             "SELECT 1 FROM sueta_members WHERE sueta_id=? AND user_id=?",
-            (data["sueta_id"], message.from_user.id),
+            (sueta_id, message.from_user.id),
         ).fetchone()
-        if not member:
-            await message.answer("Сначала войди в эту суету.")
-            await state.clear()
+        sueta = conn.execute(
+            "SELECT name FROM suetas WHERE id=?", (sueta_id,)
+        ).fetchone()
+
+        if not member or not sueta:
+            active_suetas.pop(message.from_user.id, None)
+            await message.answer("Суета больше недоступна. Выбери другую.")
             return
+
         conn.execute(
             "INSERT INTO sueta_messages(sueta_id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
-            (data["sueta_id"], message.from_user.id, text, datetime.now().isoformat(timespec="seconds")),
+            (
+                sueta_id,
+                message.from_user.id,
+                text,
+                datetime.now().isoformat(timespec="seconds"),
+            ),
         )
-    await state.clear()
-    await message.answer("💬 Сообщение отправлено. Открой суету снова.", reply_markup=main_keyboard())
+
+    # Сообщение отправлено. Никакой кнопки «Написать» больше не требуется.
+    await message.answer(
+        f"💬 <b>{html.escape(sueta['name'])}</b> · сообщение отправлено"
+    )
 
 
 @dp.callback_query(F.data == "about")
