@@ -858,6 +858,14 @@ async def active_sueta_message(message: Message, state: FSMContext):
             ),
         )
 
+    # Убираем исходное сообщение пользователя из личного чата с ботом,
+    # чтобы Telegram не оставлял локальный "след". Само сообщение уже
+    # сохранено в общей суете и появится в едином окне чата.
+    try:
+        await message.delete()
+    except Exception:
+        logger.debug("Не удалось удалить исходное сообщение user_id=%s", message.from_user.id, exc_info=True)
+
     # Не отправляем отдельное подтверждение: обновляем единое сообщение общего чата.
     view_message_id = active_sueta_views.get(message.from_user.id)
     if view_message_id:
