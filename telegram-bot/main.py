@@ -1,7 +1,9 @@
 import asyncio
+import hashlib
 import html
 import logging
 import os
+import re
 import sqlite3
 import urllib.request
 from datetime import datetime
@@ -19,16 +21,25 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 TOKEN_FILE = Path(__file__).resolve().parent.parent / "token.txt"
 DB_FILE = Path(__file__).resolve().parent / "sueta05.db"
 
+CITIES = ("Весь Дагестан", "Махачкала", "Буйнакск", "Дербент", "Каспийск", "Хасавюрт", "Избербаш", "Кизляр")
+ALIASES = (
+    "Барс", "Чебурек", "Лезгинский Самовар", "Горный Орёл",
+    "Суетолог", "Каспийский Кот", "Дербентский Ветер", "Буйнакский Шаман",
+    "Махачкалинский Фанат", "Хинкал", "Аулский Ниндзя", "Горный Кабан",
+)
+SUETA_NAMES = ("После шести", "Кто куда?", "Город шумит", "На связи", "Пятничная суета", "Без паники", "Есть разговор")
+
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 dp = Dispatcher()
 
 
 class PostStates(StatesGroup):
-    waiting_text = State()
+    waiting_content = State()
+    waiting_city = State()
 
 
-class CommentStates(StatesGroup):
+class SuetaStates(StatesGroup):
     waiting_text = State()
 
 
@@ -45,12 +56,19 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             username TEXT,
             first_name TEXT,
+            phone TEXT,
+            alias TEXT,
+            city TEXT,
             joined_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            text TEXT NOT NULL,
+            text TEXT,
+            media_type TEXT,
+            media_id TEXT,
+            media_caption TEXT,
+            city TEXT NOT NULL DEFAULT 'Весь Дагестан',
             created_at TEXT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(user_id)
         );
@@ -59,39 +77,67 @@ def init_db():
             user_id INTEGER NOT NULL,
             PRIMARY KEY(post_id, user_id)
         );
-        CREATE TABLE IF NOT EXISTS comments (
+        CREATE TABLE IF NOT EXISTS suetas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            city TEXT NOT NULL,
+            creator_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sueta_members (
+            sueta_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            PRIMARY KEY(sueta_id, user_id)
+        );
+        CREATE TABLE IF NOT EXISTS sueta_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sueta_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             text TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            created_at TEXT NOT NULL,
-            UNIQUE(post_id, user_id)
-        );
         """)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+        for name, definition in (("phone", "TEXT"), ("alias", "TEXT"), ("city", "TEXT")):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {name} {definition}")
+        post_columns = {row["name"] for row in conn.execute("PRAGMA table_info(posts)")}
+        for name, definition in (
+            ("text", "TEXT"), ("media_type", "TEXT"), ("media_id", "TEXT"),
+            ("media_caption", "TEXT"), ("city", "TEXT NOT NULL DEFAULT 'Весь Дагестан'")
+        ):
+            if name not in post_columns:
+                conn.execute(f"ALTER TABLE posts ADD COLUMN {name} {definition}")
 
 
-def register_user(user) -> None:
+def make_alias(user_id: int, username: str | None, phone: str | None) -> str:
+    # Телефон/username используются только как внутренний вход для детерминированного псевдонима.
+    # Сам телефон и username никогда не выводятся пользователям.
+    seed = f"{phone or ''}|{username or ''}|{user_id}".encode("utf-8")
+    digest = hashlib.sha256(seed).hexdigest()
+    return f"{ALIASES[int(digest[:8], 16) % len(ALIASES)]} {digest[8:12].upper()}"
+
+
+def register_user(user, phone: str | None = None) -> None:
     if not user:
         return
     with db() as conn:
+        old = conn.execute("SELECT phone, alias, city FROM users WHERE user_id=?", (user.id,)).fetchone()
+        stored_phone = phone or (old["phone"] if old else None)
+        alias = old["alias"] if old and old["alias"] else make_alias(user.id, user.username, stored_phone)
+        city = old["city"] if old and old["city"] else "Весь Дагестан"
         conn.execute(
-            """INSERT INTO users(user_id, username, first_name, joined_at)
-               VALUES (?, ?, ?, ?)
-               ON CONFLICT(user_id) DO UPDATE SET username=excluded.username, first_name=excluded.first_name""",
-            (user.id, user.username, user.first_name, datetime.now().isoformat(timespec="seconds")),
+            """INSERT INTO users(user_id, username, first_name, phone, alias, city, joined_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               username=excluded.username, first_name=excluded.first_name,
+               phone=COALESCE(excluded.phone, users.phone), alias=excluded.alias, city=excluded.city""",
+            (user.id, user.username, user.first_name, stored_phone, alias, city, datetime.now().isoformat(timespec="seconds")),
         )
 
 
 def display_name(row) -> str:
-    if row["username"]:
-        return "@" + row["username"]
-    return row["first_name"] or "Суетолог"
+    return html.escape(row["alias"] or "Аноним 05")
 
 
 def time_ago(iso: str) -> str:
@@ -108,23 +154,36 @@ def time_ago(iso: str) -> str:
     return f"{seconds // 86400} дн назад"
 
 
-def feed(limit=10, offset=0):
+def feed(limit=10, offset=0, city=None, hot=False):
+    order = "((SELECT COUNT(*) FROM likes l WHERE l.post_id=p.id) * 3 - (julianday('now') - julianday(p.created_at)) * 2) DESC, p.id DESC" if hot else "p.id DESC"
+    where = "" if not city or city == "Весь Дагестан" else "WHERE p.city=?"
+    params = [] if not city or city == "Весь Дагестан" else [city]
     with db() as conn:
-        return conn.execute("""
-            SELECT p.*, u.username, u.first_name,
-                   (SELECT COUNT(*) FROM likes l WHERE l.post_id=p.id) likes,
-                   (SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) comments
+        return conn.execute(f"""
+            SELECT p.*, u.alias,
+                   (SELECT COUNT(*) FROM likes l WHERE l.post_id=p.id) likes
             FROM posts p JOIN users u ON u.user_id=p.user_id
-            ORDER BY p.id DESC LIMIT ? OFFSET ?
-        """, (limit, offset)).fetchall()
+            {where}
+            ORDER BY {order} LIMIT ? OFFSET ?
+        """, (*params, limit, offset)).fetchall()
 
 
 def post_text(row) -> str:
-    text = html.escape(row["text"])
+    body = html.escape(row["text"] or row["media_caption"] or "")
+    if row["media_type"] == "photo":
+        body = "📷 " + body
+    elif row["media_type"] == "video":
+        body = "🎥 " + body
+    elif row["media_type"] == "voice":
+        body = "🎙 Голосовое сообщение"
+    elif row["media_type"] == "location":
+        body = "📍 Геолокация"
+    elif row["media_type"] == "link":
+        body = "🔗 " + body
     return (
-        f"🔥 <b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n\n"
-        f"{text}\n\n"
-        f"❤️ {row['likes']}    💬 {row['comments']}"
+        f"🔥 <b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n"
+        f"📍 {html.escape(row['city'])}\n\n{body}\n\n"
+        f"❤️ {row['likes']}"
     )
 
 
@@ -132,34 +191,54 @@ def main_keyboard():
     b = InlineKeyboardBuilder()
     b.row(
         InlineKeyboardButton(text="🔥 Лента", callback_data="feed:0"),
-        InlineKeyboardButton(text="➕ Запостить", callback_data="post"),
+        InlineKeyboardButton(text="🔥 Горячее", callback_data="hot:0"),
     )
     b.row(
+        InlineKeyboardButton(text="➕ Запостить", callback_data="post"),
+        InlineKeyboardButton(text="📍 Мой город", callback_data="cities"),
+    )
+    b.row(
+        InlineKeyboardButton(text="💬 Мини-суеты", callback_data="suitas"),
         InlineKeyboardButton(text="👤 Профиль", callback_data="profile"),
-        InlineKeyboardButton(text="📍 05", callback_data="about"),
     )
     return b.as_markup()
 
 
 def post_keyboard(post_id: int, liked=False):
     b = InlineKeyboardBuilder()
-    b.row(
-        InlineKeyboardButton(text="❤️" if not liked else "💔", callback_data=f"like:{post_id}"),
-        InlineKeyboardButton(text="💬 Коммент", callback_data=f"comment:{post_id}"),
-        InlineKeyboardButton(text="🚩", callback_data=f"report:{post_id}"),
-    )
+    b.row(InlineKeyboardButton(text="❤️" if not liked else "💔", callback_data=f"like:{post_id}"))
     return b.as_markup()
 
 
-def nav_keyboard(offset: int, has_next: bool):
+def nav_keyboard(kind: str, offset: int, has_next: bool):
     b = InlineKeyboardBuilder()
     buttons = []
+    prefix = "hot" if kind == "hot" else "feed"
     if offset > 0:
-        buttons.append(InlineKeyboardButton(text="⬅️ Новее", callback_data=f"feed:{max(0, offset-10)}"))
+        buttons.append(InlineKeyboardButton(text="⬅️ Новее", callback_data=f"{prefix}:{max(0, offset-10)}"))
     if has_next:
-        buttons.append(InlineKeyboardButton(text="Старее ➡️", callback_data=f"feed:{offset+10}"))
+        buttons.append(InlineKeyboardButton(text="Старее ➡️", callback_data=f"{prefix}:{offset+10}"))
     if buttons:
         b.row(*buttons)
+    b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
+    return b.as_markup()
+
+
+def city_keyboard():
+    b = InlineKeyboardBuilder()
+    for city in CITIES:
+        b.button(text=f"📍 {city}", callback_data=f"city:{city}")
+    b.adjust(2)
+    b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
+    return b.as_markup()
+
+
+def sueta_keyboard(rows):
+    b = InlineKeyboardBuilder()
+    for row in rows:
+        b.button(text=f"💬 {row['name']} · {row['city']}", callback_data=f"sueta:{row['id']}")
+    b.adjust(1)
+    b.row(InlineKeyboardButton(text="➕ Создать суету", callback_data="new_sueta"))
     b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
     return b.as_markup()
 
@@ -167,45 +246,59 @@ def nav_keyboard(offset: int, has_next: bool):
 def get_home_text() -> str:
     return (
         "🌀 <b>SUETA 05</b>\n\n"
-        "Место, где Дагестан говорит сам за себя.\n"
-        "Пиши, что происходит. Читай, что происходит.\n"
-        "Без пафоса — просто суета.\n\n"
-        "🔥 <b>Лента</b> — посты людей\n"
-        "➕ <b>Запостить</b> — высказаться\n"
-        "👤 <b>Профиль</b> — твоя активность\n"
-        "📍 <b>05</b> — что это вообще"
+        "Дагестанская лента внутри Telegram.\n"
+        "Пиши, что происходит. Смотри, что происходит.\n"
+        "Здесь все — под прикольными анонимными именами.\n\n"
+        "🔥 Лента · 🔥 Горячее · 📍 Города\n"
+        "💬 Мини-суеты · ➕ Посты · 👤 Профиль"
     )
 
 
-async def show_feed(message_or_callback, user_id: int, offset=0):
-    rows = feed(offset=offset)
+async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
+    rows = feed(offset=offset, city=city, hot=hot)
+    title = "🔥 <b>Горячее за час</b>" if hot else "🔥 <b>Лента</b>"
+    if city and city != "Весь Дагестан":
+        title += f" · 📍 {html.escape(city)}"
     if not rows:
-        text = (
-            "🔥 <b>Лента пока пустая</b>\n\n"
-            "Будь первым, кто устроит суету. Нажми «➕ Запостить»."
-        )
+        text = f"{title}\n\nПока пусто. Устрой первую суету."
         markup = main_keyboard()
-        if isinstance(message_or_callback, types.CallbackQuery):
-            await message_or_callback.message.edit_text(text, reply_markup=markup)
+        if isinstance(target, types.CallbackQuery):
+            await target.message.edit_text(text, reply_markup=markup)
         else:
-            await message_or_callback.answer(text, reply_markup=markup)
+            await target.answer(text, reply_markup=markup)
         return
-
     for index, row in enumerate(rows):
         with db() as conn:
             liked = conn.execute("SELECT 1 FROM likes WHERE post_id=? AND user_id=?", (row["id"], user_id)).fetchone()
         markup = post_keyboard(row["id"], bool(liked))
-        if index == 0 and isinstance(message_or_callback, types.CallbackQuery):
-            await message_or_callback.message.edit_text(post_text(row), reply_markup=markup)
-        elif isinstance(message_or_callback, types.CallbackQuery):
-            await message_or_callback.message.answer(post_text(row), reply_markup=markup)
+        if row["media_type"] == "photo":
+            if isinstance(target, types.CallbackQuery) and index == 0:
+                await target.message.delete()
+            await target.bot.send_photo(target.from_user.id, row["media_id"], caption=post_text(row), reply_markup=markup)
+        elif row["media_type"] == "video":
+            if isinstance(target, types.CallbackQuery) and index == 0:
+                await target.message.delete()
+            await target.bot.send_video(target.from_user.id, row["media_id"], caption=post_text(row), reply_markup=markup)
+        elif row["media_type"] == "voice":
+            if isinstance(target, types.CallbackQuery) and index == 0:
+                await target.message.delete()
+            await target.bot.send_voice(target.from_user.id, row["media_id"], caption=post_text(row), reply_markup=markup)
+        elif row["media_type"] == "location":
+            if isinstance(target, types.CallbackQuery) and index == 0:
+                await target.message.delete()
+            await target.bot.send_location(target.from_user.id, float(row["media_id"].split(",")[0]), float(row["media_id"].split(",")[1]))
+            await target.bot.send_message(target.from_user.id, post_text(row), reply_markup=markup)
         else:
-            await message_or_callback.answer(post_text(row), reply_markup=markup)
-    nav = nav_keyboard(offset, len(rows) == 10)
-    if isinstance(message_or_callback, types.CallbackQuery):
-        await message_or_callback.message.answer("Лента", reply_markup=nav)
+            if index == 0 and isinstance(target, types.CallbackQuery):
+                await target.message.edit_text(post_text(row), reply_markup=markup)
+            elif isinstance(target, types.CallbackQuery):
+                await target.message.answer(post_text(row), reply_markup=markup)
+            else:
+                await target.answer(post_text(row), reply_markup=markup)
+    if isinstance(target, types.CallbackQuery):
+        await target.message.answer(title, reply_markup=nav_keyboard("hot" if hot else "feed", offset, len(rows) == 10))
     else:
-        await message_or_callback.answer("Лента", reply_markup=nav)
+        await target.answer(title, reply_markup=nav_keyboard("hot" if hot else "feed", offset, len(rows) == 10))
 
 
 @dp.message(Command("start"))
@@ -229,47 +322,104 @@ async def home(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(get_home_text(), reply_markup=main_keyboard())
 
 
-@dp.callback_query(F.data.startswith("feed:"))
+@dp.callback_query(F.data == "feed:0")
 async def open_feed(callback: types.CallbackQuery):
     await callback.answer()
-    offset = int(callback.data.split(":")[1])
-    await show_feed(callback, callback.from_user.id, offset)
+    await show_feed(callback, callback.from_user.id)
+
+
+@dp.callback_query(F.data.startswith("feed:"))
+async def feed_page(callback: types.CallbackQuery):
+    await callback.answer()
+    await show_feed(callback, callback.from_user.id, int(callback.data.split(":")[1]))
+
+
+@dp.callback_query(F.data.startswith("hot:"))
+async def hot_page(callback: types.CallbackQuery):
+    await callback.answer()
+    await show_feed(callback, callback.from_user.id, int(callback.data.split(":")[1]), hot=True)
+
+
+@dp.callback_query(F.data == "cities")
+async def cities(callback: types.CallbackQuery):
+    await callback.answer()
+    await callback.message.edit_text("📍 <b>Суета рядом</b>\n\nВыбери город:", reply_markup=city_keyboard())
+
+
+@dp.callback_query(F.data.startswith("city:"))
+async def choose_city(callback: types.CallbackQuery):
+    city = callback.data.split(":", 1)[1]
+    register_user(callback.from_user)
+    with db() as conn:
+        conn.execute("UPDATE users SET city=? WHERE user_id=?", (city, callback.from_user.id))
+    await callback.answer(f"Город: {city}")
+    await show_feed(callback, callback.from_user.id, city=city)
 
 
 @dp.callback_query(F.data == "post")
 async def create_post(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
-    await state.set_state(PostStates.waiting_text)
+    await state.set_state(PostStates.waiting_content)
     await callback.message.answer(
         "➕ <b>Новая суета</b>\n\n"
-        "Напиши текст одним сообщением. Максимум 1000 символов.\n"
-        "Фото и видео добавим следующим этапом."
+        "Принимаю: текст, 📷 фото, 🎥 видео, 🎙 голосовое, 📍 геолокацию и 🔗 ссылки.\n"
+        "Можно добавить подпись к медиа.\n"
+        "После сообщения выберем город."
     )
 
 
-@dp.message(PostStates.waiting_text)
+@dp.message(PostStates.waiting_content)
 async def save_post(message: Message, state: FSMContext):
-    if not message.text:
-        await message.answer("Пока принимаю только текстовый пост 👀")
+    register_user(message.from_user)
+    media_type = None
+    media_id = None
+    text = None
+    caption = (message.caption or "").strip()
+    if message.photo:
+        media_type, media_id = "photo", message.photo[-1].file_id
+        text = caption
+    elif message.video:
+        media_type, media_id = "video", message.video.file_id
+        text = caption
+    elif message.voice:
+        media_type, media_id = "voice", message.voice.file_id
+        text = caption
+    elif message.location:
+        media_type, media_id = "location", f"{message.location.latitude},{message.location.longitude}"
+        text = caption or "Геолокация"
+    elif message.text:
+        text = message.text.strip()
+        if re.match(r"^https?://", text):
+            media_type = "link"
+    else:
+        await message.answer("Такой формат пока не принимаю.")
         return
-    text = message.text.strip()
-    if not text:
+    if not text and media_type not in ("voice", "location"):
+        await message.answer("Добавь немного суеты — текст или подпись.")
         return
-    if len(text) > 1000:
+    if len(text or "") > 1000:
         await message.answer("Слишком много суеты 😄 Максимум 1000 символов.")
         return
-    register_user(message.from_user)
+    await state.update_data(media_type=media_type, media_id=media_id, text=text or "", city="Весь Дагестан")
+    await state.set_state(PostStates.waiting_city)
+    await message.answer("📍 <b>Где эта суета?</b>\n\nМожно выбрать город или весь Дагестан:", reply_markup=city_keyboard())
+
+
+@dp.callback_query(PostStates.waiting_city, F.data.startswith("city:"))
+async def publish_city(callback: types.CallbackQuery, state: FSMContext):
+    city = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    register_user(callback.from_user)
     with db() as conn:
-        cur = conn.execute(
-            "INSERT INTO posts(user_id, text, created_at) VALUES (?, ?, ?)",
-            (message.from_user.id, text, datetime.now().isoformat(timespec="seconds")),
+        conn.execute(
+            """INSERT INTO posts(user_id, text, media_type, media_id, media_caption, city, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (callback.from_user.id, data.get("text", ""), data.get("media_type"), data.get("media_id"),
+             data.get("text", ""), city, datetime.now().isoformat(timespec="seconds")),
         )
-        post_id = cur.lastrowid
     await state.clear()
-    await message.answer("🔥 <b>Пост опубликован!</b>", reply_markup=main_keyboard())
-    await message.answer("Теперь он в ленте. Давай посмотрим:", reply_markup=InlineKeyboardBuilder().button(
-        text="🔥 Открыть ленту", callback_data="feed:0"
-    ).as_markup())
+    await callback.answer("🔥 Опубликовано!")
+    await callback.message.edit_text("🔥 <b>Суета опубликована.</b>", reply_markup=main_keyboard())
 
 
 @dp.callback_query(F.data.startswith("like:"))
@@ -283,55 +433,11 @@ async def like(callback: types.CallbackQuery):
         else:
             conn.execute("INSERT OR IGNORE INTO likes(post_id, user_id) VALUES (?, ?)", (post_id, callback.from_user.id))
             await callback.answer("❤️ Лайк!")
-    with db() as conn:
         row = conn.execute("""
-            SELECT p.*, u.username, u.first_name,
-                   (SELECT COUNT(*) FROM likes WHERE post_id=p.id) likes,
-                   (SELECT COUNT(*) FROM comments WHERE post_id=p.id) comments
+            SELECT p.*, u.alias, (SELECT COUNT(*) FROM likes WHERE post_id=p.id) likes
             FROM posts p JOIN users u ON u.user_id=p.user_id WHERE p.id=?
         """, (post_id,)).fetchone()
     await callback.message.edit_text(post_text(row), reply_markup=post_keyboard(post_id, not bool(exists)))
-
-
-@dp.callback_query(F.data.startswith("comment:"))
-async def comment_start(callback: types.CallbackQuery, state: FSMContext):
-    post_id = int(callback.data.split(":")[1])
-    await callback.answer()
-    await state.update_data(post_id=post_id)
-    await state.set_state(CommentStates.waiting_text)
-    await callback.message.answer("💬 Напиши комментарий одним сообщением.")
-
-
-@dp.message(CommentStates.waiting_text)
-async def save_comment(message: Message, state: FSMContext):
-    if not message.text:
-        await message.answer("Только текстовый комментарий пока что.")
-        return
-    data = await state.get_data()
-    post_id = data["post_id"]
-    text = message.text.strip()
-    if not text or len(text) > 500:
-        await message.answer("Комментарий: от 1 до 500 символов.")
-        return
-    register_user(message.from_user)
-    with db() as conn:
-        conn.execute(
-            "INSERT INTO comments(post_id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
-            (post_id, message.from_user.id, text, datetime.now().isoformat(timespec="seconds")),
-        )
-    await state.clear()
-    await message.answer("💬 Комментарий добавлен.", reply_markup=main_keyboard())
-
-
-@dp.callback_query(F.data.startswith("report:"))
-async def report(callback: types.CallbackQuery):
-    post_id = int(callback.data.split(":")[1])
-    with db() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO reports(post_id, user_id, created_at) VALUES (?, ?, ?)",
-            (post_id, callback.from_user.id, datetime.now().isoformat(timespec="seconds")),
-        )
-    await callback.answer("🚩 Жалоба отправлена. Спасибо.", show_alert=True)
 
 
 @dp.callback_query(F.data == "profile")
@@ -340,29 +446,114 @@ async def profile(callback: types.CallbackQuery):
     with db() as conn:
         user = conn.execute("SELECT * FROM users WHERE user_id=?", (callback.from_user.id,)).fetchone()
         posts = conn.execute("SELECT COUNT(*) c FROM posts WHERE user_id=?", (callback.from_user.id,)).fetchone()["c"]
-        likes = conn.execute(
-            "SELECT COUNT(*) c FROM likes l JOIN posts p ON p.id=l.post_id WHERE p.user_id=?",
-            (callback.from_user.id,),
-        ).fetchone()["c"]
-    name = display_name(user)
+        likes = conn.execute("SELECT COUNT(*) c FROM likes l JOIN posts p ON p.id=l.post_id WHERE p.user_id=?", (callback.from_user.id,)).fetchone()["c"]
     await callback.answer()
     await callback.message.edit_text(
-        f"👤 <b>Профиль {name}</b>\n\n"
+        f"👤 <b>Профиль</b>\n\n"
+        f"🌀 Имя: <b>{display_name(user)}</b>\n"
+        f"📍 Город: <b>{html.escape(user['city'])}</b>\n"
         f"🔥 Постов: <b>{posts}</b>\n"
-        f"❤️ Лайков на твоих постах: <b>{likes}</b>\n\n"
-        "Скоро сюда добавим аватар, город, подписки и личную статистику.",
+        f"❤️ Лайков на твоих постах: <b>{likes}</b>",
         reply_markup=InlineKeyboardBuilder().button(text="🏠 Меню", callback_data="home").as_markup(),
     )
+
+
+@dp.callback_query(F.data == "suitas")
+async def suitas(callback: types.CallbackQuery):
+    with db() as conn:
+        rows = conn.execute("SELECT * FROM suetas ORDER BY id DESC LIMIT 15").fetchall()
+    await callback.answer()
+    await callback.message.edit_text(
+        "💬 <b>Мини-суеты</b>\n\nВыбирай разговор или заходи в свою.",
+        reply_markup=sueta_keyboard(rows),
+    )
+
+
+@dp.callback_query(F.data == "new_sueta")
+async def new_sueta(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    name = SUETA_NAMES[datetime.now().minute % len(SUETA_NAMES)]
+    with db() as conn:
+        cur = conn.execute(
+            "INSERT INTO suetas(name, city, creator_id, created_at) VALUES (?, ?, ?, ?)",
+            (name, "Весь Дагестан", callback.from_user.id, datetime.now().isoformat(timespec="seconds")),
+        )
+        sueta_id = cur.lastrowid
+        conn.execute("INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)", (sueta_id, callback.from_user.id))
+    await callback.answer("Суета создана!")
+    await callback.message.edit_text(
+        f"💬 <b>{html.escape(name)}</b>\n\nСуета открыта. Пиши сообщения — это отдельный разговор внутри SUETA 05.",
+        reply_markup=InlineKeyboardBuilder().button(text="💬 Войти в суету", callback_data=f"sueta:{sueta_id}").as_markup(),
+    )
+
+
+@dp.callback_query(F.data.startswith("sueta:"))
+async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
+    sueta_id = int(callback.data.split(":")[1])
+    with db() as conn:
+        sueta = conn.execute("SELECT * FROM suetas WHERE id=?", (sueta_id,)).fetchone()
+        messages = conn.execute(
+            """SELECT m.*, u.alias FROM sueta_messages m JOIN users u ON u.user_id=m.user_id
+               WHERE m.sueta_id=? ORDER BY m.id DESC LIMIT 15""", (sueta_id,)
+        ).fetchall()
+        conn.execute("INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)", (sueta_id, callback.from_user.id))
+    await callback.answer()
+    if not sueta:
+        await callback.message.edit_text("Суета не найдена.", reply_markup=main_keyboard())
+        return
+    lines = [f"💬 <b>{html.escape(sueta['name'])}</b> · 📍 {html.escape(sueta['city'])}", ""]
+    if messages:
+        for row in reversed(messages):
+            lines.append(f"<b>{display_name(row)}</b>: {html.escape(row['text'])}")
+    else:
+        lines.append("Пока тихо. Начни разговор.")
+    lines.append("")
+    lines.append("Нажми «✍️ Написать», чтобы добавить сообщение.")
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="✍️ Написать", callback_data=f"suetawrite:{sueta_id}"))
+    b.row(InlineKeyboardButton(text="🚪 Выйти", callback_data="suitas"), InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
+    await callback.message.edit_text("\n".join(lines), reply_markup=b.as_markup())
+
+
+@dp.callback_query(F.data.startswith("suetawrite:"))
+async def sueta_write(callback: types.CallbackQuery, state: FSMContext):
+    sueta_id = int(callback.data.split(":")[1])
+    await state.update_data(sueta_id=sueta_id)
+    await state.set_state(SuetaStates.waiting_text)
+    await callback.answer()
+    await callback.message.answer("✍️ Напиши сообщение в суету. До 500 символов.")
+
+
+@dp.message(SuetaStates.waiting_text)
+async def save_sueta_message(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("В мини-суетах пока только текст.")
+        return
+    text = message.text.strip()
+    if not text or len(text) > 500:
+        await message.answer("Сообщение: от 1 до 500 символов.")
+        return
+    data = await state.get_data()
+    register_user(message.from_user)
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO sueta_messages(sueta_id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
+            (data["sueta_id"], message.from_user.id, text, datetime.now().isoformat(timespec="seconds")),
+        )
+    await state.clear()
+    await message.answer("💬 Сообщение отправлено. Открой суету снова.", reply_markup=main_keyboard())
 
 
 @dp.callback_query(F.data == "about")
 async def about(callback: types.CallbackQuery):
     await callback.answer()
     await callback.message.edit_text(
-        "📍 <b>05 — это Дагестан</b>\n\n"
-        "Идея SUETA 05 — сделать местную социальную ленту прямо внутри Telegram.\n\n"
-        "Сначала — текст, лайки, комментарии и жалобы.\n"
-        "Потом — медиа, города, лички, подписки и настоящая общая суета.",
+        "📍 <b>SUETA 05</b>\n\n"
+        "Локальная соцсеть Дагестана внутри Telegram.\n\n"
+        "В ленте — только посты и лайки.\n"
+        "Общение — отдельно, в мини-суетах.\n"
+        "Имена — анонимные и генерируются автоматически.\n"
+        "Телефон и Telegram username используются только внутри базы и не показываются пользователям.",
         reply_markup=InlineKeyboardBuilder().button(text="🏠 Меню", callback_data="home").as_markup(),
     )
 
