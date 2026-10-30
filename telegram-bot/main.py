@@ -200,7 +200,17 @@ async def main() -> None:
     )
 
     try:
-        await dp.start_polling(bot)
+        while True:
+            try:
+                await dp.start_polling(bot)
+                break
+            except Exception as exc:
+                logger.exception(
+                    "Не удалось подключиться к Telegram API. "
+                    "Повтор через 15 секунд: %s",
+                    exc,
+                )
+                await asyncio.sleep(15)
     finally:
         scheduler.shutdown(wait=False)
         await bot.session.close()
