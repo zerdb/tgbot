@@ -346,24 +346,22 @@ def get_home_text() -> str:
 
 
 async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
-    """Показывает одну актуальную страницу ленты и удаляет старую."""
+    """Показывает компактную страницу ленты и удаляет старую."""
     previous = active_feeds.get(user_id, {})
     previous_ids = previous.get("message_ids", [])
 
     bot = target.bot if isinstance(target, (types.CallbackQuery, Message)) else target
     chat_id = user_id
 
-    # Сначала убираем старую страницу, чтобы навигация и автообновление
-    # не превращали чат в кашу из одинаковых постов.
     for message_id in previous_ids:
         try:
             await bot.delete_message(chat_id, message_id)
         except Exception:
             pass
 
-    rows = feed(offset=offset, city=city, hot=hot)
+    page_size = 6
+    rows = feed(limit=page_size, offset=offset, city=city, hot=hot)
     title = "🔥 <b>Горячее</b>" if hot else "🔥 <b>Лента</b>"
-
     sent_ids = []
 
     if not rows:
@@ -381,7 +379,70 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
         }
         return
 
+    # Текстовые посты объединяем в одно сообщение с общей клавиатурой.
+    # Так лента не превращается в десяток огромных Telegram-пузырей.
+    text_rows = []
+    media_rows = []
     for row in rows:
+        if row["media_type"] in ("photo", "video", "voice", "location"):
+            media_rows.append(row)
+        else:
+            text_rows.append(row)
+
+    if text_rows:
+        blocks = [title]
+        keyboard = InlineKeyboardBuilder()
+
+        for row in text_rows:
+            blocks.append(post_text(row))
+            with db() as conn:
+                liked = conn.execute(
+                    "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
+                    (row["id"], user_id),
+                ).fetchone()
+            keyboard.row(
+                InlineKeyboardButton(
+                    text=f"{'💔' if liked else '❤️'} {row['likes']}",
+                    callback_data=f"like:{row['id']}",
+                )
+            )
+
+        keyboard.row(
+            *[
+                InlineKeyboardButton(
+                    text=button.text,
+                    callback_data=button.callback_data,
+                )
+                for button in (
+                    ([] if offset <= 0 else [
+                        InlineKeyboardButton(
+                            text="⬅️ Новее",
+                            callback_data=f"{'hot' if hot else 'feed'}:{max(0, offset-page_size)}",
+                        )
+                    ])
+                    + ([] if len(rows) < page_size else [
+                        InlineKeyboardButton(
+                            text="Старее ➡️",
+                            callback_data=f"{'hot' if hot else 'feed'}:{offset+page_size}",
+                        )
+                    ])
+                )
+            ]
+        )
+        keyboard.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
+
+        msg = await bot.send_message(
+            chat_id,
+            "\n\n".join(blocks),
+            reply_markup=keyboard.as_markup(),
+        )
+        sent_ids.append(msg.message_id)
+    else:
+        # Если страница состоит только из медиа, заголовок всё равно показываем отдельно.
+        header = await bot.send_message(chat_id, title)
+        sent_ids.append(header.message_id)
+
+    for row in media_rows:
         with db() as conn:
             liked = conn.execute(
                 "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
@@ -411,19 +472,20 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
             msg = await bot.send_message(
                 chat_id, post_text(row), reply_markup=markup
             )
-        else:
-            msg = await bot.send_message(
-                chat_id, post_text(row), reply_markup=markup
-            )
-
         sent_ids.append(msg.message_id)
 
-    nav = await bot.send_message(
-        chat_id,
-        title,
-        reply_markup=nav_keyboard("hot" if hot else "feed", offset, len(rows) == 10),
-    )
-    sent_ids.append(nav.message_id)
+    # Если в странице есть медиа, навигацию оставляем отдельным компактным сообщением.
+    if media_rows:
+        nav = await bot.send_message(
+            chat_id,
+            "Лента",
+            reply_markup=nav_keyboard(
+                "hot" if hot else "feed",
+                offset,
+                len(rows) == page_size,
+            ),
+        )
+        sent_ids.append(nav.message_id)
 
     active_feeds[user_id] = {
         "city": city,
@@ -431,6 +493,7 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
         "offset": offset,
         "message_ids": sent_ids,
     }
+
 
 @dp.message(Command("start"))
 async def start(message: Message, state: FSMContext):
@@ -553,22 +616,34 @@ async def save_post(message: Message, state: FSMContext):
 async def like(callback: types.CallbackQuery):
     post_id = int(callback.data.split(":")[1])
     with db() as conn:
-        exists = conn.execute("SELECT 1 FROM likes WHERE post_id=? AND user_id=?", (post_id, callback.from_user.id)).fetchone()
+        exists = conn.execute(
+            "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
+            (post_id, callback.from_user.id),
+        ).fetchone()
         if exists:
-            conn.execute("DELETE FROM likes WHERE post_id=? AND user_id=?", (post_id, callback.from_user.id))
+            conn.execute(
+                "DELETE FROM likes WHERE post_id=? AND user_id=?",
+                (post_id, callback.from_user.id),
+            )
             await callback.answer("Лайк убран")
         else:
-            conn.execute("INSERT OR IGNORE INTO likes(post_id, user_id) VALUES (?, ?)", (post_id, callback.from_user.id))
+            conn.execute(
+                "INSERT OR IGNORE INTO likes(post_id, user_id) VALUES (?, ?)",
+                (post_id, callback.from_user.id),
+            )
             await callback.answer("❤️ Лайк!")
-        row = conn.execute("""
-            SELECT p.*, u.alias, (SELECT COUNT(*) FROM likes WHERE post_id=p.id) likes
-            FROM posts p JOIN users u ON u.user_id=p.user_id WHERE p.id=?
-        """, (post_id,)).fetchone()
-    markup = post_keyboard(post_id, not bool(exists))
-    if row["media_type"] in ("photo", "video", "voice"):
-        await callback.message.edit_caption(caption=post_text(row), reply_markup=markup)
-    else:
-        await callback.message.edit_text(post_text(row), reply_markup=markup)
+
+    # Перерисовываем текущую страницу, чтобы счётчик и клавиатура
+    # оставались корректными и для обычного текста, и для медиа.
+    view = active_feeds.get(callback.from_user.id)
+    if view:
+        await show_feed(
+            callback,
+            callback.from_user.id,
+            offset=view.get("offset", 0),
+            city=view.get("city"),
+            hot=view.get("hot", False),
+        )
 
 
 @dp.callback_query(F.data == "profile")
