@@ -238,7 +238,10 @@ def city_keyboard():
 def sueta_keyboard(rows):
     b = InlineKeyboardBuilder()
     for row in rows:
-        b.button(text=f"💬 {row['name']} · {row['city']}", callback_data=f"sueta:{row['id']}")
+        b.button(
+            text=f"💬 {row['name']} · {row['city']} · 👥 {row['members']}",
+            callback_data=f"sueta:{row['id']}",
+        )
     b.adjust(1)
     b.row(InlineKeyboardButton(text="➕ Создать суету", callback_data="new_sueta"))
     b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
@@ -472,10 +475,18 @@ async def profile(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "suitas")
 async def suitas(callback: types.CallbackQuery):
     with db() as conn:
-        rows = conn.execute("SELECT * FROM suetas ORDER BY id DESC LIMIT 15").fetchall()
+        rows = conn.execute(
+            """SELECT s.*, 
+                      (SELECT COUNT(*) FROM sueta_members sm WHERE sm.sueta_id=s.id) members,
+                      (SELECT COUNT(*) FROM sueta_messages sx WHERE sx.sueta_id=s.id) messages_count
+               FROM suetas s
+               ORDER BY s.id DESC LIMIT 15"""
+        ).fetchall()
     await callback.answer()
     await callback.message.edit_text(
-        "💬 <b>Мини-суеты</b>\n\nВыбирай разговор или заходи в свою.",
+        "💬 <b>Суеты</b>\n\n"
+        "Каждая суета — отдельный разговор со своей темой, городом и участниками.\n"
+        "Выбирай готовую или создавай свою.",
         reply_markup=sueta_keyboard(rows),
     )
 
