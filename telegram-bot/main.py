@@ -83,7 +83,7 @@ def get_morning_digest() -> str:
     return (
         f"☀️ <b>Доброе утро! {CITY}, {today}</b>\n\n"
         f"<b>🌤 Погода</b>\n{get_weather()}\n\n"
-        f"<b>💵 «По закону» (Курс ЦБ РФ)</b>\n{get_currency()}\n\n"
+        f"<b>💵 Курс</b>\n{get_currency()}\n\n"
         f"<b>🇷🇺 Топ-5 новостей России</b>\n{get_news_russia()}\n\n"
         f"<b>🌍 Топ-3 новости мира</b>\n{get_news_world()}\n\n"
         "<i>Хорошего дня! Не забудьте выпить воды.</i>"
