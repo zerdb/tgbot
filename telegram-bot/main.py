@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -147,6 +148,23 @@ async def morning_broadcast(bot: Bot) -> None:
             logger.exception("Не удалось отправить сообщение пользователю %s", user_id)
 
 
+def detect_proxy() -> str | None:
+    """Use the same Windows/system proxy discovery as urllib-based TelegramBridgeApp."""
+    explicit = os.getenv("BOT_PROXY", "").strip()
+    if explicit:
+        logger.info("Прокси для Telegram задан через BOT_PROXY")
+        return explicit
+
+    proxies = urllib.request.getproxies()
+    proxy = proxies.get("https") or proxies.get("http")
+    if proxy:
+        logger.info("Обнаружен системный прокси для Telegram")
+        return proxy
+
+    logger.info("Системный прокси не обнаружен, используется прямое подключение")
+    return None
+
+
 def load_token() -> str:
     token = os.getenv("BOT_TOKEN", "").strip()
     if token:
@@ -178,8 +196,13 @@ def load_token() -> str:
 
 
 async def main() -> None:
+    from aiogram.client.session.aiohttp import AiohttpSession
+
+    proxy = detect_proxy()
+    session = AiohttpSession(proxy=proxy) if proxy else AiohttpSession()
     bot = Bot(
         token=load_token(),
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
