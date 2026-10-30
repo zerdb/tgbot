@@ -188,10 +188,9 @@ def register_user(user, phone: str | None = None) -> None:
                          (alias, user.id, datetime.now().isoformat(timespec="seconds")))
         else:
             alias = allocate_alias(conn, user.id, user.username, stored_phone)
-        cities = get_cities(conn)
-        if not cities:
-            raise RuntimeError("В базе нет активных городов.")
-        city = old["city"] if old and old["city"] else cities[0]
+        # Город больше не участвует в пользовательской логике.
+        # Оставляем legacy-значение в БД только для совместимости со старой схемой.
+        city = old["city"] if old and old["city"] else "Весь Дагестан"
         conn.execute(
             """INSERT INTO users(user_id, username, first_name, phone, alias, city, joined_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -523,8 +522,11 @@ async def save_post(message: Message, state: FSMContext):
     if not text and media_type not in ("voice", "location"):
         await message.answer("Добавь немного суеты — текст или подпись.")
         return
-    if len(text or "") > 1000:
-        await message.answer("Слишком много суеты 😄 Максимум 1000 символов.")
+    max_length = 900 if media_type in ("photo", "video", "voice") else 1000
+    if len(text or "") > max_length:
+        await message.answer(
+            f"Слишком много суеты 😄 Максимум {max_length} символов для этого формата."
+        )
         return
 
     with db() as conn:
@@ -562,7 +564,11 @@ async def like(callback: types.CallbackQuery):
             SELECT p.*, u.alias, (SELECT COUNT(*) FROM likes WHERE post_id=p.id) likes
             FROM posts p JOIN users u ON u.user_id=p.user_id WHERE p.id=?
         """, (post_id,)).fetchone()
-    await callback.message.edit_text(post_text(row), reply_markup=post_keyboard(post_id, not bool(exists)))
+    markup = post_keyboard(post_id, not bool(exists))
+    if row["media_type"] in ("photo", "video", "voice"):
+        await callback.message.edit_caption(caption=post_text(row), reply_markup=markup)
+    else:
+        await callback.message.edit_text(post_text(row), reply_markup=markup)
 
 
 @dp.callback_query(F.data == "profile")
@@ -669,7 +675,6 @@ async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
     lines = [
         f"💬 <b>{html.escape(sueta['name'])}</b>",
         "",
-        f"📍 {html.escape(sueta['city'])}",
         f"👥 {members} {'участник' if members == 1 else 'участников'}",
         f"🔥 {messages_count} сообщений",
         "",
