@@ -31,6 +31,8 @@ dp = Dispatcher()
 active_feeds: dict[int, dict] = {}
 active_suetas: dict[int, int] = {}
 active_sueta_views: dict[int, int] = {}
+# Пользователи, которые сейчас открыли одну и ту же суету.
+active_sueta_users: dict[int, set[int]] = {}
 
 
 
@@ -552,8 +554,11 @@ async def menu(message: Message, state: FSMContext):
 @dp.callback_query(F.data == "home")
 async def home(callback: types.CallbackQuery, state: FSMContext):
     active_feeds.pop(callback.from_user.id, None)
-    active_suetas.pop(callback.from_user.id, None)
+    old_sueta_id = active_suetas.pop(callback.from_user.id, None)
     active_sueta_views.pop(callback.from_user.id, None)
+    if old_sueta_id:
+        active_sueta_users.get(old_sueta_id, set()).discard(callback.from_user.id)
+    active_sueta_users.get(sueta_id, set()).discard(callback.from_user.id)
     await callback.answer()
     await state.clear()
     await show_suetas_screen(callback)
@@ -790,7 +795,11 @@ async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
             return
         conn.execute("INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)", (sueta_id, callback.from_user.id))
 
+    old_sueta_id = active_suetas.get(callback.from_user.id)
+    if old_sueta_id and old_sueta_id != sueta_id:
+        active_sueta_users.get(old_sueta_id, set()).discard(callback.from_user.id)
     active_suetas[callback.from_user.id] = sueta_id
+    active_sueta_users.setdefault(sueta_id, set()).add(callback.from_user.id)
     active_feeds.pop(callback.from_user.id, None)
     await state.clear()
     await callback.answer("Суета закреплена 🔥")
@@ -866,19 +875,22 @@ async def active_sueta_message(message: Message, state: FSMContext):
     except Exception:
         logger.debug("Не удалось удалить исходное сообщение user_id=%s", message.from_user.id, exc_info=True)
 
-    # Не отправляем отдельное подтверждение: обновляем единое сообщение общего чата.
-    view_message_id = active_sueta_views.get(message.from_user.id)
-    if view_message_id:
-        view_text, view_markup = sueta_view(sueta_id)
+    # Обновляем одно общее окно у всех пользователей, которые сейчас открыли эту суету.
+    view_text, view_markup = sueta_view(sueta_id)
+    viewers = list(active_sueta_users.get(sueta_id, set()))
+    for viewer_id in viewers:
+        view_message_id = active_sueta_views.get(viewer_id)
+        if not view_message_id:
+            continue
         try:
             await message.bot.edit_message_text(
-                chat_id=message.chat.id,
+                chat_id=viewer_id,
                 message_id=view_message_id,
                 text=view_text,
                 reply_markup=view_markup,
             )
         except Exception:
-            logger.warning("Не удалось обновить общий чат суеты user_id=%s sueta_id=%s", message.from_user.id, sueta_id, exc_info=True)
+            logger.warning("Не удалось обновить чат суеты viewer_id=%s sueta_id=%s", viewer_id, sueta_id, exc_info=True)
 
 
 @dp.callback_query(F.data == "about")
