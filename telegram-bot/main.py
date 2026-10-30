@@ -34,12 +34,10 @@ active_feeds: dict[int, dict] = {}
 
 class PostStates(StatesGroup):
     waiting_content = State()
-    waiting_city = State()
 
 
 class SuetaStates(StatesGroup):
     waiting_name = State()
-    waiting_city = State()
     waiting_text = State()
 
 
@@ -251,7 +249,7 @@ def post_text(row) -> str:
 
     return (
         f"👤 <b>{display_name(row)}</b>\n"
-        f"📍 <b>{html.escape(row['city'])}</b> · 🕒 <i>{time_ago(row['created_at'])}</i>\n"
+        f"🕒 <i>{time_ago(row['created_at'])}</i>\n"
         f"━━━━━━━━━━━━━━\n"
         f"{body}\n\n"
         f"❤️ {row['likes']}"
@@ -261,15 +259,14 @@ def post_text(row) -> str:
 def main_keyboard():
     b = InlineKeyboardBuilder()
     b.row(
-        InlineKeyboardButton(text="🔥 Лента", callback_data="feed:0"),
+        InlineKeyboardButton(text="🔥 Дагестанская суета", callback_data="feed:0"),
         InlineKeyboardButton(text="🔥 Горячее", callback_data="hot:0"),
     )
     b.row(
         InlineKeyboardButton(text="➕ Запостить", callback_data="post"),
-        InlineKeyboardButton(text="📍 Мой город", callback_data="cities"),
+        InlineKeyboardButton(text="💬 Суеты", callback_data="suitas"),
     )
     b.row(
-        InlineKeyboardButton(text="💬 Мини-суеты", callback_data="suitas"),
         InlineKeyboardButton(text="👤 Профиль", callback_data="profile"),
     )
     return b.as_markup()
@@ -325,33 +322,15 @@ def nav_keyboard(kind: str, offset: int, has_next: bool):
     return b.as_markup()
 
 
-def city_keyboard():
-    b = InlineKeyboardBuilder()
-    for city in get_cities():
-        b.button(text=f"📍 {city}", callback_data=f"city:{city}")
-    b.adjust(2)
-    b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
-    return b.as_markup()
-
-
 def sueta_keyboard(rows):
     b = InlineKeyboardBuilder()
     for row in rows:
         b.button(
-            text=f"💬 {row['name']} · {row['city']} · 👥 {row['members']}",
+            text=f"💬 {row['name']} · 👥 {row['members']}",
             callback_data=f"sueta:{row['id']}",
         )
     b.adjust(1)
-    b.row(InlineKeyboardButton(text="➕ Создать суету", callback_data="new_sueta"))
-    b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
-    return b.as_markup()
-
-
-def sueta_city_keyboard():
-    b = InlineKeyboardBuilder()
-    for city in get_cities():
-        b.button(text=f"📍 {city}", callback_data=f"suetacity:{city}")
-    b.adjust(2)
+    b.row(InlineKeyboardButton(text="➕ Создать свою суету", callback_data="new_sueta"))
     b.row(InlineKeyboardButton(text="🏠 Меню", callback_data="home"))
     return b.as_markup()
 
@@ -362,8 +341,8 @@ def get_home_text() -> str:
         "Дагестанская лента внутри Telegram.\n"
         "Пиши, что происходит. Смотри, что происходит.\n"
         "Здесь все — под прикольными анонимными именами.\n\n"
-        "🔥 Лента · 🔥 Горячее · 📍 Города\n"
-        "💬 Мини-суеты · ➕ Посты · 👤 Профиль"
+        "🔥 Дагестанская суета · 🔥 Горячее\n"
+        "💬 Суеты пользователей · ➕ Посты · 👤 Профиль"
     )
 
 
@@ -385,8 +364,6 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
 
     rows = feed(offset=offset, city=city, hot=hot)
     title = "🔥 <b>Горячее</b>" if hot else "🔥 <b>Лента</b>"
-    if city and city != "Весь Дагестан":
-        title += f" · 📍 {html.escape(city)}"
 
     sent_ids = []
 
@@ -500,51 +477,6 @@ async def hot_page(callback: types.CallbackQuery):
     await show_feed(callback, callback.from_user.id, int(callback.data.split(":")[1]), hot=True)
 
 
-@dp.callback_query(F.data == "cities")
-async def cities(callback: types.CallbackQuery):
-    await callback.answer()
-    await callback.message.edit_text("📍 <b>Суета рядом</b>\n\nВыбери город:", reply_markup=city_keyboard())
-
-
-@dp.callback_query(F.data.startswith("city:"))
-async def choose_city(callback: types.CallbackQuery, state: FSMContext):
-    city = callback.data.split(":", 1)[1]
-
-    # В режиме публикации этот же callback должен завершить создание поста.
-    # Раньше общий city:* обработчик перехватывал кнопку раньше publish_city,
-    # поэтому пост не записывался в БД.
-    if await state.get_state() == PostStates.waiting_city:
-        data = await state.get_data()
-        register_user(callback.from_user)
-        with db() as conn:
-            conn.execute(
-                """INSERT INTO posts(user_id, text, media_type, media_id, media_caption, city, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    callback.from_user.id,
-                    data.get("text", ""),
-                    data.get("media_type"),
-                    data.get("media_id"),
-                    data.get("text", ""),
-                    city,
-                    datetime.now().isoformat(timespec="seconds"),
-                ),
-            )
-        await state.clear()
-        await callback.answer("🔥 Опубликовано!")
-        await callback.message.edit_text(
-            "🔥 <b>Суета опубликована.</b>",
-            reply_markup=main_keyboard(),
-        )
-        await push_new_post_to_active_feeds(callback.bot, callback.from_user.id)
-        return
-
-    register_user(callback.from_user)
-    with db() as conn:
-        conn.execute("UPDATE users SET city=? WHERE user_id=?", (city, callback.from_user.id))
-    await callback.answer(f"Город: {city}")
-    await show_feed(callback, callback.from_user.id, city=city)
-
 
 @dp.callback_query(F.data == "post")
 async def create_post(callback: types.CallbackQuery, state: FSMContext):
@@ -553,9 +485,10 @@ async def create_post(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(PostStates.waiting_content)
     await callback.message.answer(
         "➕ <b>Новая суета</b>\n\n"
+        "Это общий Дагестанский поток.\n"
         "Принимаю: текст, 📷 фото, 🎥 видео, 🎙 голосовое, 📍 геолокацию и 🔗 ссылки.\n"
-        "Можно добавить подпись к медиа.\n"
-        "После сообщения выберем город."
+        "Можно добавить подпись к медиа.\n\n"
+        "Просто отправь сообщение — оно сразу появится в суете."
     )
 
 
@@ -566,6 +499,7 @@ async def save_post(message: Message, state: FSMContext):
     media_id = None
     text = None
     caption = (message.caption or "").strip()
+
     if message.photo:
         media_type, media_id = "photo", message.photo[-1].file_id
         text = caption
@@ -585,32 +519,32 @@ async def save_post(message: Message, state: FSMContext):
     else:
         await message.answer("Такой формат пока не принимаю.")
         return
+
     if not text and media_type not in ("voice", "location"):
         await message.answer("Добавь немного суеты — текст или подпись.")
         return
     if len(text or "") > 1000:
         await message.answer("Слишком много суеты 😄 Максимум 1000 символов.")
         return
-    await state.update_data(media_type=media_type, media_id=media_id, text=text or "", city=get_cities()[0])
-    await state.set_state(PostStates.waiting_city)
-    await message.answer("📍 <b>Где эта суета?</b>\n\nМожно выбрать город или весь Дагестан:", reply_markup=city_keyboard())
 
-
-@dp.callback_query(PostStates.waiting_city, F.data.startswith("city:"))
-async def publish_city(callback: types.CallbackQuery, state: FSMContext):
-    city = callback.data.split(":", 1)[1]
-    data = await state.get_data()
-    register_user(callback.from_user)
     with db() as conn:
         conn.execute(
             """INSERT INTO posts(user_id, text, media_type, media_id, media_caption, city, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (callback.from_user.id, data.get("text", ""), data.get("media_type"), data.get("media_id"),
-             data.get("text", ""), city, datetime.now().isoformat(timespec="seconds")),
+            (
+                message.from_user.id,
+                text or "",
+                media_type,
+                media_id,
+                text or "",
+                "Весь Дагестан",
+                datetime.now().isoformat(timespec="seconds"),
+            ),
         )
+
     await state.clear()
-    await callback.answer("🔥 Опубликовано!")
-    await callback.message.edit_text("🔥 <b>Суета опубликована.</b>", reply_markup=main_keyboard())
+    await message.answer("🔥 <b>Суета опубликована в Дагестане.</b>", reply_markup=main_keyboard())
+    await push_new_post_to_active_feeds(message.bot, message.from_user.id)
 
 
 @dp.callback_query(F.data.startswith("like:"))
@@ -653,7 +587,7 @@ async def profile(callback: types.CallbackQuery):
 async def suitas(callback: types.CallbackQuery):
     with db() as conn:
         rows = conn.execute(
-            """SELECT s.*, 
+            """SELECT s.*,
                       (SELECT COUNT(*) FROM sueta_members sm WHERE sm.sueta_id=s.id) members,
                       (SELECT COUNT(*) FROM sueta_messages sx WHERE sx.sueta_id=s.id) messages_count
                FROM suetas s
@@ -661,9 +595,9 @@ async def suitas(callback: types.CallbackQuery):
         ).fetchall()
     await callback.answer()
     await callback.message.edit_text(
-        "💬 <b>Суеты</b>\n\n"
-        "Каждая суета — отдельный разговор со своей темой, городом и участниками.\n"
-        "Выбирай готовую или создавай свою.",
+        "💬 <b>Суеты пользователей</b>\n\n"
+        "Здесь отдельные разговоры, которые создают сами пользователи.\n"
+        "Выбирай суету или создай свою.",
         reply_markup=sueta_keyboard(rows),
     )
 
@@ -673,12 +607,12 @@ async def new_sueta(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(SuetaStates.waiting_name)
     await callback.message.edit_text(
-        "➕ <b>Создать суету</b>\n\n"
-        "Придумай название. Например:\n"
-        "«КТО СЕГОДНЯ НА БУЙНАКСК?»\n"
-        "«Вечерняя Махачкала»\n"
-        "«Кто едет на море?»\n\n"
-        "Название: до 80 символов."
+        "➕ <b>Создать свою суету</b>\n\n"
+        "Придумай название — до 80 символов.\n\n"
+        "Например:\n"
+        "«Кто сегодня на море?»\n"
+        "«Вечерняя тусовка»\n"
+        "«Что происходит?»"
     )
 
 
@@ -691,32 +625,28 @@ async def save_sueta_name(message: Message, state: FSMContext):
     if not name or len(name) > 80:
         await message.answer("Название должно быть от 1 до 80 символов.")
         return
-    await state.update_data(sueta_name=name)
-    await state.set_state(SuetaStates.waiting_city)
-    await message.answer("📍 <b>Где эта суета?</b>\n\nВыбери город или весь Дагестан:", reply_markup=sueta_city_keyboard())
 
-
-@dp.callback_query(SuetaStates.waiting_city, F.data.startswith("suetacity:"))
-async def save_sueta_city(callback: types.CallbackQuery, state: FSMContext):
-    city = callback.data.split(":", 1)[1]
-    data = await state.get_data()
-    register_user(callback.from_user)
+    register_user(message.from_user)
     with db() as conn:
         cur = conn.execute(
             "INSERT INTO suetas(name, city, creator_id, created_at) VALUES (?, ?, ?, ?)",
-            (data["sueta_name"], city, callback.from_user.id, datetime.now().isoformat(timespec="seconds")),
+            (name, "Дагестан", message.from_user.id, datetime.now().isoformat(timespec="seconds")),
         )
         sueta_id = cur.lastrowid
-        conn.execute("INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)", (sueta_id, callback.from_user.id))
+        conn.execute(
+            "INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)",
+            (sueta_id, message.from_user.id),
+        )
+
     await state.clear()
-    await callback.answer("Суета создана!")
-    await callback.message.edit_text(
-        f"💬 <b>{html.escape(data['sueta_name'])}</b>\n\n"
-        f"📍 {html.escape(city)}\n"
+    await message.answer(
+        f"💬 <b>{html.escape(name)}</b>\n\n"
         "👥 1 участник\n"
         "🔥 0 сообщений\n\n"
-        "Суета создана. Собирай людей вокруг своей темы.",
-        reply_markup=InlineKeyboardBuilder().button(text="💬 Войти в суету", callback_data=f"sueta:{sueta_id}").as_markup(),
+        "Суета создана. Можно звать людей.",
+        reply_markup=InlineKeyboardBuilder().button(
+            text="💬 Открыть суету", callback_data=f"sueta:{sueta_id}"
+        ).as_markup(),
     )
 
 
@@ -830,8 +760,8 @@ async def about(callback: types.CallbackQuery):
     await callback.message.edit_text(
         "📍 <b>SUETA 05</b>\n\n"
         "Локальная соцсеть Дагестана внутри Telegram.\n\n"
-        "В ленте — только посты и лайки.\n"
-        "Общение — отдельно, в мини-суетах.\n"
+        "В ленте — общий поток по всему Дагестану.\n"
+        "Отдельные разговоры пользователи создают в своих суетах.\n"
         "Имена — анонимные и генерируются автоматически.\n"
         "Телефон и Telegram username используются только внутри базы и не показываются пользователям.",
         reply_markup=InlineKeyboardBuilder().button(text="🏠 Меню", callback_data="home").as_markup(),
