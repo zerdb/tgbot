@@ -372,7 +372,7 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
     previous = active_feeds.get(user_id, {})
     previous_ids = previous.get("message_ids", [])
 
-    bot = target.bot if isinstance(target, types.CallbackQuery) else target.bot
+    bot = target.bot if isinstance(target, (types.CallbackQuery, Message)) else target
     chat_id = user_id
 
     # Сначала убираем старую страницу, чтобы навигация и автообновление
