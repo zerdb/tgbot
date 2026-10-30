@@ -1,3 +1,6 @@
 # Local secrets
 token.txt
-\n# Telegram bot runtime data\ntelegram-bot/users.json\n
+
+# Telegram bot runtime data
+telegram-bot/users.json
+telegram-bot/sueta05.db
