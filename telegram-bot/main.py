@@ -30,6 +30,7 @@ dp = Dispatcher()
 # ленты после публикации нового поста без спама всем подряд.
 active_feeds: dict[int, dict] = {}
 active_suetas: dict[int, int] = {}
+active_sueta_views: dict[int, int] = {}
 
 
 
@@ -552,6 +553,7 @@ async def menu(message: Message, state: FSMContext):
 async def home(callback: types.CallbackQuery, state: FSMContext):
     active_feeds.pop(callback.from_user.id, None)
     active_suetas.pop(callback.from_user.id, None)
+    active_sueta_views.pop(callback.from_user.id, None)
     await callback.answer()
     await state.clear()
     await show_suetas_screen(callback)
@@ -754,6 +756,28 @@ async def save_sueta_name(message: Message, state: FSMContext):
     )
 
 
+def sueta_view(sueta_id: int):
+    with db() as conn:
+        sueta = conn.execute("SELECT * FROM suetas WHERE id=?", (sueta_id,)).fetchone()
+        if not sueta:
+            return None, None
+        members = conn.execute("SELECT COUNT(*) c FROM sueta_members WHERE sueta_id=?", (sueta_id,)).fetchone()["c"]
+        messages_count = conn.execute("SELECT COUNT(*) c FROM sueta_messages WHERE sueta_id=?", (sueta_id,)).fetchone()["c"]
+        messages = conn.execute("""SELECT m.*, u.alias FROM sueta_messages m JOIN users u ON u.user_id=m.user_id WHERE m.sueta_id=? ORDER BY m.id DESC LIMIT 30""", (sueta_id,)).fetchall()
+
+    lines = [f"📌 <b>{html.escape(sueta['name'])}</b>", f"👥 {members} · 💬 {messages_count}", ""]
+    if messages:
+        for row in reversed(messages):
+            lines.append(f"<b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n{html.escape(row['text'])}")
+    else:
+        lines.append("Пока тихо. Напиши первое сообщение прямо из строки Telegram.")
+
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="🚪 Выйти из суеты", callback_data=f"leave_sueta:{sueta_id}"))
+    b.row(InlineKeyboardButton(text="💬 Сменить суету", callback_data="suitas"))
+    return "\n\n".join(lines), b.as_markup()
+
+
 @dp.callback_query(F.data.startswith("sueta:"))
 async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
     sueta_id = int(callback.data.split(":")[1])
@@ -764,56 +788,15 @@ async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
         if not sueta:
             await callback.answer("Суета не найдена.", show_alert=True)
             return
-
-        # Выбор суеты сразу делает её активной и автоматически добавляет пользователя.
-        conn.execute(
-            "INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)",
-            (sueta_id, callback.from_user.id),
-        )
-        members = conn.execute(
-            "SELECT COUNT(*) c FROM sueta_members WHERE sueta_id=?", (sueta_id,)
-        ).fetchone()["c"]
-        messages_count = conn.execute(
-            "SELECT COUNT(*) c FROM sueta_messages WHERE sueta_id=?", (sueta_id,)
-        ).fetchone()["c"]
-        messages = conn.execute(
-            """SELECT m.*, u.alias FROM sueta_messages m JOIN users u ON u.user_id=m.user_id
-               WHERE m.sueta_id=? ORDER BY m.id DESC LIMIT 15""",
-            (sueta_id,),
-        ).fetchall()
+        conn.execute("INSERT OR IGNORE INTO sueta_members(sueta_id, user_id) VALUES (?, ?)", (sueta_id, callback.from_user.id))
 
     active_suetas[callback.from_user.id] = sueta_id
     active_feeds.pop(callback.from_user.id, None)
     await state.clear()
     await callback.answer("Суета закреплена 🔥")
-
-    lines = [
-        f"📌 <b>{html.escape(sueta['name'])}</b>",
-        f"👥 {members} · 💬 {messages_count}",
-        "",
-    ]
-    if messages:
-        for row in reversed(messages):
-            lines.append(
-                f"<b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n"
-                f"{html.escape(row['text'])}"
-            )
-    else:
-        lines.append("Пока тихо. Напиши первое сообщение прямо из строки Telegram.")
-
-    b = InlineKeyboardBuilder()
-    b.row(InlineKeyboardButton(text="🚪 Выйти из суеты", callback_data=f"leave_sueta:{sueta_id}"))
-    b.row(InlineKeyboardButton(text="💬 Сменить суету", callback_data="suitas"))
-    await callback.message.edit_text("\n\n".join(lines), reply_markup=b.as_markup())
-
-
-@dp.callback_query(F.data.startswith("join_sueta:"))
-async def join_sueta(callback: types.CallbackQuery):
-    # Старые кнопки совместимости: теперь вход происходит сразу при выборе суеты.
-    sueta_id = int(callback.data.split(":")[1])
-    callback.data = f"sueta:{sueta_id}"
-    await open_sueta(callback, FSMContext)
-
+    view_text, view_markup = sueta_view(sueta_id)
+    await callback.message.edit_text(view_text, reply_markup=view_markup)
+    active_sueta_views[callback.from_user.id] = callback.message.message_id
 
 @dp.callback_query(F.data.startswith("leave_sueta:"))
 async def leave_sueta(callback: types.CallbackQuery, state: FSMContext):
@@ -824,6 +807,7 @@ async def leave_sueta(callback: types.CallbackQuery, state: FSMContext):
             (sueta_id, callback.from_user.id),
         )
     active_suetas.pop(callback.from_user.id, None)
+    active_sueta_views.pop(callback.from_user.id, None)
     await state.clear()
     await callback.answer("Ты вышел из суеты.")
     await show_suetas_screen(callback)
@@ -874,10 +858,19 @@ async def active_sueta_message(message: Message, state: FSMContext):
             ),
         )
 
-    # Сообщение отправлено. Никакой кнопки «Написать» больше не требуется.
-    await message.answer(
-        f"💬 <b>{html.escape(sueta['name'])}</b> · сообщение отправлено"
-    )
+    # Не отправляем отдельное подтверждение: обновляем единое сообщение общего чата.
+    view_message_id = active_sueta_views.get(message.from_user.id)
+    if view_message_id:
+        view_text, view_markup = sueta_view(sueta_id)
+        try:
+            await message.bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=view_message_id,
+                text=view_text,
+                reply_markup=view_markup,
+            )
+        except Exception:
+            logger.warning("Не удалось обновить общий чат суеты user_id=%s sueta_id=%s", message.from_user.id, sueta_id, exc_info=True)
 
 
 @dp.callback_query(F.data == "about")
