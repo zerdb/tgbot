@@ -248,9 +248,12 @@ def post_text(row) -> str:
         body = "📍 Геолокация"
     elif row["media_type"] == "link":
         body = "🔗 " + body
+
     return (
-        f"🔥 <b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n"
-        f"📍 {html.escape(row['city'])}\n\n{body}\n\n"
+        f"👤 <b>{display_name(row)}</b>\n"
+        f"📍 <b>{html.escape(row['city'])}</b> · 🕒 <i>{time_ago(row['created_at'])}</i>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"{body}\n\n"
         f"❤️ {row['likes']}"
     )
 
@@ -273,7 +276,7 @@ def main_keyboard():
 
 
 async def push_new_post_to_active_feeds(bot: Bot, author_id: int):
-    """Мгновенно показывает новый пост пользователям, которые сейчас в ленте."""
+    """Перерисовывает открытые ленты после публикации нового поста."""
     with db() as conn:
         row = conn.execute(
             """SELECT p.*, u.alias,
@@ -287,28 +290,20 @@ async def push_new_post_to_active_feeds(bot: Bot, author_id: int):
 
     recipients = list(active_feeds.items())
     for user_id, view in recipients:
-        if user_id == author_id:
-            continue
         city = view.get("city")
         if city and city != "Весь Дагестан" and row["city"] != city:
             continue
         try:
-            with db() as conn:
-                liked = conn.execute(
-                    "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
-                    (row["id"], user_id),
-                ).fetchone()
-            await bot.send_message(
+            await show_feed(
+                bot,
                 user_id,
-                "🆕 <b>Новая суета в ленте</b>\n\n" + post_text(row),
-                reply_markup=post_keyboard(row["id"], bool(liked)),
+                offset=view.get("offset", 0),
+                city=city,
+                hot=view.get("hot", False),
             )
         except Exception:
-            # Пользователь мог заблокировать бота/закрыть чат — просто убираем
-            # его из списка активных подписчиков.
             logger.warning("Не удалось обновить ленту user_id=%s", user_id, exc_info=True)
             active_feeds.pop(user_id, None)
-
 
 def post_keyboard(post_id: int, liked=False):
     b = InlineKeyboardBuilder()
@@ -373,59 +368,93 @@ def get_home_text() -> str:
 
 
 async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
-    # Запоминаем, кто сейчас смотрит ленту. Новые посты будут автоматически
-    # доставляться этим пользователям, если они подходят под фильтр города.
-    active_feeds[user_id] = {
-        "city": city,
-        "hot": hot,
-        "offset": offset,
-        "message_id": target.message.message_id if isinstance(target, types.CallbackQuery) else None,
-    }
+    """Показывает одну актуальную страницу ленты и удаляет старую."""
+    previous = active_feeds.get(user_id, {})
+    previous_ids = previous.get("message_ids", [])
+
+    bot = target.bot if isinstance(target, types.CallbackQuery) else target.bot
+    chat_id = user_id
+
+    # Сначала убираем старую страницу, чтобы навигация и автообновление
+    # не превращали чат в кашу из одинаковых постов.
+    for message_id in previous_ids:
+        try:
+            await bot.delete_message(chat_id, message_id)
+        except Exception:
+            pass
+
     rows = feed(offset=offset, city=city, hot=hot)
     title = "🔥 <b>Горячее</b>" if hot else "🔥 <b>Лента</b>"
     if city and city != "Весь Дагестан":
         title += f" · 📍 {html.escape(city)}"
-    if not rows:
-        text = f"{title}\n\nПока пусто. Устрой первую суету."
-        markup = main_keyboard()
-        if isinstance(target, types.CallbackQuery):
-            await target.message.edit_text(text, reply_markup=markup)
-        else:
-            await target.answer(text, reply_markup=markup)
-        return
-    for index, row in enumerate(rows):
-        with db() as conn:
-            liked = conn.execute("SELECT 1 FROM likes WHERE post_id=? AND user_id=?", (row["id"], user_id)).fetchone()
-        markup = post_keyboard(row["id"], bool(liked))
-        if row["media_type"] == "photo":
-            if isinstance(target, types.CallbackQuery) and index == 0:
-                await target.message.delete()
-            await target.bot.send_photo(target.from_user.id, row["media_id"], caption=post_text(row), reply_markup=markup)
-        elif row["media_type"] == "video":
-            if isinstance(target, types.CallbackQuery) and index == 0:
-                await target.message.delete()
-            await target.bot.send_video(target.from_user.id, row["media_id"], caption=post_text(row), reply_markup=markup)
-        elif row["media_type"] == "voice":
-            if isinstance(target, types.CallbackQuery) and index == 0:
-                await target.message.delete()
-            await target.bot.send_voice(target.from_user.id, row["media_id"], caption=post_text(row), reply_markup=markup)
-        elif row["media_type"] == "location":
-            if isinstance(target, types.CallbackQuery) and index == 0:
-                await target.message.delete()
-            await target.bot.send_location(target.from_user.id, float(row["media_id"].split(",")[0]), float(row["media_id"].split(",")[1]))
-            await target.bot.send_message(target.from_user.id, post_text(row), reply_markup=markup)
-        else:
-            if index == 0 and isinstance(target, types.CallbackQuery):
-                await target.message.edit_text(post_text(row), reply_markup=markup)
-            elif isinstance(target, types.CallbackQuery):
-                await target.message.answer(post_text(row), reply_markup=markup)
-            else:
-                await target.answer(post_text(row), reply_markup=markup)
-    if isinstance(target, types.CallbackQuery):
-        await target.message.answer(title, reply_markup=nav_keyboard("hot" if hot else "feed", offset, len(rows) == 10))
-    else:
-        await target.answer(title, reply_markup=nav_keyboard("hot" if hot else "feed", offset, len(rows) == 10))
 
+    sent_ids = []
+
+    if not rows:
+        msg = await bot.send_message(
+            chat_id,
+            f"{title}\n\nПока пусто. Устрой первую суету.",
+            reply_markup=main_keyboard(),
+        )
+        sent_ids.append(msg.message_id)
+        active_feeds[user_id] = {
+            "city": city,
+            "hot": hot,
+            "offset": offset,
+            "message_ids": sent_ids,
+        }
+        return
+
+    for row in rows:
+        with db() as conn:
+            liked = conn.execute(
+                "SELECT 1 FROM likes WHERE post_id=? AND user_id=?",
+                (row["id"], user_id),
+            ).fetchone()
+        markup = post_keyboard(row["id"], bool(liked))
+
+        if row["media_type"] == "photo":
+            msg = await bot.send_photo(
+                chat_id, row["media_id"], caption=post_text(row), reply_markup=markup
+            )
+        elif row["media_type"] == "video":
+            msg = await bot.send_video(
+                chat_id, row["media_id"], caption=post_text(row), reply_markup=markup
+            )
+        elif row["media_type"] == "voice":
+            msg = await bot.send_voice(
+                chat_id, row["media_id"], caption=post_text(row), reply_markup=markup
+            )
+        elif row["media_type"] == "location":
+            msg = await bot.send_location(
+                chat_id,
+                float(row["media_id"].split(",")[0]),
+                float(row["media_id"].split(",")[1]),
+            )
+            sent_ids.append(msg.message_id)
+            msg = await bot.send_message(
+                chat_id, post_text(row), reply_markup=markup
+            )
+        else:
+            msg = await bot.send_message(
+                chat_id, post_text(row), reply_markup=markup
+            )
+
+        sent_ids.append(msg.message_id)
+
+    nav = await bot.send_message(
+        chat_id,
+        title,
+        reply_markup=nav_keyboard("hot" if hot else "feed", offset, len(rows) == 10),
+    )
+    sent_ids.append(nav.message_id)
+
+    active_feeds[user_id] = {
+        "city": city,
+        "hot": hot,
+        "offset": offset,
+        "message_ids": sent_ids,
+    }
 
 @dp.message(Command("start"))
 async def start(message: Message, state: FSMContext):
