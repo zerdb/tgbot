@@ -138,9 +138,15 @@ def init_db():
             conn.execute("INSERT OR IGNORE INTO aliases(name, user_id, created_at) VALUES (?, ?, ?)", (row["alias"], row["user_id"], now))
 
 
-def get_cities() -> list[str]:
-    with db() as conn:
-        return [r["name"] for r in conn.execute("SELECT name FROM cities WHERE active=1 ORDER BY sort_order, id").fetchall()]
+def get_cities(conn=None) -> list[str]:
+    if conn is not None:
+        return [r["name"] for r in conn.execute(
+            "SELECT name FROM cities WHERE active=1 ORDER BY sort_order, id"
+        ).fetchall()]
+    with db() as local_conn:
+        return [r["name"] for r in local_conn.execute(
+            "SELECT name FROM cities WHERE active=1 ORDER BY sort_order, id"
+        ).fetchall()]
 
 
 def allocate_alias(conn, user_id: int, username: str | None, phone: str | None) -> str:
@@ -178,7 +184,10 @@ def register_user(user, phone: str | None = None) -> None:
                          (alias, user.id, datetime.now().isoformat(timespec="seconds")))
         else:
             alias = allocate_alias(conn, user.id, user.username, stored_phone)
-        city = old["city"] if old and old["city"] else get_cities()[0]
+        cities = get_cities(conn)
+        if not cities:
+            raise RuntimeError("В базе нет активных городов.")
+        city = old["city"] if old and old["city"] else cities[0]
         conn.execute(
             """INSERT INTO users(user_id, username, first_name, phone, alias, city, joined_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -368,9 +377,13 @@ async def show_feed(target, user_id: int, offset=0, city=None, hot=False):
 
 @dp.message(Command("start"))
 async def start(message: Message, state: FSMContext):
-    register_user(message.from_user)
-    await state.clear()
-    await message.answer(get_home_text(), reply_markup=main_keyboard())
+    try:
+        register_user(message.from_user)
+        await state.clear()
+        await message.answer(get_home_text(), reply_markup=main_keyboard())
+    except Exception:
+        logger.exception("Ошибка обработки /start для user_id=%s", message.from_user.id)
+        await message.answer("⚠️ Не удалось открыть SUETA 05. Ошибка уже записана в лог.")
 
 
 @dp.message(Command("menu"))
