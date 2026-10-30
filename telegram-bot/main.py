@@ -425,8 +425,37 @@ async def cities(callback: types.CallbackQuery):
 
 
 @dp.callback_query(F.data.startswith("city:"))
-async def choose_city(callback: types.CallbackQuery):
+async def choose_city(callback: types.CallbackQuery, state: FSMContext):
     city = callback.data.split(":", 1)[1]
+
+    # В режиме публикации этот же callback должен завершить создание поста.
+    # Раньше общий city:* обработчик перехватывал кнопку раньше publish_city,
+    # поэтому пост не записывался в БД.
+    if await state.get_state() == PostStates.waiting_city:
+        data = await state.get_data()
+        register_user(callback.from_user)
+        with db() as conn:
+            conn.execute(
+                """INSERT INTO posts(user_id, text, media_type, media_id, media_caption, city, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    callback.from_user.id,
+                    data.get("text", ""),
+                    data.get("media_type"),
+                    data.get("media_id"),
+                    data.get("text", ""),
+                    city,
+                    datetime.now().isoformat(timespec="seconds"),
+                ),
+            )
+        await state.clear()
+        await callback.answer("🔥 Опубликовано!")
+        await callback.message.edit_text(
+            "🔥 <b>Суета опубликована.</b>",
+            reply_markup=main_keyboard(),
+        )
+        return
+
     register_user(callback.from_user)
     with db() as conn:
         conn.execute("UPDATE users SET city=? WHERE user_id=?", (city, callback.from_user.id))
