@@ -757,9 +757,16 @@ async def main():
     )
     logger.info("SUETA 05 запускается...")
     try:
+        # На всякий случай сбрасываем webhook: polling не получает апдейты,
+        # если бот ранее был переведен в webhook-режим.
+        webhook = await bot.get_webhook_info()
+        if webhook.url:
+            logger.warning("Найден webhook %s — удаляем перед polling.", webhook.url)
+            await bot.delete_webhook(drop_pending_updates=False)
+        logger.info("Telegram webhook очищен, запускаем polling.")
         while True:
             try:
-                await dp.start_polling(bot)
+                await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
                 break
             except Exception as exc:
                 logger.exception("Ошибка Telegram API. Повтор через 15 секунд: %s", exc)
