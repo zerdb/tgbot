@@ -1,1 +1,2 @@
 aiogram>=3.13,<4\nAPScheduler>=3.10,<4\n
+aiohttp-socks>=0.10,<1
