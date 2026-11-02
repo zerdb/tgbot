@@ -56,7 +56,7 @@ Optional environment variables:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GIGAAM_MODEL` | `e2e_rnnt` | Model name passed to `gigaam.load_model()` |
+| `GIGAAM_MODEL` | `v3_e2e_rnnt` | Model name passed to `gigaam.load_model()` |
 | `PUSH_TO_TALK_KEY` | `right ctrl` | Key held while recording |
 | `SAMPLE_RATE` | `16000` | Microphone sample rate |
 
