@@ -933,34 +933,8 @@ async def active_sueta_message(message: Message, state: FSMContext):
 
     active_viewers = set(active_sueta_users.get(sueta_id, set()))
     for viewer_id in active_viewers:
-        # Фото и видео доставляем каждому открывшему суету как настоящее
-        # Telegram-медиа-сообщение. file_id принадлежит этому же боту,
-        # поэтому повторно скачивать файл и загружать его на сервер не нужно.
-        if media_type == "photo":
-            media_caption = f"<b>{html.escape(sueta['name'])}</b> · {html.escape(get_user_alias(message.from_user.id))}"
-            if caption:
-                media_caption += "\n" + html.escape(caption)
-            try:
-                await message.bot.send_photo(
-                    chat_id=viewer_id,
-                    photo=file_id,
-                    caption=media_caption[:1024],
-                )
-            except Exception:
-                logger.warning("Не удалось доставить фото viewer_id=%s sueta_id=%s", viewer_id, sueta_id, exc_info=True)
-        elif media_type == "video":
-            media_caption = f"<b>{html.escape(sueta['name'])}</b> · {html.escape(get_user_alias(message.from_user.id))}"
-            if caption:
-                media_caption += "\n" + html.escape(caption)
-            try:
-                await message.bot.send_video(
-                    chat_id=viewer_id,
-                    video=file_id,
-                    caption=media_caption[:1024],
-                )
-            except Exception:
-                logger.warning("Не удалось доставить видео viewer_id=%s sueta_id=%s", viewer_id, sueta_id, exc_info=True)
-
+        # Медиа намеренно не отправляем в общий чат: там остаётся только
+        # компактная запись 📷/🎥, а сами файлы доступны отдельно в разделе «Медиа».
         view_message_id = active_sueta_views.get(viewer_id)
         if not view_message_id:
             continue
