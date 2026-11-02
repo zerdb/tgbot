@@ -31,7 +31,7 @@ def save_address_book(book: dict[str, str]):
 def list_email_contacts():
     book = load_address_book()
     if not book:
-        print("Адресная книга пуста. Добавьте контакт: «добавь контакт Мама email@example.com».")
+        print("Адресная книга пуста. Скажите «добавить контакт» и заполните открывшуюся форму.")
         return
     print("Адресная книга:")
     for name, address in book.items():
@@ -48,7 +48,7 @@ def begin_email(text: str):
         return
     book = load_address_book()
     if not book:
-        print("Адресная книга пуста. Сначала добавьте контакт голосом: «добавь контакт Имя email@example.com».")
+        print("Адресная книга пуста. Сначала скажите «добавить контакт» и заполните форму.")
         return
     _pending_email_subject = subject
     print(f"Кому отправить письмо «{subject}»? Назовите получателя:")
