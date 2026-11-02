@@ -81,6 +81,14 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, sueta_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
             text TEXT NOT NULL, created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS sueta_media (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, sueta_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            media_type TEXT NOT NULL, file_id TEXT NOT NULL, caption TEXT, created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sueta_subscriptions (
+            sueta_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL, PRIMARY KEY(sueta_id, user_id)
+        );
         CREATE TABLE IF NOT EXISTS cities (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
             sort_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1
@@ -558,7 +566,6 @@ async def home(callback: types.CallbackQuery, state: FSMContext):
     active_sueta_views.pop(callback.from_user.id, None)
     if old_sueta_id:
         active_sueta_users.get(old_sueta_id, set()).discard(callback.from_user.id)
-    active_sueta_users.get(sueta_id, set()).discard(callback.from_user.id)
     await callback.answer()
     await state.clear()
     await show_suetas_screen(callback)
@@ -761,14 +768,16 @@ async def save_sueta_name(message: Message, state: FSMContext):
     )
 
 
-def sueta_view(sueta_id: int):
+def sueta_view(sueta_id: int, user_id: int | None = None):
     with db() as conn:
         sueta = conn.execute("SELECT * FROM suetas WHERE id=?", (sueta_id,)).fetchone()
         if not sueta:
             return None, None
         members = conn.execute("SELECT COUNT(*) c FROM sueta_members WHERE sueta_id=?", (sueta_id,)).fetchone()["c"]
         messages_count = conn.execute("SELECT COUNT(*) c FROM sueta_messages WHERE sueta_id=?", (sueta_id,)).fetchone()["c"]
+        media_count = conn.execute("SELECT COUNT(*) c FROM sueta_media WHERE sueta_id=?", (sueta_id,)).fetchone()["c"]
         messages = conn.execute("""SELECT m.*, u.alias FROM sueta_messages m JOIN users u ON u.user_id=m.user_id WHERE m.sueta_id=? ORDER BY m.id DESC LIMIT 30""", (sueta_id,)).fetchall()
+        subscribed = bool(user_id and conn.execute("SELECT 1 FROM sueta_subscriptions WHERE sueta_id=? AND user_id=?", (sueta_id, user_id)).fetchone())
 
     lines = [f"📌 <b>{html.escape(sueta['name'])}</b>", f"👥 {members} · 💬 {messages_count}", ""]
     if messages:
@@ -776,12 +785,15 @@ def sueta_view(sueta_id: int):
             lines.append(f"<b>{display_name(row)}</b> · <i>{time_ago(row['created_at'])}</i>\n{html.escape(row['text'])}")
     else:
         lines.append("Пока тихо. Напиши первое сообщение прямо из строки Telegram.")
+    if media_count:
+        lines.extend(["", f"📎 В разделе «Медиа» файлов: <b>{media_count}</b>"])
 
     b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="🔔 Отписаться" if subscribed else "🔔 Подписаться", callback_data=f"subsueta:{sueta_id}"))
+    b.row(InlineKeyboardButton(text=f"📁 Медиа ({media_count})", callback_data=f"sueta_media:{sueta_id}"))
     b.row(InlineKeyboardButton(text="🚪 Выйти из суеты", callback_data=f"leave_sueta:{sueta_id}"))
-    b.row(InlineKeyboardButton(text="💬 Сменить суету", callback_data="suitas"))
+    b.row(InlineKeyboardButton(text="🔄 Сменить суету", callback_data="switch_sueta"))
     return "\n\n".join(lines), b.as_markup()
-
 
 @dp.callback_query(F.data.startswith("sueta:"))
 async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
@@ -803,9 +815,52 @@ async def open_sueta(callback: types.CallbackQuery, state: FSMContext):
     active_feeds.pop(callback.from_user.id, None)
     await state.clear()
     await callback.answer("Суета закреплена 🔥")
-    view_text, view_markup = sueta_view(sueta_id)
+    view_text, view_markup = sueta_view(sueta_id, callback.from_user.id)
     await callback.message.edit_text(view_text, reply_markup=view_markup)
     active_sueta_views[callback.from_user.id] = callback.message.message_id
+
+@dp.callback_query(F.data == "switch_sueta")
+async def switch_sueta(callback: types.CallbackQuery):
+    old_id = active_suetas.pop(callback.from_user.id, None)
+    active_sueta_views.pop(callback.from_user.id, None)
+    if old_id:
+        active_sueta_users.get(old_id, set()).discard(callback.from_user.id)
+    await callback.answer("Выбери другую суету")
+    await show_suetas_screen(callback)
+
+
+@dp.callback_query(F.data.startswith("subsueta:"))
+async def toggle_sueta_subscription(callback: types.CallbackQuery):
+    sueta_id = int(callback.data.split(":")[1])
+    with db() as conn:
+        exists = conn.execute("SELECT 1 FROM sueta_subscriptions WHERE sueta_id=? AND user_id=?", (sueta_id, callback.from_user.id)).fetchone()
+        if exists:
+            conn.execute("DELETE FROM sueta_subscriptions WHERE sueta_id=? AND user_id=?", (sueta_id, callback.from_user.id))
+            notice = "Уведомления отключены"
+        else:
+            conn.execute("INSERT OR IGNORE INTO sueta_subscriptions(sueta_id, user_id, created_at) VALUES (?, ?, ?)", (sueta_id, callback.from_user.id, datetime.now().isoformat(timespec="seconds")))
+            notice = "Подписка включена 🔔"
+    await callback.answer(notice)
+    view_text, view_markup = sueta_view(sueta_id, callback.from_user.id)
+    await callback.message.edit_text(view_text, reply_markup=view_markup)
+
+
+@dp.callback_query(F.data.startswith("sueta_media:"))
+async def show_sueta_media(callback: types.CallbackQuery):
+    sueta_id = int(callback.data.split(":")[1])
+    with db() as conn:
+        items = conn.execute("SELECT media_type, file_id, caption FROM sueta_media WHERE sueta_id=? ORDER BY id DESC LIMIT 20", (sueta_id,)).fetchall()
+    await callback.answer("Последние медиа")
+    if not items:
+        await callback.message.answer("📁 В этой суете пока нет фото и видео.")
+        return
+    for item in reversed(items):
+        caption = (item["caption"] or "").strip()[:1024]
+        if item["media_type"] == "photo":
+            await callback.bot.send_photo(callback.from_user.id, item["file_id"], caption=caption or None)
+        else:
+            await callback.bot.send_video(callback.from_user.id, item["file_id"], caption=caption or None)
+
 
 @dp.callback_query(F.data.startswith("leave_sueta:"))
 async def leave_sueta(callback: types.CallbackQuery, state: FSMContext):
@@ -815,8 +870,10 @@ async def leave_sueta(callback: types.CallbackQuery, state: FSMContext):
             "DELETE FROM sueta_members WHERE sueta_id=? AND user_id=?",
             (sueta_id, callback.from_user.id),
         )
+        conn.execute("DELETE FROM sueta_subscriptions WHERE sueta_id=? AND user_id=?", (sueta_id, callback.from_user.id))
     active_suetas.pop(callback.from_user.id, None)
     active_sueta_views.pop(callback.from_user.id, None)
+    active_sueta_users.get(sueta_id, set()).discard(callback.from_user.id)
     await state.clear()
     await callback.answer("Ты вышел из суеты.")
     await show_suetas_screen(callback)
@@ -824,74 +881,72 @@ async def leave_sueta(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message()
 async def active_sueta_message(message: Message, state: FSMContext):
-    """Любое обычное сообщение идёт в закреплённую суету."""
-    if message.text and message.text.startswith("/"):
+    """Текст, фото и видео отправляются в активную суету без лишних ответов."""
+    if (message.text and message.text.startswith("/")) or (message.caption and message.caption.startswith("/")):
         return
-
     sueta_id = active_suetas.get(message.from_user.id)
     if not sueta_id:
         return
-
     register_user(message.from_user)
 
-    if not message.text:
-        await message.answer("В суете пока принимаю сообщения только текстом.")
+    media_type = None
+    file_id = None
+    caption = (message.caption or "").strip()
+    if message.photo:
+        media_type, file_id, text_value = "photo", message.photo[-1].file_id, "📷 Фото"
+    elif message.video:
+        media_type, file_id, text_value = "video", message.video.file_id, "🎥 Видео"
+    elif message.text:
+        text_value = message.text.strip()
+    else:
         return
 
-    text = message.text.strip()
-    if not text or len(text) > 500:
-        await message.answer("Сообщение: от 1 до 500 символов.")
+    if not media_type and (not text_value or len(text_value) > 500):
+        return
+    if media_type and len(caption) > 900:
         return
 
+    now = datetime.now().isoformat(timespec="seconds")
     with db() as conn:
-        member = conn.execute(
-            "SELECT 1 FROM sueta_members WHERE sueta_id=? AND user_id=?",
-            (sueta_id, message.from_user.id),
-        ).fetchone()
-        sueta = conn.execute(
-            "SELECT name FROM suetas WHERE id=?", (sueta_id,)
-        ).fetchone()
-
+        member = conn.execute("SELECT 1 FROM sueta_members WHERE sueta_id=? AND user_id=?", (sueta_id, message.from_user.id)).fetchone()
+        sueta = conn.execute("SELECT name FROM suetas WHERE id=?", (sueta_id,)).fetchone()
         if not member or not sueta:
             active_suetas.pop(message.from_user.id, None)
-            await message.answer("Суета больше недоступна. Выбери другую.")
+            active_sueta_views.pop(message.from_user.id, None)
+            active_sueta_users.get(sueta_id, set()).discard(message.from_user.id)
             return
+        conn.execute("INSERT INTO sueta_messages(sueta_id, user_id, text, created_at) VALUES (?, ?, ?, ?)", (sueta_id, message.from_user.id, caption or text_value, now))
+        if media_type:
+            conn.execute("INSERT INTO sueta_media(sueta_id, user_id, media_type, file_id, caption, created_at) VALUES (?, ?, ?, ?, ?, ?)", (sueta_id, message.from_user.id, media_type, file_id, caption, now))
 
-        conn.execute(
-            "INSERT INTO sueta_messages(sueta_id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
-            (
-                sueta_id,
-                message.from_user.id,
-                text,
-                datetime.now().isoformat(timespec="seconds"),
-            ),
-        )
-
-    # Убираем исходное сообщение пользователя из личного чата с ботом,
-    # чтобы Telegram не оставлял локальный "след". Само сообщение уже
-    # сохранено в общей суете и появится в едином окне чата.
+    # Удаляем исходник только после успешного сохранения на стороне бота.
     try:
         await message.delete()
     except Exception:
         logger.debug("Не удалось удалить исходное сообщение user_id=%s", message.from_user.id, exc_info=True)
 
-    # Обновляем одно общее окно у всех пользователей, которые сейчас открыли эту суету.
-    view_text, view_markup = sueta_view(sueta_id)
-    viewers = list(active_sueta_users.get(sueta_id, set()))
-    for viewer_id in viewers:
+    view_text, view_markup = sueta_view(sueta_id, message.from_user.id)
+    active_viewers = set(active_sueta_users.get(sueta_id, set()))
+    for viewer_id in active_viewers:
         view_message_id = active_sueta_views.get(viewer_id)
         if not view_message_id:
             continue
         try:
-            await message.bot.edit_message_text(
-                chat_id=viewer_id,
-                message_id=view_message_id,
-                text=view_text,
-                reply_markup=view_markup,
-            )
+            await message.bot.edit_message_text(chat_id=viewer_id, message_id=view_message_id, text=view_text, reply_markup=view_markup)
         except Exception:
             logger.warning("Не удалось обновить чат суеты viewer_id=%s sueta_id=%s", viewer_id, sueta_id, exc_info=True)
 
+    # Уведомления отправляются только подписчикам, которые не открыли эту суету сейчас.
+    with db() as conn:
+        subscribers = [row["user_id"] for row in conn.execute("SELECT user_id FROM sueta_subscriptions WHERE sueta_id=?", (sueta_id,)).fetchall()]
+    preview = "новое фото" if media_type == "photo" else "новое видео" if media_type == "video" else "новое сообщение"
+    for subscriber_id in subscribers:
+        if subscriber_id in active_viewers:
+            continue
+        try:
+            await message.bot.send_message(subscriber_id, f"🔔 В суете «{html.escape(sueta['name'])}» {preview}. Открой суету, чтобы посмотреть.")
+        except Exception:
+            logger.debug("Не удалось отправить уведомление подписчику user_id=%s", subscriber_id, exc_info=True)
 
 @dp.callback_query(F.data == "about")
 async def about(callback: types.CallbackQuery):
