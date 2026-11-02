@@ -558,7 +558,7 @@ def list_email_contacts():
 def begin_email(text: str):
     global _pending_email_subject
     subject = re.sub(
-        r"^\s*отправь\s+на\s+почту\s+(?:текст\s+)?",
+        r"^\s*отправ(?:ь|ить)\s+на\s+почту\s+(?:текст\s+)?",
         "", text, flags=re.IGNORECASE,
     ).strip().strip(" .,!?:;«»\"'")
     if not subject:
@@ -724,7 +724,7 @@ def handle_command(text: str):
     elif command_text in {"покажи контакты", "покажи адресную книгу", "список контактов"}:
         list_email_contacts()
         return
-    elif command_text.startswith("отправь на почту "):
+    elif command_text.startswith(("отправь на почту ", "отправить на почту ")):
         begin_email(text)
         return
     if command_text in {"блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
