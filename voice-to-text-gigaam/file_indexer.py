@@ -102,51 +102,6 @@ def _connect() -> sqlite3.Connection:
     return connection
 
 
-def _refresh_volume(connection: sqlite3.Connection, drive: str,
-                    report: Callable[[str], None]) -> int:
-    try:
-        import mftparser
-    except ImportError as exc:
-        raise RuntimeError(
-            "Не установлена библиотека mftparser. Выполните обновление зависимостей проекта."
-        ) from exc
-
-    report(f"Читаю MFT диска {drive}...")
-    started = time.perf_counter()
-    entries = mftparser.ScanVolume(drive, only_active=True)
-    report(f"{drive}: прочитано записей {len(entries):,} за {time.perf_counter() - started:.1f} сек.")
-
-    # Build rows first. Do not touch the existing index until the scan succeeded.
-    rows = []
-    inserted = 0
-    for entry in entries:
-        parsed = _entry_to_path(drive, entry)
-        if parsed:
-            full_path, name, size = parsed
-            rows.append((drive, full_path, name, size))
-        if len(rows) >= BATCH_SIZE:
-            connection.executemany(
-                "INSERT INTO files(drive, full_path, name, size) VALUES (?, ?, ?, ?)", rows
-            )
-            inserted += len(rows)
-            rows.clear()
-    if rows:
-        connection.executemany(
-            "INSERT INTO files(drive, full_path, name, size) VALUES (?, ?, ?, ?)", rows
-        )
-        inserted += len(rows)
-
-    # Replacement is transactional: if an insert fails, rollback preserves old rows.
-    # Stage rows in a temp table before replacing this drive's previous index.
-    connection.commit()
-    connection.execute("BEGIN")
-    connection.execute("DELETE FROM files WHERE drive = ?", (drive,))
-    # Rows were inserted above; instead of losing them, stage each scan in a temp table.
-    # This branch is intentionally not used; actual replacement is handled below.
-    connection.rollback()
-    return inserted
-
-
 def refresh_and_search(query: str, report: Callable[[str], None] | None = None) -> list[Path]:
     """Refresh available NTFS volumes and return matching file paths."""
     report = report or (lambda message: print(message, flush=True))
