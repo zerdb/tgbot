@@ -1,68 +1,80 @@
-# Voice to Text — GigaAM
+# Voice to Text — Local GigaAM-v3
 
-Push-to-talk voice typing for your desktop. Hold **Right Ctrl** to record; release it to transcribe with [GigaAM](https://github.com/salute-developers/GigaAM) and paste the recognized text at the cursor.
+Offline push-to-talk voice typing for Windows. Hold **Right Ctrl** to record; release it to transcribe with a locally stored GigaAM-v3 model and paste the recognized text into the active window.
 
-> This folder is independent of the other projects in the `tgbot` repository. It does not use Vosk.
+**No Vosk. No API. No network access at inference time.** The model is loaded from a local directory using `local_files_only=True`.
 
-## Requirements
+## 1. Download the model
 
-- Python 3.10+
-- A working microphone
-- [FFmpeg](https://ffmpeg.org/) installed and available on `PATH`
-- Windows is the primary target (the `keyboard` package may require elevated permissions on some systems)
+Download the official GigaAM-v3 end-to-end RNNT model from Hugging Face:
 
-## Installation
+- [GigaAM-v3 — e2e_rnnt model files](https://huggingface.co/ai-sage/GigaAM-v3/tree/e2e_rnnt)
+- [Official GigaAM project and documentation](https://github.com/salute-developers/GigaAM)
 
-Install the official GigaAM package first:
+The model snapshot is about 449 MB. Download **all files** from the `e2e_rnnt` revision (including `config.json`, `modeling_gigaam.py`, `pytorch_model.bin`, and `tokenizer.model`).
 
-```bash
-git clone https://github.com/salute-developers/GigaAM.git
-cd GigaAM
-pip install -e ".[torch]"
+The easiest way is with the Hugging Face CLI:
+
+```powershell
+py -m pip install -U huggingface_hub
+hf download ai-sage/GigaAM-v3 --revision e2e_rnnt --local-dir GigaAM-v3
 ```
 
-Then install this project's dependencies:
+Place the resulting `GigaAM-v3` folder **next to** `voice-to-text-gigaam`, like this:
 
-```bash
-cd ../tgbot/voice-to-text-gigaam
-python -m pip install -r requirements.txt
+```text
+tgbot/
+├── GigaAM-v3/
+│   ├── config.json
+│   ├── modeling_gigaam.py
+│   ├── pytorch_model.bin
+│   └── tokenizer.model
+└── voice-to-text-gigaam/
+    ├── main.py
+    ├── requirements.txt
+    └── README.md
 ```
 
-## Run
+Do not put the model weights into GitHub; the model is downloaded separately.
 
-```bash
-python main.py
+## 2. Install dependencies
+
+Use Python 3.10 or newer. Install FFmpeg and add it to PATH if required by your audio environment.
+
+From the `voice-to-text-gigaam` folder:
+
+```powershell
+py -m venv .venv
+.venv\Scripts\activate
+py -m pip install --upgrade pip
+py -m pip install -r requirements.txt
 ```
 
-1. Wait until the GigaAM model is loaded.
+PyTorch installation can differ by hardware. If you need a CUDA-enabled build, install the matching PyTorch/torchaudio wheels from the [official PyTorch selector](https://pytorch.org/get-started/locally/) instead of the CPU/default wheels.
+
+## 3. Run
+
+```powershell
+py main.py
+```
+
+1. Wait for the model to load.
 2. Hold **Right Ctrl** and speak.
 3. Release **Right Ctrl**. The recognized text is copied to the clipboard and pasted into the active window.
 4. Press **Esc** to exit.
 
-The default model is `e2e_rnnt`. To choose another supported GigaAM model:
+The default model path is `../GigaAM-v3` relative to this project folder. To use another location, set `GIGAAM_MODEL_DIR`:
 
-**Windows PowerShell**
 ```powershell
-$env:GIGAAM_MODEL="v3_e2e_rnnt"
-python main.py
+$env:GIGAAM_MODEL_DIR="D:\\AI\\GigaAM-v3"
+py main.py
 ```
 
-**Linux/macOS**
-```bash
-GIGAAM_MODEL=v3_e2e_rnnt python main.py
-```
-
-Optional environment variables:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `GIGAAM_MODEL` | `v3_e2e_rnnt` | Model name passed to `gigaam.load_model()` |
-| `PUSH_TO_TALK_KEY` | `right ctrl` | Key held while recording |
-| `SAMPLE_RATE` | `16000` | Microphone sample rate |
+Optional setting: `PUSH_TO_TALK_KEY` changes the recording key (default: `right ctrl`).
 
 ## Notes
 
-- The model weights are downloaded by GigaAM when the model is first loaded; they are not stored in this repository.
-- Audio is written to a temporary WAV file for inference and deleted afterward.
-- The default GigaAM `.transcribe()` interface supports audio up to 25 seconds; longer push-to-talk recordings are skipped with a message. For longer recordings, use the long-form API and its optional dependencies as described in the official GigaAM documentation.
-- Make sure the target text field is focused before releasing the hotkey.
+- GigaAM's short-audio `.transcribe()` method supports clips up to 25 seconds; longer recordings are skipped with a message.
+- The model files and custom model code are loaded locally. The application does not fetch model weights from Hugging Face when it starts.
+- The model repository contains custom Python code. `trust_remote_code=True` is required by GigaAM; only use model files obtained from the official publisher.
+- The model weights are not included in this GitHub repository.
