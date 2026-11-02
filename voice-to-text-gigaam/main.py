@@ -268,6 +268,11 @@ def take_screenshot():
         counter += 1
     ImageGrab.grab(all_screens=True).save(destination, "PNG")
     print(f"Скриншот сохранён: {destination}")
+    try:
+        os.startfile(str(destination))
+        print("Открываю скриншот.")
+    except OSError as exc:
+        print(f"Скриншот сохранён, но не удалось открыть его автоматически: {exc}")
 
 
 def show_notification(title: str, message: str):
