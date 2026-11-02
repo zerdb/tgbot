@@ -44,43 +44,28 @@ def _available_ntfs_volumes() -> list[str]:
 
 
 def _entry_to_path(drive: str, entry) -> tuple[str, str, int] | None:
-    # mftparser 1.7.x tuple layout:
-    # path=5, name=6, size=7, is_dir=9. (В присланном примере индексы
-    # path/size сдвинуты: entry[7] — это размер, entry[9] — флаг папки.)
-    if len(entry) <= 9:
+    # Реальный формат mftparser 1.7.x (проверен на Windows):
+    # 0=MFT record, 3=parent reference, 4=parent record,
+    # 6=active, 7=path, 8=name, 9=size, 11=is_directory.
+    if len(entry) < 12:
         return None
-    relative_path = entry[5]
-    name = entry[6]
-    size = entry[7]
-    is_dir = entry[9]
-    if is_dir or not name:
+    if not entry[6] or entry[11]:
         return None
 
-    relative_path = str(relative_path or "").strip()
-    name = str(name).strip()
-    if not name:
+    relative_path = str(entry[7] or "").strip().replace("/", "\\")
+    name = str(entry[8] or "").strip()
+    if not relative_path or not name or name in (".", ".."):
         return None
 
-    if len(relative_path) >= 2 and relative_path[1] == ":":
-        full_path = relative_path
-        if Path(full_path).name.casefold() != name.casefold():
-            full_path = os.path.join(full_path, name)
-    else:
-        relative_path = relative_path.replace("/", "\\")
-        if relative_path.startswith("\\"):
-            full_path = drive + relative_path
-        elif relative_path:
-            full_path = drive + "\\" + relative_path.lstrip("\\")
-        else:
-            full_path = drive + "\\"
-        if Path(full_path).name.casefold() != name.casefold():
-            full_path = os.path.join(full_path, name)
+    # Поле 7 уже содержит путь от корня тома вместе с именем файла.
+    relative_path = relative_path.lstrip("\\")
+    full_path = os.path.normpath(drive + "\\\\" + relative_path)
 
     try:
-        size = max(0, int(size or 0))
+        size = max(0, int(entry[9] or 0))
     except (TypeError, ValueError):
         size = 0
-    return os.path.normpath(full_path), name, size
+    return full_path, name, size
 
 
 def _connect() -> sqlite3.Connection:
@@ -117,6 +102,20 @@ def _connect() -> sqlite3.Connection:
     connection.execute("CREATE INDEX IF NOT EXISTS idx_files_name ON files(name COLLATE NOCASE)")
     connection.execute("CREATE INDEX IF NOT EXISTS idx_files_path ON files(full_path COLLATE NOCASE)")
     connection.execute("CREATE INDEX IF NOT EXISTS idx_files_drive ON files(drive)")
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+    )
+    version_row = connection.execute(
+        "SELECT value FROM index_meta WHERE key = 'schema_version'"
+    ).fetchone()
+    if not version_row or version_row[0] != "2":
+        # Старые записи были построены по неверным индексам кортежа MFT.
+        # Их нельзя использовать: пути и количество файлов недостоверны.
+        with connection:
+            connection.execute("DELETE FROM files")
+            connection.execute(
+                "INSERT OR REPLACE INTO index_meta(key, value) VALUES ('schema_version', '2')"
+            )
     return connection
 
 
