@@ -937,7 +937,7 @@ async def active_sueta_message(message: Message, state: FSMContext):
         # Telegram-медиа-сообщение. file_id принадлежит этому же боту,
         # поэтому повторно скачивать файл и загружать его на сервер не нужно.
         if media_type == "photo":
-            media_caption = f"<b>{html.escape(sueta['name'])}</b> · {html.escape(display_name({'alias': get_user_alias(message.from_user.id)}))}"
+            media_caption = f"<b>{html.escape(sueta['name'])}</b> · {html.escape(get_user_alias(message.from_user.id))}"
             if caption:
                 media_caption += "\n" + html.escape(caption)
             try:
