@@ -421,7 +421,8 @@ def show_file_results(paths: list[Path], query: str):
 
 
 def search_files(text: str):
-    query = re.sub(r"^\s*найди\s+файл\s*", "", text, flags=re.IGNORECASE).strip().strip('"«»')
+    # Поддерживаем обе формулировки: «найди файл ...» и «найди ...».
+    query = re.sub(r"^\s*найди\s+(?:файл\s+)?", "", text, flags=re.IGNORECASE).strip().strip('"«»')
     # Убираем знаки препинания, которые распознавание речи часто добавляет в конце фразы.
     query = re.sub(r"[\s.,!?;:…]+$", "", query).strip()
     if not query:
@@ -482,7 +483,7 @@ def handle_command(text: str):
         add_reminder(text)
     elif command_text.startswith("найди в интернете "):
         search_web(text)
-    elif command_text.startswith("найди файл "):
+    elif command_text.startswith("найди файл ") or command_text.startswith("найди "):
         search_files(text)
     else:
         print("Команда не распознана. Проверьте формулировку и попробуйте ещё раз.")
