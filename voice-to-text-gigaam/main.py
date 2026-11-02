@@ -1,4 +1,4 @@
-""""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
+"""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
 
 Expected layout:
     tgbot/
