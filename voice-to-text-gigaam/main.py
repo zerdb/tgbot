@@ -1,4 +1,4 @@
-""""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
+"""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
 
 Hold Right Ctrl to record. Release it to transcribe and paste the text.
 The model is loaded only from disk; inference does not contact Hugging Face.
@@ -6,6 +6,7 @@ The model is loaded only from disk; inference does not contact Hugging Face.
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import threading
 import traceback
@@ -40,10 +41,17 @@ _transcription_lock = threading.Lock()
 
 
 def configure_ffmpeg():
-    """Добавляет поставляемый с imageio-ffmpeg бинарник в PATH для GigaAM."""
-    ffmpeg_exe = Path(imageio_ffmpeg.get_ffmpeg_exe()).resolve()
-    os.environ["PATH"] = str(ffmpeg_exe.parent) + os.pathsep + os.environ.get("PATH", "")
-    print(f"FFmpeg найден: {ffmpeg_exe}")
+    """Создаёт ffmpeg.exe с ожидаемым Windows именем и добавляет его в PATH."""
+    source = Path(imageio_ffmpeg.get_ffmpeg_exe()).resolve()
+    target_dir = Path(tempfile.gettempdir()) / "gigaam_ffmpeg"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / "ffmpeg.exe"
+
+    if not target.exists() or target.stat().st_size != source.stat().st_size:
+        shutil.copy2(source, target)
+
+    os.environ["PATH"] = str(target_dir) + os.pathsep + os.environ.get("PATH", "")
+    print(f"FFmpeg настроен: {target}")
 
 
 def check_microphone() -> bool:
