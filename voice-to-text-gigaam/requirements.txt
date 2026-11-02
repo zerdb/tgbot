@@ -9,3 +9,5 @@ transformers==4.57.1
 hydra-core
 omegaconf
 sentencepiece
+pyannote-audio==4.0.0
+torchcodec==0.7.0
