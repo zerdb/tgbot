@@ -105,6 +105,28 @@ def _connect() -> sqlite3.Connection:
     connection.execute(
         "CREATE TABLE IF NOT EXISTS index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
     )
+    # FTS5 trigram index supports fast substring search (including Cyrillic),
+    # unlike instr(SEARCHKEY(...)), which scans every row.
+    try:
+        connection.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5("
+            "drive UNINDEXED, full_path UNINDEXED, search_text, tokenize='trigram')"
+        )
+        fts_row = connection.execute("SELECT value FROM index_meta WHERE key = 'fts_populated'").fetchone()
+        if not fts_row:
+            with connection:
+                connection.execute("DELETE FROM files_fts")
+                connection.execute(
+                    "INSERT INTO files_fts(drive, full_path, search_text) "
+                    "SELECT drive, full_path, "
+                    "SEARCHKEY(name) || ' ' || SEARCHKEY(full_path) FROM files"
+                )
+                connection.execute(
+                    "INSERT OR REPLACE INTO index_meta(key, value) VALUES ('fts_populated', '1')"
+                )
+    except sqlite3.OperationalError:
+        # Fallback below remains compatible with SQLite builds without FTS5/trigram.
+        pass
     version_row = connection.execute(
         "SELECT value FROM index_meta WHERE key = 'schema_version'"
     ).fetchone()
@@ -190,6 +212,16 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
                     "INSERT INTO files(drive, full_path, name, size) "
                     "SELECT drive, full_path, name, size FROM scan_files"
                 )
+                try:
+                    connection.execute("DELETE FROM files_fts WHERE drive = ?", (drive,))
+                    connection.execute(
+                        "INSERT INTO files_fts(drive, full_path, search_text) "
+                        "SELECT drive, full_path, "
+                        "SEARCHKEY(name) || ' ' || SEARCHKEY(full_path) "
+                        "FROM scan_files"
+                    )
+                except sqlite3.OperationalError:
+                    pass
             report(f"{drive}: индексировано {count:,} файлов за {time.perf_counter() - started:.1f} сек.")
 
         # Equivalent to *query*: find the text anywhere in the file name
@@ -204,13 +236,27 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
         total = connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]
         report(f"В базе SQLite записей: {total:,}. Ищу нормализованную строку «{needle}»...")
 
-        rows = connection.execute(
-            "SELECT full_path FROM files "
-            "WHERE instr(SEARCHKEY(name), ?) > 0 "
-            "OR instr(SEARCHKEY(full_path), ?) > 0 "
-            "ORDER BY SEARCHKEY(name) LIMIT ?",
-            (needle, needle, MAX_RESULTS),
-        ).fetchall()
+        rows = []
+        # Trigram FTS is indexed and finds a substring without scanning the
+        # entire SQLite table. For 1-2 character queries use the safe fallback.
+        if len(needle) >= 3:
+            try:
+                fts_query = '"' + needle.replace('"', '""') + '"'
+                rows = connection.execute(
+                    "SELECT full_path FROM files_fts "
+                    "WHERE files_fts MATCH ? LIMIT ?",
+                    (fts_query, MAX_RESULTS),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = []
+
+        if not rows and len(needle) < 3:
+            rows = connection.execute(
+                "SELECT full_path FROM files "
+                "WHERE instr(SEARCHKEY(name), ?) > 0 "
+                "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
+                (needle, needle, MAX_RESULTS),
+            ).fetchall()
 
         if not rows:
             first_word = needle.split()[0] if " " in needle else needle[:3]
