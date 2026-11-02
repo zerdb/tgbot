@@ -203,7 +203,8 @@ def transcribe_and_paste(audio_data: np.ndarray):
 def normalize_command(text: str) -> str:
     normalized = text.lower().replace("ё", "е")
     normalized = re.sub(r"[^а-яa-z0-9.:/ -]+", " ", normalized)
-    return " ".join(normalized.split())
+    # ASR often adds a final period or comma; it must not break exact commands.
+    return " ".join(normalized.split()).strip(" .,:;!?")
 
 
 def windows_only():
@@ -476,8 +477,10 @@ def handle_command(text: str):
     command_text = normalize_command(text)
     print(f"Распознана голосовая команда: {text}")
     if command_text in {"блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
-                        "заблокируй комп", "заблокируй экран", "закблокируй компьютер",
-                        "закблокируй комп", "lock computer", "lock screen"}:
+                        "заблокируй комп", "заблокируй экран", "заблокируй пк",
+                        "блокируй компьютер", "блокируй комп", "закблокируй компьютер",
+                        "закблокируй комп", "заблокировать компьютер", "заблокировать комп",
+                        "lock computer", "lock screen"}:
         lock_computer()
     elif command_text in {"перезагрузи компьютер", "перезагрузи комп", "перезагрузка компьютера"}:
         reboot_computer()
