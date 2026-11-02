@@ -141,6 +141,16 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
     connection = _connect()
     try:
         for drive in volumes:
+            cached_count = connection.execute(
+                "SELECT COUNT(*) FROM files WHERE drive = ?", (drive,)
+            ).fetchone()[0]
+            if cached_count:
+                report(
+                    f"Использую сохранённый индекс {drive}: "
+                    f"{cached_count:,} файлов (повторное сканирование не требуется)."
+                )
+                continue
+
             report(f"Индексирую {drive} через MFT...")
             started = time.perf_counter()
             try:
