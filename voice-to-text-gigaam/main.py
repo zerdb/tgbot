@@ -1,14 +1,19 @@
-"""Push-to-talk voice typing with GigaAM.
+"""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
+
+Expected layout:
+    tgbot/
+      GigaAM-v3/                 # downloaded Hugging Face model snapshot
+      voice-to-text-gigaam/
+        main.py
 
 Hold Right Ctrl to record. Release it to transcribe and paste the text.
-Requires the official GigaAM package and ffmpeg.
+The model is loaded only from disk; inference does not contact Hugging Face.
 """
 from __future__ import annotations
 
 import os
 import tempfile
 import threading
-import time
 from pathlib import Path
 
 import keyboard
@@ -16,13 +21,18 @@ import numpy as np
 import pyperclip
 import sounddevice as sd
 import soundfile as sf
-import gigaam
+import torch
+from transformers import AutoModel
 
 
-SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
+SAMPLE_RATE = 16000
 CHANNELS = 1
-MODEL_NAME = os.getenv("GIGAAM_MODEL", "v3_e2e_rnnt")
 HOTKEY = os.getenv("PUSH_TO_TALK_KEY", "right ctrl")
+
+PROJECT_DIR = Path(__file__).resolve().parent
+MODEL_DIR = Path(
+    os.getenv("GIGAAM_MODEL_DIR", str(PROJECT_DIR.parent / "GigaAM-v3"))
+).expanduser().resolve()
 
 _model = None
 _stream = None
@@ -34,9 +44,25 @@ _transcription_lock = threading.Lock()
 
 def load_model():
     global _model
-    print(f"Loading GigaAM model: {MODEL_NAME} ...")
-    _model = gigaam.load_model(MODEL_NAME)
-    print("GigaAM is ready.")
+
+    if not (MODEL_DIR / "config.json").is_file():
+        raise FileNotFoundError(
+            f"Local GigaAM model not found: {MODEL_DIR}\n"
+            "Download ai-sage/GigaAM-v3 (revision e2e_rnnt) into a folder "
+            "named 'GigaAM-v3' next to the voice-to-text-gigaam project, "
+            "or set GIGAAM_MODEL_DIR to the model folder."
+        )
+
+    print(f"Loading local GigaAM model from: {MODEL_DIR}")
+    # trust_remote_code is required by the official GigaAM model architecture.
+    # local_files_only prevents any network access or automatic model download.
+    _model = AutoModel.from_pretrained(
+        str(MODEL_DIR),
+        trust_remote_code=True,
+        local_files_only=True,
+    )
+    _model.eval()
+    print("GigaAM is ready (offline mode).")
 
 
 def audio_callback(indata, frames, time_info, status):
@@ -109,8 +135,9 @@ def transcribe_and_paste(audio: np.ndarray):
             temp_path = Path(tmp.name)
 
         sf.write(str(temp_path), audio, SAMPLE_RATE, subtype="PCM_16")
-        print("Transcribing...")
-        text = _model.transcribe(str(temp_path)).strip()
+        print("Transcribing locally...")
+        with torch.inference_mode():
+            text = _model.transcribe(str(temp_path)).strip()
 
         if text:
             pyperclip.copy(text)
