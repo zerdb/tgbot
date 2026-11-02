@@ -21,7 +21,7 @@ import gigaam
 
 SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
 CHANNELS = 1
-MODEL_NAME = os.getenv("GIGAAM_MODEL", "e2e_rnnt")
+MODEL_NAME = os.getenv("GIGAAM_MODEL", "v3_e2e_rnnt")
 HOTKEY = os.getenv("PUSH_TO_TALK_KEY", "right ctrl")
 
 _model = None
