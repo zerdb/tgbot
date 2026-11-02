@@ -389,21 +389,44 @@ def parse_reminder(text: str):
     if not source.startswith("напомни "):
         return None
     body = source[len("напомни "):].strip()
+    # В разговорной речи часто говорят «напомни мне ...».
+    body = re.sub(r"^мне\\s+", "", body)
     now = datetime.now()
     due = None
     rest = body
 
-    # Relative periods: через полчаса, через 1 час 20 минут, через 10 минут.
+    # Относительное время: «через минуту», «через час», «через 1 час 20 минут».
     if rest.startswith("через "):
-        m = re.match(r"через\s+полчаса(?:\s+|$)(.*)", rest)
+        m = re.match(r"через\\s+полчаса(?:\\s+|$)(.*)", rest)
         if m:
             due, rest = now + timedelta(minutes=30), m.group(1).strip()
         else:
-            m = re.match(r"через\s+(?:(\d+)\s*(?:час|часа|часов|ч)\s*)?(?:(\d+)\s*(?:минуту|минуты|минут|минута|мин)\s*)?(?:(\d+)\s*(?:секунду|секунды|секунд|сек)\s*)?(.*)", rest)
-            if m and any(m.group(i) for i in (1, 2, 3)):
+            m = re.match(
+                r"через\\s+"
+                r"(?:(\\d+)\\s*(?:час|часа|часов|ч)\\s*)?"
+                r"(?:(\\d+)\\s*(?:минуту|минуты|минут|минута|мин)\\s*)?"
+                r"(?:(\\d+)\\s*(?:секунду|секунды|секунд|сек)\\s*)?"
+                r"(.*)",
+                rest,
+            )
+            if m:
                 hours, minutes, seconds = (int(m.group(i) or 0) for i in (1, 2, 3))
-                due = now + timedelta(hours=hours, minutes=minutes, seconds=seconds)
-                rest = m.group(4).strip()
+                remainder = m.group(4).strip()
+                # Если единица времени названа без числа, подразумевается одна.
+                if not any(m.group(i) for i in (1, 2, 3)):
+                    unit = re.match(r"через\\s+(час|часа|часов|ч|минуту|минута|минуты|минут|мин|секунду|секунда|секунды|секунд|сек)\\b", rest)
+                    if unit:
+                        token = unit.group(1)
+                        if token in {"час", "часа", "часов", "ч"}:
+                            hours = 1
+                        elif token in {"минуту", "минута", "минуты", "минут", "мин"}:
+                            minutes = 1
+                        else:
+                            seconds = 1
+                        remainder = rest[unit.end():].strip()
+                if hours or minutes or seconds:
+                    due = now + timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                    rest = remainder
     # "завтра в 9 утра", "завтра утром", "завтра в 09:30".
     if due is None and rest.startswith("завтра"):
         tomorrow = now.date() + timedelta(days=1)
