@@ -768,6 +768,12 @@ async def save_sueta_name(message: Message, state: FSMContext):
     )
 
 
+def get_user_alias(user_id: int) -> str:
+    with db() as conn:
+        row = conn.execute("SELECT alias FROM users WHERE user_id=?", (user_id,)).fetchone()
+    return row["alias"] if row and row["alias"] else "Аноним 05"
+
+
 def sueta_view(sueta_id: int, user_id: int | None = None):
     with db() as conn:
         sueta = conn.execute("SELECT * FROM suetas WHERE id=?", (sueta_id,)).fetchone()
@@ -927,6 +933,34 @@ async def active_sueta_message(message: Message, state: FSMContext):
 
     active_viewers = set(active_sueta_users.get(sueta_id, set()))
     for viewer_id in active_viewers:
+        # Фото и видео доставляем каждому открывшему суету как настоящее
+        # Telegram-медиа-сообщение. file_id принадлежит этому же боту,
+        # поэтому повторно скачивать файл и загружать его на сервер не нужно.
+        if media_type == "photo":
+            media_caption = f"<b>{html.escape(sueta['name'])}</b> · {html.escape(display_name({'alias': get_user_alias(message.from_user.id)}))}"
+            if caption:
+                media_caption += "\n" + html.escape(caption)
+            try:
+                await message.bot.send_photo(
+                    chat_id=viewer_id,
+                    photo=file_id,
+                    caption=media_caption[:1024],
+                )
+            except Exception:
+                logger.warning("Не удалось доставить фото viewer_id=%s sueta_id=%s", viewer_id, sueta_id, exc_info=True)
+        elif media_type == "video":
+            media_caption = f"<b>{html.escape(sueta['name'])}</b> · {html.escape(get_user_alias(message.from_user.id))}"
+            if caption:
+                media_caption += "\n" + html.escape(caption)
+            try:
+                await message.bot.send_video(
+                    chat_id=viewer_id,
+                    video=file_id,
+                    caption=media_caption[:1024],
+                )
+            except Exception:
+                logger.warning("Не удалось доставить видео viewer_id=%s sueta_id=%s", viewer_id, sueta_id, exc_info=True)
+
         view_message_id = active_sueta_views.get(viewer_id)
         if not view_message_id:
             continue
