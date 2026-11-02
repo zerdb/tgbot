@@ -88,6 +88,13 @@ def _connect() -> sqlite3.Connection:
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
     connection.execute("PRAGMA temp_store=MEMORY")
+    # Python casefold() provides Unicode-aware, case-insensitive matching,
+    # including Cyrillic (SQLite's built-in NOCASE handles ASCII only).
+    connection.create_function(
+        "CASEFOLD", 1,
+        lambda value: str(value or "").casefold(),
+        deterministic=True,
+    )
     connection.execute("""
         CREATE TABLE IF NOT EXISTS files (
             drive TEXT NOT NULL,
@@ -165,14 +172,15 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
                 )
             report(f"{drive}: индексировано {count:,} файлов за {time.perf_counter() - started:.1f} сек.")
 
-        # A substring search; SQLite returns the actual stored full paths.
-        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        # Equivalent to *query*: find the text anywhere in the file name
+        # or full path. casefold() makes matching case-insensitive for Cyrillic too.
+        needle = query.casefold()
         rows = connection.execute(
             "SELECT full_path FROM files "
-            "WHERE name LIKE ? ESCAPE '\\' COLLATE NOCASE "
-            "OR full_path LIKE ? ESCAPE '\\' COLLATE NOCASE "
-            "ORDER BY name COLLATE NOCASE LIMIT ?",
-            (f"%{escaped}%", f"%{escaped}%", MAX_RESULTS),
+            "WHERE instr(CASEFOLD(name), ?) > 0 "
+            "OR instr(CASEFOLD(full_path), ?) > 0 "
+            "ORDER BY CASEFOLD(name) LIMIT ?",
+            (needle, needle, MAX_RESULTS),
         ).fetchall()
         return [Path(row[0]) for row in rows]
     finally:
