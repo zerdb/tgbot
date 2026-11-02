@@ -385,7 +385,7 @@ def search_web(text: str):
 
 def show_file_results(paths: list[Path], query: str):
     import tkinter as tk
-    from tkinter import ttk
+    from tkinter import ttk, messagebox
     root = tk.Tk()
     root.title(f"Результаты поиска: {query}")
     root.geometry("850x420")
@@ -407,7 +407,7 @@ def show_file_results(paths: list[Path], query: str):
             try:
                 os.startfile(str(paths[selection[0]]))
             except OSError as exc:
-                tk.messagebox.showerror("Не удалось открыть файл", str(exc))
+                messagebox.showerror("Не удалось открыть файл", str(exc))
     listing.bind("<Double-Button-1>", open_selected)
     ttk.Button(root, text="Открыть выбранный файл", command=open_selected).pack(pady=(0, 12))
     root.mainloop()
