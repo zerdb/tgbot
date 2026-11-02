@@ -492,7 +492,7 @@ def save_address_book(book: dict[str, str]):
 def add_email_contact(text: str):
     match = re.match(
         r"^(?:добавь|создай)\s+(?:контакт|получателя)\s+(.+?)\s+([\w.+-]+@[\w.-]+\.[a-zа-я]{2,})$",
-        normalize_command(text),
+        text.strip().replace("ё", "е"),
         re.IGNORECASE,
     )
     if not match:
