@@ -1,6 +1,6 @@
 # Voice to Text — Local GigaAM-v3
 
-Offline push-to-talk voice typing for Windows. Hold **Right Ctrl** to record; release it to transcribe with a locally stored GigaAM-v3 model and paste the recognized text into the active window.
+Offline push-to-talk voice typing and voice commands for Windows. Hold **Right Shift** to dictate text; hold **Right Ctrl** to issue a voice command. Release the key to process the recording with a locally stored GigaAM-v3 model.
 
 **No Vosk. No API. No network access at inference time.** The model is loaded from a local directory using `local_files_only=True`.
 
@@ -59,8 +59,8 @@ py main.py
 ```
 
 1. Wait for the model to load.
-2. Hold **Right Ctrl** and speak.
-3. Release **Right Ctrl**. The recognized text is copied to the clipboard and pasted into the active window.
+2. Hold **Right Shift** and speak to dictate text, or hold **Right Ctrl** and speak a command.
+3. Release the key to process the recording.
 4. Press **Esc** to exit.
 
 The default model path is `../GigaAM-v3` relative to this project folder. To use another location, set `GIGAAM_MODEL_DIR`:
@@ -78,3 +78,19 @@ Optional setting: `PUSH_TO_TALK_KEY` changes the recording key (default: `right 
 - The model files and custom model code are loaded locally. The application does not fetch model weights from Hugging Face when it starts.
 - The model repository contains custom Python code. `trust_remote_code=True` is required by GigaAM; only use model files obtained from the official publisher.
 - The model weights are not included in this GitHub repository.
+
+
+## Project modules
+
+The application is split by responsibility so features can be maintained independently:
+
+- `main.py` — startup, microphone hotkeys, speech recognition and command routing.
+- `windows_actions.py` — Windows actions: lock, reboot, settings, Downloads, Recycle Bin and screenshots.
+- `reminders.py` — reminder parsing, scheduling and background notifications.
+- `notifications.py` — Windows toast notifications and speech synthesis.
+- `email_manager.py` — Mail.ru SMTP sending and local address-book storage.
+- `contact_form.py` — desktop form for manually adding contacts.
+- `file_search.py` — web search, MFT search orchestration and results window.
+- `file_indexer.py` — NTFS MFT indexing and SQLite/FTS search database.
+
+The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAssistant`, not in the repository. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
