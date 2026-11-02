@@ -91,6 +91,9 @@ def stop_recording():
     if len(audio) < SAMPLE_RATE // 4:
         print("Recording is too short; skipped.")
         return
+    if len(audio) > SAMPLE_RATE * 25:
+        print("Recording exceeds GigaAM short-audio limit (25 seconds); skipped.")
+        return
 
     threading.Thread(target=transcribe_and_paste, args=(audio,), daemon=True).start()
 
