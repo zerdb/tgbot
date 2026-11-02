@@ -1,4 +1,4 @@
-"""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
+""""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
 
 Hold Right Ctrl to record. Release it to transcribe and paste the text.
 The model is loaded only from disk; inference does not contact Hugging Face.
@@ -11,6 +11,7 @@ import threading
 import traceback
 from pathlib import Path
 
+import imageio_ffmpeg
 import keyboard
 import numpy as np
 import pyperclip
@@ -23,7 +24,6 @@ from transformers import AutoModel
 SAMPLE_RATE = 16000
 CHANNELS = 1
 HOTKEY = os.getenv("PUSH_TO_TALK_KEY", "right ctrl")
-# GigaAM .transcribe() принимает аудио до 25 секунд.
 MAX_CHUNK_SECONDS = 24
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -39,8 +39,14 @@ _lock = threading.Lock()
 _transcription_lock = threading.Lock()
 
 
+def configure_ffmpeg():
+    """Добавляет поставляемый с imageio-ffmpeg бинарник в PATH для GigaAM."""
+    ffmpeg_exe = Path(imageio_ffmpeg.get_ffmpeg_exe()).resolve()
+    os.environ["PATH"] = str(ffmpeg_exe.parent) + os.pathsep + os.environ.get("PATH", "")
+    print(f"FFmpeg найден: {ffmpeg_exe}")
+
+
 def check_microphone() -> bool:
-    """Проверяет наличие доступного устройства записи."""
     try:
         device = sd.query_devices(kind="input")
         if device["max_input_channels"] < CHANNELS:
@@ -61,7 +67,7 @@ def load_model():
 
     if not (MODEL_DIR / "config.json").is_file():
         raise FileNotFoundError(
-            f"Локальная модель GigaAM не найдена: {MODEL_DIR}\n"
+            f"Локальная модель GigaAM не найдена: {MODEL_DIR}\\n"
             "Скачайте ai-sage/GigaAM-v3 (revision e2e_rnnt) в папку "
             "'GigaAM-v3' рядом с папкой voice-to-text-gigaam "
             "или укажите путь к модели в переменной GIGAAM_MODEL_DIR."
@@ -141,7 +147,6 @@ def stop_recording():
 
 
 def transcribe_audio_file(audio: np.ndarray) -> str:
-    """Сохраняет фрагмент во временный WAV и распознаёт его."""
     temp_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -195,6 +200,7 @@ def main():
     if not check_microphone():
         return
 
+    configure_ffmpeg()
     load_model()
     print(f"Голосовой ввод включён. Удерживайте {HOTKEY} и говорите.")
     print("Для выхода нажмите Esc.")
