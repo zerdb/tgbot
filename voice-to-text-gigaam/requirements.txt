@@ -3,3 +3,9 @@ sounddevice>=0.4.6
 soundfile>=0.12.1
 keyboard>=0.13.5
 pyperclip>=1.8.2
+torch==2.8.0
+torchaudio==2.8.0
+transformers==4.57.1
+hydra-core
+omegaconf
+sentencepiece
