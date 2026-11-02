@@ -422,6 +422,8 @@ def show_file_results(paths: list[Path], query: str):
 
 def search_files(text: str):
     query = re.sub(r"^\s*найди\s+файл\s*", "", text, flags=re.IGNORECASE).strip().strip('"«»')
+    # Убираем знаки препинания, которые распознавание речи часто добавляет в конце фразы.
+    query = re.sub(r"[\s.,!?;:…]+$", "", query).strip()
     if not query:
         print("Не распознано имя файла. Скажите, например: «найди файл договор».")
         return
