@@ -64,5 +64,5 @@ Optional environment variables:
 
 - The model weights are downloaded by GigaAM when the model is first loaded; they are not stored in this repository.
 - Audio is written to a temporary WAV file for inference and deleted afterward.
-- The default GigaAM `.transcribe()` interface is intended for short clips. For longer recordings, use the long-form API and its optional dependencies as described in the official GigaAM documentation.
+- The default GigaAM `.transcribe()` interface supports audio up to 25 seconds; longer push-to-talk recordings are skipped with a message. For longer recordings, use the long-form API and its optional dependencies as described in the official GigaAM documentation.
 - Make sure the target text field is focused before releasing the hotkey.
