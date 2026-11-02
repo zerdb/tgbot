@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 
+from file_indexer import refresh_and_search
+
 _STARTUP_TIME = time.perf_counter()
 
 
@@ -422,31 +424,20 @@ def search_files(text: str):
 
 
 def run_file_search(query: str):
-    print(f"Ищу «{query}» на всех доступных дисках. Поиск может занять время...")
-    windows_only()
-    import string
-    roots = []
-    for letter in string.ascii_uppercase:
-        root = Path(f"{letter}:\\")
-        if root.exists():
-            roots.append(root)
-    if not roots:
-        roots = [Path.home()]
-    matches: list[Path] = []
-    query_lower = query.casefold()
-    skipped = {"$recycle.bin", "system volume information"}
-    for root in roots:
-        for current, dirs, files in os.walk(root, topdown=True, onerror=lambda _e: None):
-            dirs[:] = [d for d in dirs if d.casefold() not in skipped]
-            for filename in files:
-                if query_lower in filename.casefold():
-                    matches.append(Path(current) / filename)
-                    if len(matches) >= 500:
-                        break
-            if len(matches) >= 500:
-                break
-        if len(matches) >= 500:
-            break
+    print(f"Ищу «{query}» по MFT и SQLite. Первое индексирование может занять некоторое время...")
+    try:
+        matches = refresh_and_search(
+            query,
+            report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+        )
+    except Exception as exc:
+        print(f"Ошибка MFT-поиска: {exc}")
+        try:
+            show_notification("Поиск файлов", str(exc))
+        except Exception:
+            pass
+        return
+
     if not matches:
         print(f"Файлы по запросу «{query}» не найдены.")
         try:
@@ -454,6 +445,7 @@ def run_file_search(query: str):
         except Exception:
             pass
         return
+
     print(f"Найдено файлов: {len(matches)}")
     try:
         show_file_results(matches, query)
