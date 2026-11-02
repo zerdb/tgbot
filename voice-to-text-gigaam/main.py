@@ -47,13 +47,13 @@ def load_model():
 
     if not (MODEL_DIR / "config.json").is_file():
         raise FileNotFoundError(
-            f"Local GigaAM model not found: {MODEL_DIR}\n"
-            "Download ai-sage/GigaAM-v3 (revision e2e_rnnt) into a folder "
-            "named 'GigaAM-v3' next to the voice-to-text-gigaam project, "
-            "or set GIGAAM_MODEL_DIR to the model folder."
+            f"Локальная модель GigaAM не найдена: {MODEL_DIR}\n"
+            "Скачайте ai-sage/GigaAM-v3 (revision e2e_rnnt) в папку "
+            "'GigaAM-v3' рядом с папкой voice-to-text-gigaam "
+            "или укажите путь к модели в переменной GIGAAM_MODEL_DIR."
         )
 
-    print(f"Loading local GigaAM model from: {MODEL_DIR}")
+    print(f"Загружаю локальную модель GigaAM из папки: {MODEL_DIR}")
     # trust_remote_code is required by the official GigaAM model architecture.
     # local_files_only prevents any network access or automatic model download.
     _model = AutoModel.from_pretrained(
@@ -62,12 +62,12 @@ def load_model():
         local_files_only=True,
     )
     _model.eval()
-    print("GigaAM is ready (offline mode).")
+    print("Модель GigaAM готова к работе (автономный режим).")
 
 
 def audio_callback(indata, frames, time_info, status):
     if status:
-        print(f"Audio status: {status}")
+        print(f"Состояние аудиоустройства: {status}")
     with _lock:
         if _recording:
             _audio_chunks.append(indata.copy())
@@ -89,7 +89,7 @@ def start_recording():
             callback=audio_callback,
         )
         _stream.start()
-        print("Recording... release Right Ctrl to transcribe.")
+        print("Идёт запись... Отпустите правый Ctrl, чтобы распознать речь.")
     except Exception:
         with _lock:
             _recording = False
@@ -110,15 +110,15 @@ def stop_recording():
         stream.close()
 
     if not chunks:
-        print("No audio captured.")
+        print("Звук не записан.")
         return
 
     audio = np.concatenate(chunks, axis=0).reshape(-1)
     if len(audio) < SAMPLE_RATE // 4:
-        print("Recording is too short; skipped.")
+        print("Запись слишком короткая, пропускаю.")
         return
     if len(audio) > SAMPLE_RATE * 25:
-        print("Recording exceeds GigaAM short-audio limit (25 seconds); skipped.")
+        print("Запись длиннее допустимых 25 секунд, пропускаю.")
         return
 
     threading.Thread(target=transcribe_and_paste, args=(audio,), daemon=True).start()
@@ -126,7 +126,7 @@ def stop_recording():
 
 def transcribe_and_paste(audio: np.ndarray):
     if not _transcription_lock.acquire(blocking=False):
-        print("Previous transcription is still running; skipped.")
+        print("Предыдущее распознавание ещё выполняется. Эта запись пропущена.")
         return
 
     temp_path = None
@@ -135,18 +135,18 @@ def transcribe_and_paste(audio: np.ndarray):
             temp_path = Path(tmp.name)
 
         sf.write(str(temp_path), audio, SAMPLE_RATE, subtype="PCM_16")
-        print("Transcribing locally...")
+        print("Распознаю речь локально...")
         with torch.inference_mode():
             text = _model.transcribe(str(temp_path)).strip()
 
         if text:
             pyperclip.copy(text)
             keyboard.send("ctrl+v")
-            print(f"Pasted: {text}")
+            print(f"Текст распознан и вставлен: {text}")
         else:
-            print("No speech recognized.")
+            print("Речь не распознана.")
     except Exception as exc:
-        print(f"Transcription error: {exc}")
+        print(f"Ошибка распознавания: {exc}")
     finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
@@ -155,8 +155,8 @@ def transcribe_and_paste(audio: np.ndarray):
 
 def main():
     load_model()
-    print(f"Push-to-talk is active. Hold {HOTKEY} to speak.")
-    print("Press Esc to quit.")
+    print(f"Голосовой ввод включён. Удерживайте {HOTKEY} и говорите.")
+    print("Для выхода нажмите Esc.")
 
     keyboard.on_press_key(HOTKEY, lambda _: start_recording(), suppress=False)
     keyboard.on_release_key(HOTKEY, lambda _: stop_recording(), suppress=False)
@@ -171,7 +171,7 @@ def main():
         if active:
             stop_recording()
         keyboard.unhook_all()
-        print("Stopped.")
+        print("Работа программы завершена.")
 
 
 if __name__ == "__main__":
