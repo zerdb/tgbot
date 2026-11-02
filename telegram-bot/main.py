@@ -925,12 +925,12 @@ async def active_sueta_message(message: Message, state: FSMContext):
     except Exception:
         logger.debug("Не удалось удалить исходное сообщение user_id=%s", message.from_user.id, exc_info=True)
 
-    view_text, view_markup = sueta_view(sueta_id, message.from_user.id)
     active_viewers = set(active_sueta_users.get(sueta_id, set()))
     for viewer_id in active_viewers:
         view_message_id = active_sueta_views.get(viewer_id)
         if not view_message_id:
             continue
+        view_text, view_markup = sueta_view(sueta_id, viewer_id)
         try:
             await message.bot.edit_message_text(chat_id=viewer_id, message_id=view_message_id, text=view_text, reply_markup=view_markup)
         except Exception:
