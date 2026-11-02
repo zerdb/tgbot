@@ -491,7 +491,7 @@ def save_address_book(book: dict[str, str]):
 
 def add_email_contact(text: str):
     match = re.match(
-        r"^(?:добавь|создай)\\s+(?:контакт|получателя)\\s+(.+?)\\s+([\\w.+-]+@[\\w.-]+\\.[a-zа-я]{2,})$",
+        r"^(?:добавь|создай)\s+(?:контакт|получателя)\s+(.+?)\s+([\w.+-]+@[\w.-]+\.[a-zа-я]{2,})$",
         normalize_command(text),
         re.IGNORECASE,
     )
@@ -518,9 +518,9 @@ def list_email_contacts():
 def begin_email(text: str):
     global _pending_email_subject
     subject = re.sub(
-        r"^\\s*отправь\\s+на\\s+почту\\s+(?:текст\\s+)?",
+        r"^\s*отправь\s+на\s+почту\s+(?:текст\s+)?",
         "", text, flags=re.IGNORECASE,
-    ).strip().strip(" .,!?:;«»\\"'")
+    ).strip().strip(" .,!?:;«»\"'")
     if not subject:
         print("Скажите тему письма после команды «отправь на почту текст ...».")
         return
