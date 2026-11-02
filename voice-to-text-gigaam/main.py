@@ -1,11 +1,5 @@
 """Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
 
-Expected layout:
-    tgbot/
-      GigaAM-v3/                 # downloaded Hugging Face model snapshot
-      voice-to-text-gigaam/
-        main.py
-
 Hold Right Ctrl to record. Release it to transcribe and paste the text.
 The model is loaded only from disk; inference does not contact Hugging Face.
 """
@@ -14,6 +8,7 @@ from __future__ import annotations
 import os
 import tempfile
 import threading
+import traceback
 from pathlib import Path
 
 import keyboard
@@ -28,6 +23,8 @@ from transformers import AutoModel
 SAMPLE_RATE = 16000
 CHANNELS = 1
 HOTKEY = os.getenv("PUSH_TO_TALK_KEY", "right ctrl")
+# GigaAM .transcribe() принимает аудио до 25 секунд.
+MAX_CHUNK_SECONDS = 24
 
 PROJECT_DIR = Path(__file__).resolve().parent
 MODEL_DIR = Path(
@@ -43,7 +40,7 @@ _transcription_lock = threading.Lock()
 
 
 def check_microphone() -> bool:
-    """Check that Windows/PortAudio has a default input device."""
+    """Проверяет наличие доступного устройства записи."""
     try:
         device = sd.query_devices(kind="input")
         if device["max_input_channels"] < CHANNELS:
@@ -71,8 +68,6 @@ def load_model():
         )
 
     print(f"Загружаю локальную модель GigaAM из папки: {MODEL_DIR}")
-    # trust_remote_code is required by the official GigaAM model architecture.
-    # local_files_only prevents any network access or automatic model download.
     _model = AutoModel.from_pretrained(
         str(MODEL_DIR),
         trust_remote_code=True,
@@ -92,6 +87,7 @@ def audio_callback(indata, frames, time_info, status):
 
 def start_recording():
     global _stream, _recording, _audio_chunks
+
     with _lock:
         if _recording:
             return
@@ -116,6 +112,7 @@ def start_recording():
 
 def stop_recording():
     global _stream, _recording
+
     with _lock:
         if not _recording:
             return
@@ -124,22 +121,38 @@ def stop_recording():
 
     stream, _stream = _stream, None
     if stream is not None:
-        stream.stop()
-        stream.close()
+        try:
+            stream.stop()
+        finally:
+            stream.close()
 
     if not chunks:
-        print("Звук не записан.")
+        print("Звук не записан: микрофон не передал аудиоданные.")
         return
 
     audio = np.concatenate(chunks, axis=0).reshape(-1)
-    if len(audio) < SAMPLE_RATE // 4:
-        print("Запись слишком короткая, пропускаю.")
-        return
-    if len(audio) > SAMPLE_RATE * 25:
-        print("Запись длиннее допустимых 25 секунд, пропускаю.")
+    if audio.size == 0:
+        print("Звук не записан.")
         return
 
+    duration = len(audio) / SAMPLE_RATE
+    print(f"Запись завершена: {duration:.2f} сек. Отправляю на распознавание...")
     threading.Thread(target=transcribe_and_paste, args=(audio,), daemon=True).start()
+
+
+def transcribe_audio_file(audio: np.ndarray) -> str:
+    """Сохраняет фрагмент во временный WAV и распознаёт его."""
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            temp_path = Path(tmp.name)
+
+        sf.write(str(temp_path), audio, SAMPLE_RATE, subtype="PCM_16")
+        with torch.inference_mode():
+            return _model.transcribe(str(temp_path)).strip()
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def transcribe_and_paste(audio: np.ndarray):
@@ -147,16 +160,23 @@ def transcribe_and_paste(audio: np.ndarray):
         print("Предыдущее распознавание ещё выполняется. Эта запись пропущена.")
         return
 
-    temp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            temp_path = Path(tmp.name)
-
-        sf.write(str(temp_path), audio, SAMPLE_RATE, subtype="PCM_16")
         print("Распознаю речь локально...")
-        with torch.inference_mode():
-            text = _model.transcribe(str(temp_path)).strip()
+        chunk_size = SAMPLE_RATE * MAX_CHUNK_SECONDS
+        parts = [
+            audio[start:start + chunk_size]
+            for start in range(0, len(audio), chunk_size)
+        ]
 
+        recognized_parts = []
+        for index, part in enumerate(parts, start=1):
+            if len(parts) > 1:
+                print(f"Распознаю фрагмент {index} из {len(parts)}...")
+            result = transcribe_audio_file(part)
+            if result:
+                recognized_parts.append(result)
+
+        text = " ".join(recognized_parts).strip()
         if text:
             pyperclip.copy(text)
             keyboard.send("ctrl+v")
@@ -165,9 +185,9 @@ def transcribe_and_paste(audio: np.ndarray):
             print("Речь не распознана.")
     except Exception as exc:
         print(f"Ошибка распознавания: {exc}")
+        print("Подробности ошибки:")
+        traceback.print_exc()
     finally:
-        if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
         _transcription_lock.release()
 
 
