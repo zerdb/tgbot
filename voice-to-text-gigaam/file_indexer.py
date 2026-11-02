@@ -12,6 +12,7 @@ import sqlite3
 import string
 import tempfile
 import time
+import unicodedata
 from pathlib import Path
 from typing import Callable
 
@@ -92,7 +93,17 @@ def _connect() -> sqlite3.Connection:
     # including Cyrillic (SQLite's built-in NOCASE handles ASCII only).
     connection.create_function(
         "CASEFOLD", 1,
-        lambda value: str(value or "").casefold(),
+        lambda value: unicodedata.normalize("NFKC", str(value or "")).casefold(),
+        deterministic=True,
+    )
+    # Игнорируем пробелы и разделители: «акт сверки», «акт-сверки»
+    # и «акт_сверки» должны находиться одинаково.
+    connection.create_function(
+        "SEARCHKEY", 1,
+        lambda value: "".join(
+            char for char in unicodedata.normalize("NFKC", str(value or "")).casefold()
+            if char.isalnum()
+        ),
         deterministic=True,
     )
     connection.execute("""
@@ -174,14 +185,36 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
 
         # Equivalent to *query*: find the text anywhere in the file name
         # or full path. casefold() makes matching case-insensitive for Cyrillic too.
-        needle = query.casefold()
+        needle = "".join(
+            char for char in unicodedata.normalize("NFKC", query).casefold()
+            if char.isalnum()
+        )
+        if not needle:
+            return []
+
+        total = connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+        report(f"В базе SQLite записей: {total:,}. Ищу нормализованную строку «{needle}»...")
+
         rows = connection.execute(
             "SELECT full_path FROM files "
-            "WHERE instr(CASEFOLD(name), ?) > 0 "
-            "OR instr(CASEFOLD(full_path), ?) > 0 "
-            "ORDER BY CASEFOLD(name) LIMIT ?",
+            "WHERE instr(SEARCHKEY(name), ?) > 0 "
+            "OR instr(SEARCHKEY(full_path), ?) > 0 "
+            "ORDER BY SEARCHKEY(name) LIMIT ?",
             (needle, needle, MAX_RESULTS),
         ).fetchall()
+
+        if not rows:
+            first_word = needle.split()[0] if " " in needle else needle[:3]
+            partial = connection.execute(
+                "SELECT name FROM files WHERE instr(SEARCHKEY(name), ?) > 0 LIMIT 5",
+                (first_word,),
+            ).fetchall()
+            if partial:
+                examples = "; ".join(str(row[0]) for row in partial)
+                report(f"Совпадения по части запроса «{first_word}»: {examples}")
+            else:
+                report(f"В именах файлов не найден даже фрагмент «{first_word}».")
+
         return [Path(row[0]) for row in rows]
     finally:
         connection.close()
