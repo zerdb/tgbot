@@ -792,7 +792,7 @@ def sueta_view(sueta_id: int, user_id: int | None = None):
     b.row(InlineKeyboardButton(text="🔔 Отписаться" if subscribed else "🔔 Подписаться", callback_data=f"subsueta:{sueta_id}"))
     b.row(InlineKeyboardButton(text=f"📁 Медиа ({media_count})", callback_data=f"sueta_media:{sueta_id}"))
     b.row(InlineKeyboardButton(text="🚪 Выйти из суеты", callback_data=f"leave_sueta:{sueta_id}"))
-    b.row(InlineKeyboardButton(text="🔄 Сменить суету", callback_data="switch_sueta"))
+    b.row(InlineKeyboardButton(text="⬅️ Назад", callback_data="switch_sueta"))
     return "\n\n".join(lines), b.as_markup()
 
 @dp.callback_query(F.data.startswith("sueta:"))
