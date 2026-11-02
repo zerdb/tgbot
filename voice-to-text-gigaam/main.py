@@ -1,4 +1,4 @@
-"""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
+""""Offline push-to-talk voice typing using a locally stored GigaAM-v3 model.
 
 Expected layout:
     tgbot/
@@ -40,6 +40,23 @@ _audio_chunks: list[np.ndarray] = []
 _recording = False
 _lock = threading.Lock()
 _transcription_lock = threading.Lock()
+
+
+def check_microphone() -> bool:
+    """Check that Windows/PortAudio has a default input device."""
+    try:
+        device = sd.query_devices(kind="input")
+        if device["max_input_channels"] < CHANNELS:
+            print("Микрофон не найден: устройство не поддерживает запись звука.")
+            print("Подключите микрофон и перезапустите программу.")
+            return False
+    except (sd.PortAudioError, OSError) as exc:
+        print(f"Микрофон не найден или недоступен: {exc}")
+        print("Подключите микрофон и перезапустите программу.")
+        return False
+
+    print(f"Микрофон найден: {device['name']}")
+    return True
 
 
 def load_model():
@@ -90,10 +107,11 @@ def start_recording():
         )
         _stream.start()
         print("Идёт запись... Отпустите правый Ctrl, чтобы распознать речь.")
-    except Exception:
+    except (sd.PortAudioError, OSError) as exc:
         with _lock:
             _recording = False
-        raise
+        _stream = None
+        print(f"Не удалось начать запись: микрофон недоступен. {exc}")
 
 
 def stop_recording():
@@ -154,6 +172,9 @@ def transcribe_and_paste(audio: np.ndarray):
 
 
 def main():
+    if not check_microphone():
+        return
+
     load_model()
     print(f"Голосовой ввод включён. Удерживайте {HOTKEY} и говорите.")
     print("Для выхода нажмите Esc.")
