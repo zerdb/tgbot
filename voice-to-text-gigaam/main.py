@@ -9,17 +9,28 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import traceback
 from pathlib import Path
 
+_STARTUP_TIME = time.perf_counter()
+
+def progress(message: str):
+    elapsed = time.perf_counter() - _STARTUP_TIME
+    print(f"[{elapsed:6.1f} сек] {message}", flush=True)
+
+progress("Запуск Python: загружаю аудиобиблиотеки...")
 import imageio_ffmpeg
 import keyboard
 import numpy as np
 import pyperclip
 import sounddevice as sd
 import soundfile as sf
+progress("Аудиобиблиотеки загружены. Загружаю PyTorch...")
 import torch
+progress("PyTorch загружен. Загружаю Transformers...")
 from transformers import AutoModel
+progress("Библиотеки загружены.")
 
 
 SAMPLE_RATE = 16000
@@ -51,7 +62,7 @@ def configure_ffmpeg():
         shutil.copy2(source, target)
 
     os.environ["PATH"] = str(target_dir) + os.pathsep + os.environ.get("PATH", "")
-    print(f"FFmpeg настроен: {target}")
+    progress(f"FFmpeg настроен: {target}")
 
 
 def check_microphone() -> bool:
@@ -81,14 +92,15 @@ def load_model():
             "или укажите путь к модели в переменной GIGAAM_MODEL_DIR."
         )
 
-    print(f"Загружаю локальную модель GigaAM из папки: {MODEL_DIR}")
+    progress(f"Загружаю локальную модель GigaAM из папки: {MODEL_DIR}")
     _model = AutoModel.from_pretrained(
         str(MODEL_DIR),
         trust_remote_code=True,
         local_files_only=True,
     )
+    progress("Веса модели загружены. Перевожу модель в режим распознавания...")
     _model.eval()
-    print("Модель GigaAM готова к работе (автономный режим).")
+    progress("Модель GigaAM готова к работе (автономный режим).")
 
 
 def audio_callback(indata, frames, time_info, status):
@@ -205,12 +217,15 @@ def transcribe_and_paste(audio: np.ndarray):
 
 
 def main():
+    progress("Проверяю микрофон...")
     if not check_microphone():
         return
 
+    progress("Настраиваю FFmpeg...")
     configure_ffmpeg()
+    progress("Начинаю загрузку GigaAM...")
     load_model()
-    print(f"Голосовой ввод включён. Удерживайте {HOTKEY} и говорите.")
+    progress(f"Голосовой ввод включён. Удерживайте {HOTKEY} и говорите.")
     print("Для выхода нажмите Esc.")
 
     keyboard.on_press_key(HOTKEY, lambda _: start_recording(), suppress=False)
