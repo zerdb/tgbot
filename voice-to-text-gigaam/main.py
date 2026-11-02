@@ -235,17 +235,77 @@ def reboot_computer():
     subprocess.Popen(["shutdown", "/r", "/t", "0"], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
+def _bring_window_to_front(title_parts: tuple[str, ...], timeout: float = 3.0):
+    """Restore and foreground an already-open Windows window by its title."""
+    import ctypes
+    import time
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    target = None
+    deadline = time.monotonic() + timeout
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def enum_callback(hwnd, _):
+        nonlocal target
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if not length:
+            return True
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buffer, length + 1)
+        title = buffer.value.casefold()
+        if any(part.casefold() in title for part in title_parts):
+            target = hwnd
+            return False
+        return True
+
+    while time.monotonic() < deadline:
+        target = None
+        user32.EnumWindows(enum_callback, 0)
+        if target:
+            SW_RESTORE = 9
+            user32.ShowWindow(target, SW_RESTORE)
+            user32.BringWindowToTop(target)
+            # Windows may deny foreground activation to a background process.
+            # Attach input queues briefly so the existing window gets focus.
+            foreground = user32.GetForegroundWindow()
+            current_thread = kernel32.GetCurrentThreadId()
+            target_thread = user32.GetWindowThreadProcessId(target, None)
+            foreground_thread = user32.GetWindowThreadProcessId(foreground, None) if foreground else 0
+            attached_target = False
+            attached_foreground = False
+            try:
+                if target_thread and target_thread != current_thread:
+                    attached_target = bool(user32.AttachThreadInput(current_thread, target_thread, True))
+                if foreground_thread and foreground_thread != current_thread:
+                    attached_foreground = bool(user32.AttachThreadInput(current_thread, foreground_thread, True))
+                user32.SetForegroundWindow(target)
+                user32.SetActiveWindow(target)
+                user32.SetFocus(target)
+            finally:
+                if attached_foreground:
+                    user32.AttachThreadInput(current_thread, foreground_thread, False)
+                if attached_target:
+                    user32.AttachThreadInput(current_thread, target_thread, False)
+            return
+        time.sleep(0.15)
+
+
 def open_downloads():
     windows_only()
     path = Path.home() / "Downloads"
     if not path.exists():
         path = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Загрузки"
     os.startfile(str(path))
+    _bring_window_to_front(("Загрузки", "Downloads"))
 
 
 def open_settings():
     windows_only()
     os.startfile("ms-settings:")
+    _bring_window_to_front(("Параметры", "Settings"))
 
 
 def empty_recycle_bin():
