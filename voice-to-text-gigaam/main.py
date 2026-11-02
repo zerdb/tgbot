@@ -397,6 +397,14 @@ def show_file_results(paths: list[Path], query: str):
     root.title(f"Результаты поиска: {query}")
     root.geometry("850x420")
     root.minsize(550, 260)
+    # Окно создаётся после фонового поиска: явно выводим его на передний план,
+    # иначе Windows может оставить его позади главного окна/терминала.
+    root.attributes("-topmost", True)
+    root.update_idletasks()
+    root.deiconify()
+    root.lift()
+    root.focus_force()
+    root.after(700, lambda: root.attributes("-topmost", False))
     ttk.Label(root, text=f"Найдено файлов: {len(paths)}. Двойной щелчок — открыть файл.").pack(
         anchor="w", padx=12, pady=(12, 6))
     frame = ttk.Frame(root)
