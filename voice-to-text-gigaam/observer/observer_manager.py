@@ -9,6 +9,7 @@ from .event_store import EventStore
 from .file_collector import FileCollector, default_watch_folders
 from .process_collector import ProcessCollector
 from .observer_config import OBSERVER_DIR, load_config, save_config
+from .pattern_analyzer import analyze_patterns
 
 logger = logging.getLogger("gigaam.observer")
 
@@ -56,6 +57,13 @@ class ObserverManager:
 
         logger.info("Observer core started.")
         return True
+
+    def analyze_now(self, days: int = 7) -> int:
+        """Run deterministic local analysis; no network or raw data leaves the PC."""
+        patterns = analyze_patterns(self.store, days=days)
+        created = self.store.save_suggestions(patterns)
+        logger.info("Observer analysis found %d new suggestions.", created)
+        return created
 
     def stop(self) -> None:
         self.started = False
