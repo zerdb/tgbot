@@ -63,6 +63,7 @@ class ProcessCollector:
             pid: data for pid, data in current.items()
             if str(data.get("name") or "").casefold() not in self.excluded_processes
             and (str(data.get("path") or "").casefold() not in self.excluded_processes)
+            and bool(data.get("path"))
         }
 
     def scan_once(self, initial: bool = False) -> int:
