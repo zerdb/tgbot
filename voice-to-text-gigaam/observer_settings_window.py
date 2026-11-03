@@ -1,15 +1,14 @@
-"""User-facing, explicit controls for GigaAM Observer."""
+"""Minimal settings for GigaAM Observer; clipboard is the only opt-in."""
 from __future__ import annotations
 
 import copy
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 from observer.observer_config import save_config
 
 
 def open_observer_settings(parent, manager):
-    """Show Observer settings; collectors change only after the user saves."""
     current = copy.deepcopy(manager.config)
     dialog = tk.Toplevel(parent)
     dialog.title("GigaAM — Наблюдатель")
@@ -17,85 +16,72 @@ def open_observer_settings(parent, manager):
     dialog.resizable(False, False)
     dialog.grab_set()
 
-    enabled_var = tk.BooleanVar(value=bool(current.get("enabled", False)))
-    consent_var = tk.BooleanVar(value=bool(current.get("created_with_consent", False)))
-    categories = current.setdefault("categories", {})
-    files_var = tk.BooleanVar(value=bool(categories.get("files", False)))
-    apps_var = tk.BooleanVar(value=bool(categories.get("apps", False)))
-    focus_var = tk.BooleanVar(value=bool(categories.get("focus", False)))
-    clipboard_var = tk.BooleanVar(value=bool(categories.get("clipboard", False)))
+    clipboard_var = tk.BooleanVar(
+        value=bool(current.get("categories", {}).get("clipboard", False))
+    )
 
     outer = ttk.Frame(dialog, padding=18)
     outer.pack(fill="both", expand=True)
-    ttk.Label(outer, text="Локальный наблюдатель", font=("Segoe UI", 15, "bold")).pack(anchor="w")
+    ttk.Label(
+        outer, text="Локальный наблюдатель",
+        font=("Segoe UI", 15, "bold"),
+    ).pack(anchor="w")
     ttk.Label(
         outer,
-        text=("Наблюдатель замечает выбранные системные события и хранит историю "
-              "только на этом компьютере. Он не читает содержимое документов, "
-              "не записывает клавиатуру или экран. Буфер обмена сохраняется только после фильтрации секретов."),
-        wraplength=470, justify="left"
+        text=(
+            "Наблюдатель автоматически запускается вместе с помощником. "
+            "Он фиксирует изменения файлов в выбранных папках, запуск и "
+            "завершение программ, а также активное окно и длительность работы "
+            "в нём. Содержимое документов, нажатия клавиш и экран не записываются."
+        ),
+        wraplength=470, justify="left",
     ).pack(anchor="w", pady=(8, 12))
 
-    ttk.Checkbutton(
-        outer, text="Включить наблюдатель", variable=enabled_var
-    ).pack(anchor="w", pady=(0, 8))
-
-    group = ttk.LabelFrame(outer, text="Что разрешить отслеживать", padding=10)
+    group = ttk.LabelFrame(outer, text="Дополнительная функция", padding=10)
     group.pack(fill="x", pady=(0, 10))
-    ttk.Checkbutton(group, text="Файлы в выбранных папках (имя, путь и метаданные)",
-                    variable=files_var).pack(anchor="w")
-    ttk.Checkbutton(group, text="Запуск и завершение программ (имя, PID и путь)",
-                    variable=apps_var).pack(anchor="w")
-    ttk.Checkbutton(group, text="Активное окно и длительность фокуса", variable=focus_var).pack(anchor="w")
-    ttk.Checkbutton(group, text="Текст буфера обмена (с отсечением распознаваемых секретов)", variable=clipboard_var).pack(anchor="w")
+    ttk.Checkbutton(
+        group,
+        text="Собирать текст буфера обмена (распознаваемые секреты отбрасываются)",
+        variable=clipboard_var,
+    ).pack(anchor="w")
+
     watched = current.get("watched_folders", [])
-    folders_text = "\\n".join(str(item) for item in watched) or "Папки не найдены — добавьте их в config.json."
-    ttk.Label(group, text="Папки, которые проверяются на изменения:", foreground="#444444").pack(anchor="w", pady=(8, 2))
-    ttk.Label(group, text=folders_text, wraplength=440, justify="left").pack(anchor="w")
-    ttk.Label(group, text="Печать и USB пока не собираются; браузер намеренно исключён.",
-              foreground="#666666").pack(anchor="w", pady=(6, 0))
+    folders_text = "\n".join(str(item) for item in watched) or "Список папок пока пуст."
+    ttk.Label(outer, text="Отслеживаемые папки:", foreground="#444444").pack(
+        anchor="w", pady=(4, 2)
+    )
+    ttk.Label(outer, text=folders_text, wraplength=470, justify="left").pack(anchor="w")
 
     ttk.Label(
         outer,
-        text=("При включении сбор событий начнётся только для отмеченных категорий. "
-              "История хранится локально без автоматического удаления. "
-              "Передача сводок внешнему ИИ сейчас не включена."),
-        wraplength=470, justify="left"
-    ).pack(anchor="w", pady=(0, 10))
-    ttk.Checkbutton(
-        outer, text="Я ознакомился и явно разрешаю сбор отмеченных событий.",
-        variable=consent_var
-    ).pack(anchor="w", pady=(0, 12))
+        text=(
+            "История хранится локально без автоматического удаления. "
+            "Буфер обмена по умолчанию выключен. При включении отбрасываются "
+            "тексты, похожие на пароли, токены и другие секреты; фильтр не "
+            "гарантирует распознавание всех чувствительных данных. "
+            "Передача данных внешнему ИИ выключена."
+        ),
+        wraplength=470, justify="left",
+    ).pack(anchor="w", pady=(10, 12))
 
     buttons = ttk.Frame(outer)
     buttons.pack(fill="x")
 
     def save_and_close():
-        if enabled_var.get() and not consent_var.get():
-            messagebox.showwarning(
-                "Нужно согласие",
-                "Чтобы включить наблюдатель, подтвердите согласие на сбор выбранных событий.",
-                parent=dialog,
-            )
-            return
         updated = copy.deepcopy(current)
-        updated["enabled"] = bool(enabled_var.get())
-        updated["created_with_consent"] = bool(consent_var.get())
-        updated.setdefault("categories", {})
-        updated["categories"].update({
-            "files": bool(files_var.get()),
-            "apps": bool(apps_var.get()),
-            "focus": bool(focus_var.get()),
+        updated["enabled"] = True
+        updated["start_with_assistant"] = True
+        updated["created_with_consent"] = True
+        categories = updated.setdefault("categories", {})
+        categories.update({
+            "files": True,
+            "apps": True,
+            "focus": True,
             "clipboard": bool(clipboard_var.get()),
             "printing": False,
             "usb": False,
-            "browser": False,
         })
-        if not updated["enabled"]:
-            updated["categories"]["files"] = False
-            updated["categories"]["apps"] = False
-            updated["categories"]["focus"] = False
-            updated["categories"]["clipboard"] = False
+        categories.pop("browser", None)
         save_config(updated, manager.data_dir / "config.json")
         manager.stop()
         manager.config = updated
