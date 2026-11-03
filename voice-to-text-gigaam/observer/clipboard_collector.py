@@ -113,7 +113,7 @@ class ClipboardCollector:
         self._last_hash = digest
         self.callback(
             category="clipboard", event_type="text_copied", source="windows_clipboard",
-            object_name=f"{len(safe)} символов",
+            object_name="Буфер обмена",
             details={"text": safe, "sha256": digest},
         )
         return True
