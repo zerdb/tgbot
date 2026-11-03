@@ -78,7 +78,7 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
 
 
 def save_config(config: dict, path: Path = CONFIG_PATH) -> None:
-    """Atomically persist settings; never silently enable monitoring."""
+    """Atomically persist Observer settings."""
     with _lock:
         path.parent.mkdir(parents=True, exist_ok=True)
         merged = json.loads(json.dumps(DEFAULT_CONFIG))
