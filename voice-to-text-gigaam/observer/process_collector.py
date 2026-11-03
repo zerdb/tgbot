@@ -46,16 +46,16 @@ def _system_processes():
 
 # Windows infrastructure directories generate noise rather than useful app activity.
 SYSTEM_PATH_PARTS = (
-    r"\\windows\\system32\\",
-    r"\\windows\\syswow64\\",
-    r"\\windows\\winsxs\\",
-    r"\\windows\\servicing\\",
-    r"\\windows\\uus\\",
+    "\\windows\\system32\\",
+    "\\windows\\syswow64\\",
+    "\\windows\\winsxs\\",
+    "\\windows\\servicing\\",
+    "\\windows\\uus\\",
 )
 
 
 def _is_windows_system_path(path) -> bool:
-    normalized = ntpath.normcase(ntpath.normpath(str(path or ""))).replace("/", "\\\\")
+    normalized = ntpath.normcase(ntpath.normpath(str(path or ""))).replace("/", "\\")
     return any(part in normalized for part in SYSTEM_PATH_PARTS)
 
 
