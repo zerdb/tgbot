@@ -121,6 +121,9 @@ def open_email_form(initial_subject: str = ""):
 
         status_var = tk.StringVar(master=root, value="Вложений: 0")
         add_paths(copied_file_paths())
+        # Explorer may briefly keep the clipboard open while the voice command
+        # launches this window. Retry once after the window has initialized.
+        root.after(350, lambda: add_paths(copied_file_paths()))
 
         controls = ttk.Frame(outer)
         controls.pack(fill="x", pady=(8, 0))
