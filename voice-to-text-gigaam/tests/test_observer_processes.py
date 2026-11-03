@@ -40,6 +40,27 @@ class ProcessCollectorTests(unittest.TestCase):
         self.assertEqual(collector.scan_once(), 0)
         self.assertEqual(events, [])
 
+    def test_ignores_windows_infrastructure_directories(self):
+        events = []
+        collector = ProcessCollector(
+            lambda **event: events.append(event),
+            process_provider=lambda: {
+                40: {"name": "sppsvc.exe", "path": r"C:\\Windows\\System32\\sppsvc.exe"},
+                41: {"name": "MoUsoCoreWorker.exe", "path": r"C:\\Windows\\UUS\\amd64\\MoUsoCoreWorker.exe"},
+                42: {"name": "editor.exe", "path": r"C:\\Users\\user\\Apps\\editor.exe"},
+            },
+        )
+        collector.scan_once(initial=True)
+        collector.process_provider = lambda: {
+            40: {"name": "sppsvc.exe", "path": r"C:\\Windows\\System32\\sppsvc.exe"},
+            41: {"name": "MoUsoCoreWorker.exe", "path": r"C:\\Windows\\UUS\\amd64\\MoUsoCoreWorker.exe"},
+            42: {"name": "editor.exe", "path": r"C:\\Users\\user\\Apps\\editor.exe"},
+            43: {"name": "new.exe", "path": r"C:\\Windows\\SysWOW64\\new.exe"},
+            44: {"name": "tool.exe", "path": r"C:\\Users\\user\\Apps\\tool.exe"},
+        }
+        collector.scan_once()
+        self.assertEqual([event["object_name"] for event in events], ["tool.exe"])
+
     def test_does_not_collect_command_line_or_window_content(self):
         events = []
         collector = ProcessCollector(
