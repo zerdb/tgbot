@@ -15,7 +15,8 @@ from pathlib import Path
 
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_settings, empty_recycle_bin, take_screenshot
 from reminders import start_reminder_service, add_reminder
-from email_manager import list_email_contacts, begin_email, send_email_to_contact, has_pending_email, cancel_pending_email
+from email_manager import list_email_contacts
+from email_form import open_email_form
 from contact_form import open_contact_form
 from file_search import search_web, search_files
 from assistant_window import AssistantWindow
@@ -222,21 +223,15 @@ def normalize_command(text: str) -> str:
 def handle_command(text: str):
     command_text = normalize_command(text)
     print(f"Распознана голосовая команда: {text}")
-    if has_pending_email():
-        if command_text in {"отмена", "отмени отправку", "не отправляй"}:
-            cancel_pending_email()
-            print("Отправка письма отменена.")
-            return
-        if send_email_to_contact(command_text):
-            return
     if command_text in {"добавить контакт", "добавь контакт", "создать контакт", "новый контакт"}:
         open_contact_form()
         return
     elif command_text in {"покажи контакты", "покажи адресную книгу", "список контактов"}:
         list_email_contacts()
         return
-    elif command_text.startswith(("отправь на почту ", "отправить на почту ")):
-        begin_email(text)
+    elif command_text in {"отправь на почту", "отправить на почту", "отправь письмо", "открыть отправку почты"} or command_text.startswith(("отправь на почту ", "отправить на почту ")):
+        subject = re.sub(r"^\\s*отправ(?:ь|ить)\\s+на\\s+почту\\s*", "", text, flags=re.IGNORECASE).strip(" .,!?:;«»\\"")
+        open_email_form(subject)
         return
     if command_text in {"блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
                         "заблокируй комп", "заблокируй экран", "заблокируй пк",
