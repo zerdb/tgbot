@@ -94,18 +94,33 @@ class EventStore:
         incoming = dict(details or {})
         with closing(self._connect()) as db, db:
             # Keep one rolling row per app, and one rolling clipboard row.
-            if category in {"focus", "apps", "clipboard"}:
-                key_name = (object_name or category).casefold()
-                row = db.execute(
-                    """SELECT id, occurred_at, details_json, event_type, object_path
-                       FROM observer_events
-                       WHERE category=? AND lower(coalesce(object_name, ''))=?
-                       ORDER BY id DESC LIMIT 1""",
-                    (category, key_name),
-                ).fetchone()
+            if category in {"focus", "apps", "clipboard", "files"}:
+                key_name = (object_path if category == "files" else (object_name or category)) or ""
+                key_name = key_name.casefold()
+                if category == "files":
+                    row = db.execute(
+                        """SELECT id, occurred_at, details_json, event_type, object_path
+                           FROM observer_events
+                           WHERE category=? AND lower(coalesce(object_path, ''))=?
+                           ORDER BY id DESC LIMIT 1""",
+                        (category, key_name),
+                    ).fetchone()
+                else:
+                    row = db.execute(
+                        """SELECT id, occurred_at, details_json, event_type, object_path
+                           FROM observer_events
+                           WHERE category=? AND lower(coalesce(object_name, ''))=?
+                           ORDER BY id DESC LIMIT 1""",
+                        (category, key_name),
+                    ).fetchone()
                 if row:
                     old = json.loads(row["details_json"] or "{}")
-                    if category == "focus":
+                    if category == "files":
+                        old["changes"] = int(old.get("changes", 1) or 1) + 1
+                        old["last_change"] = event_type
+                        old["last_size_bytes"] = incoming.get("size_bytes", old.get("last_size_bytes"))
+                        old["last_modified_ns"] = incoming.get("modified_ns", old.get("last_modified_ns"))
+                    elif category == "focus":
                         old_seconds = float(old.get("duration_seconds", 0) or 0)
                         new_seconds = float(incoming.get("duration_seconds", 0) or 0)
                         old["duration_seconds"] = round(old_seconds + new_seconds, 1)
@@ -143,7 +158,12 @@ class EventStore:
                     )
                     return int(row["id"])
 
-                if category == "focus":
+                if category == "files":
+                    incoming["changes"] = 1
+                    incoming["last_change"] = event_type
+                    incoming["last_size_bytes"] = incoming.get("size_bytes")
+                    incoming["last_modified_ns"] = incoming.get("modified_ns")
+                elif category == "focus":
                     incoming["sessions"] = 1
                 elif category == "apps":
                     incoming["starts"] = 1 if event_type == "started" else 0
