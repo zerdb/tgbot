@@ -48,7 +48,7 @@ def send_email(recipient: str, subject: str, body: str = "", attachments: list[s
             "Не задан пароль приложения. Установите переменную GIGAAM_MAIL_PASSWORD "
             "и перезапустите помощника."
         )
-    if not re.fullmatch(r"[\\w.+-]+@[\\w.-]+\\.[a-zа-я]{2,}", recipient.strip(), re.IGNORECASE):
+    if not re.fullmatch(r"[\w.+-]+@[\w.-]+\.[a-zа-я]{2,}", recipient.strip(), re.IGNORECASE):
         raise ValueError("Укажите корректный адрес электронной почты.")
 
     message = EmailMessage()
@@ -79,7 +79,7 @@ def send_email(recipient: str, subject: str, body: str = "", attachments: list[s
 def begin_email(text: str):
     global _pending_email_subject
     subject = re.sub(
-        r"^\\s*отправ(?:ь|ить)\\s+на\\s+почту\\s+(?:текст\\s+)?",
+        r"^\s*отправ(?:ь|ить)\s+на\s+почту\s+(?:текст\s+)?",
         "", text, flags=re.IGNORECASE,
     ).strip().strip(" .,!?:;«»\\"'")
     if not subject:
