@@ -44,7 +44,11 @@ def open_observer_settings(parent, manager):
                     variable=files_var).pack(anchor="w")
     ttk.Checkbutton(group, text="Запуск и завершение программ (имя, PID и путь)",
                     variable=apps_var).pack(anchor="w")
-    ttk.Label(group, text="Печать и USB — появятся в следующих версиях.",
+    watched = current.get("watched_folders", [])
+    folders_text = "\\n".join(str(item) for item in watched) or "Папки не найдены — добавьте их в config.json."
+    ttk.Label(group, text="Папки, которые проверяются на изменения:", foreground="#444444").pack(anchor="w", pady=(8, 2))
+    ttk.Label(group, text=folders_text, wraplength=440, justify="left").pack(anchor="w")
+    ttk.Label(group, text="Печать и USB пока не собираются; браузер намеренно исключён.",
               foreground="#666666").pack(anchor="w", pady=(6, 0))
 
     ttk.Label(
