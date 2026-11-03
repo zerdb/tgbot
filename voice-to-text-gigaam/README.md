@@ -85,6 +85,7 @@ Optional setting: `PUSH_TO_TALK_KEY` changes the recording key (default: `right 
 The application is split by responsibility so features can be maintained independently:
 
 - `main.py` — startup, microphone hotkeys, speech recognition and command routing.
+- `assistant_window.py` — Tkinter command guide and live microphone/listening status.
 - `windows_actions.py` — Windows actions: lock, reboot, settings, Downloads, Recycle Bin and screenshots.
 - `reminders.py` — reminder parsing, scheduling and background notifications.
 - `notifications.py` — Windows toast notifications and speech synthesis.
@@ -94,3 +95,7 @@ The application is split by responsibility so features can be maintained indepen
 - `file_indexer.py` — NTFS MFT indexing and SQLite/FTS search database.
 
 The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAssistant`, not in the repository. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
+
+## Tkinter interface
+
+After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Right Shift for dictation or Right Ctrl for a voice command; release the key to process the audio. Close the window to exit.
