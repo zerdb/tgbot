@@ -84,25 +84,25 @@ def open_observer_history(parent, manager):
                         copied_at = datetime.fromisoformat(copied_at).astimezone().strftime("%d.%m.%Y %H:%M:%S")
                     except (ValueError, TypeError):
                         pass
-                    chunks.append(f"--- Копирование {index} · {copied_at} ---\\n{item.get('text', '')}")
-                body = "\\n\\n".join(chunks)
+                    chunks.append(f"--- Копирование {index} · {copied_at} ---\n{item.get('text', '')}")
+                body = "\n\n".join(chunks)
             else:
                 body = details.get("text") or "Текст отсутствует в этой записи."
             heading = f"Буфер обмена · записей: {len(history) or details.get('copies', 1)}"
         elif event.get("category") == "focus":
             titles = details.get("window_titles") or ([details.get("window_title")] if details.get("window_title") else [])
             body = (
-                f"Программа: {event.get('object_name') or ''}\\n"
-                f"Суммарная активность: {_format_duration(details.get('duration_seconds'))}\\n"
-                f"Количество сеансов: {details.get('sessions', 1)}\\n"
-                f"Последний PID: {details.get('last_pid', details.get('pid', ''))}\\n"
+                f"Программа: {event.get('object_name') or ''}\n"
+                f"Суммарная активность: {_format_duration(details.get('duration_seconds'))}\n"
+                f"Количество сеансов: {details.get('sessions', 1)}\n"
+                f"Последний PID: {details.get('last_pid', details.get('pid', ''))}\n"
                 f"Заголовки окон: {'; '.join(titles)}"
             )
             heading = "Суммарная активность приложения"
         elif event.get("category") == "apps":
             body = (
-                f"Программа: {event.get('object_name') or ''}\\n"
-                f"Запусков: {details.get('starts', 0)}\\n"
+                f"Программа: {event.get('object_name') or ''}\n"
+                f"Запусков: {details.get('starts', 0)}\n"
                 f"Завершений: {details.get('stops', 0)}"
             )
             heading = "Статистика запусков программы"
