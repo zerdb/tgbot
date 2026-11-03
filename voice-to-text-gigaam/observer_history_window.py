@@ -88,7 +88,7 @@ def open_observer_history(parent, manager):
                 body = "\\n\\n".join(chunks)
             else:
                 body = details.get("text") or "Текст отсутствует в этой записи."
-            heading = f"История буфера · копирований: {len(history) or details.get('copies', 1)}"
+            heading = f"Буфер обмена · записей: {len(history) or details.get('copies', 1)}"
         elif event.get("category") == "focus":
             titles = details.get("window_titles") or ([details.get("window_title")] if details.get("window_title") else [])
             body = (
@@ -138,7 +138,7 @@ def open_observer_history(parent, manager):
             duration = _format_duration(details.get("duration_seconds")) if event.get("category") == "focus" else ""
             name = event.get("object_name") or ""
             if event.get("category") == "clipboard":
-                name = f"История копирования · {details.get('copies', len(details.get('history', [])))}"
+                name = "Буфер обмена"
             elif event.get("category") == "apps":
                 name = f"{name} · запусков: {details.get('starts', 0)}"
             if event.get("category") == "files":
