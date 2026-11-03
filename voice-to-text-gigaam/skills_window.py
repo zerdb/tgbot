@@ -103,7 +103,7 @@ class SkillsWindow:
             messagebox.showerror("Ошибка навыка", error, parent=self.window)
             return
         self.status_var.set(f"Готово. Строк: {result['rows_read']}; групп: {result['groups']}; сумма: {result['grand_total']}.")
-        messagebox.showinfo("Отчёт создан", f"Файл сохранён:\\n{result['report']}", parent=self.window)
+        messagebox.showinfo("Отчёт создан", f"Файл сохранён:\n{result['report']}", parent=self.window)
 
 def open_skills_window(parent: tk.Tk, registry: SkillRegistry):
     SkillsWindow(parent, registry)
