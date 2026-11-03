@@ -91,6 +91,21 @@ def open_observer_settings(parent, manager):
         save_config(updated, manager.data_dir / "config.json")
         dialog.destroy()
 
+    def clear_history():
+        confirmed = messagebox.askyesno(
+            "Удалить историю?",
+            "Удалить ВСЕ события наблюдателя, историю буфера, статистику активности, "
+            "предложения и заметки? Это действие нельзя отменить.",
+            parent=dialog,
+        )
+        if not confirmed:
+            return
+        manager.store.clear_history()
+        messagebox.showinfo("История очищена", "Все локальные данные истории удалены.", parent=dialog)
+
+    ttk.Button(
+        buttons, text="Удалить всю историю", command=clear_history,
+    ).pack(side="left")
     ttk.Button(buttons, text="Сохранить", command=save_and_close).pack(side="right")
     def cancel_and_close():
         clipboard_var.set(original_clipboard)
