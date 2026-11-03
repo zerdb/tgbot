@@ -92,6 +92,7 @@ The application is split by responsibility so features can be maintained indepen
 - `email_manager.py` — Mail.ru SMTP sending and local address-book storage.
 - `contact_form.py` — desktop form for manually adding contacts.
 - `file_search.py` — web search, MFT search orchestration and results window.
+- `folder_organizer.py` — preview-first folder organizer with confirmation before moving files.
 - `file_indexer.py` — NTFS MFT indexing and SQLite/FTS search database.
 
 The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAssistant`, not in the repository. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
@@ -99,3 +100,4 @@ The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAss
 ## Tkinter interface
 
 After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Left Ctrl + Left Shift for dictation or Right Ctrl for a voice command; release the keys to process the audio. Close the window to exit.
+\n\nTo organize a folder, say **«разбери папку»** while holding Right Ctrl. Choose a folder to preview how its top-level files will be grouped. Nothing moves until you click **«Разложить файлы»** and confirm. Existing files are never overwritten; nested folders are left untouched.\n

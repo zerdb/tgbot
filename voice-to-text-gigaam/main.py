@@ -19,6 +19,7 @@ from email_manager import list_email_contacts
 from email_form import open_email_form
 from contact_form import open_contact_form
 from file_search import search_web, search_files
+from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow
 
 _STARTUP_TIME = time.perf_counter()
@@ -281,6 +282,8 @@ def handle_command(text: str):
     elif begins("напомни", "создай напоминание", "добавь напоминание",
                 "поставь напоминание", "напоминание"):
         add_reminder(text)
+    elif exact("разбери папку", "разложи файлы по папкам", "организуй папку") or begins("разбери папку", "организуй папку"):
+        open_folder_organizer(_ui.root if _ui is not None else None)
     elif begins("найди в интернете", "поищи в интернете", "загугли",
                 "найди в сети", "веб поиск", "поиск в интернете"):
         search_web(text)
