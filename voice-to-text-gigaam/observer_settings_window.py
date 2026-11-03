@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from observer.observer_config import save_config
 
