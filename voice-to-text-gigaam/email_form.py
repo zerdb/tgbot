@@ -117,6 +117,7 @@ def open_email_form(initial_subject: str = ""):
         def refresh_count():
             status_var.set(f"Вложений: {len(attachment_paths)}")
 
+        status_var = tk.StringVar(master=root, value="Вложений: 0")
         add_paths(copied_file_paths())
 
         controls = ttk.Frame(outer)
@@ -139,7 +140,6 @@ def open_email_form(initial_subject: str = ""):
 
         buttons = ttk.Frame(outer)
         buttons.pack(fill="x", pady=(14, 0))
-        status_var = tk.StringVar(value=f"Вложений: {len(attachment_paths)}")
         ttk.Label(buttons, textvariable=status_var).pack(side="left")
 
         def send():
