@@ -29,7 +29,7 @@ class AssistantWindow:
         ttk.Label(status, textvariable=self.listening_var, foreground="#1558a6").grid(row=1, column=1, sticky="w", pady=(6, 0))
         ttk.Label(outer, text="Как пользоваться", font=("Segoe UI", 13, "bold")).pack(anchor="w")
         guide = (
-            "1. Диктовка текста: зажмите Ctrl+Shift (левые Ctrl и Shift), произнесите текст и отпустите клавиши. "
+            "1. Диктовка текста: зажмите Right Alt + Right Shift, произнесите текст и отпустите клавиши. "
             "Распознанный текст будет вставлен в активное поле.\n"
             "2. Голосовая команда: зажмите Right Ctrl, произнесите одну команду и отпустите клавишу. "
             "Дождитесь распознавания и выполнения.\n"
@@ -65,7 +65,7 @@ class AssistantWindow:
             text.insert("end", "   " + description + "\n\n")
         text.tag_configure("title", font=("Segoe UI", 10, "bold"))
         text.configure(state="disabled")
-        ttk.Label(outer, text="Примечание: для диктовки удерживайте левый Ctrl+левый Shift; для команды произносите фразу после нажатия Right Ctrl и отпускайте клавишу только после окончания фразы.", wraplength=760).pack(anchor="w")
+        ttk.Label(outer, text="Примечание: для диктовки удерживайте правые Alt+Shift; для команды произносите фразу после нажатия Right Ctrl и отпускайте клавишу только после окончания фразы.", wraplength=760).pack(anchor="w")
     
     def set_status(self, listening=None, microphone=None):
         def apply():
