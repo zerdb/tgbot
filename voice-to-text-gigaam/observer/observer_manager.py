@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .event_store import EventStore
 from .file_collector import FileCollector, default_watch_folders
+from .process_collector import ProcessCollector
 from .observer_config import OBSERVER_DIR, load_config, save_config
 
 logger = logging.getLogger("gigaam.observer")
@@ -25,6 +26,7 @@ class ObserverManager:
             save_config(self.config, self.data_dir / "config.json")
         self.started = False
         self._file_collector = None
+        self._process_collector = None
 
     @property
     def is_enabled(self) -> bool:
@@ -44,6 +46,14 @@ class ObserverManager:
                 logger.info("File collector started for %d selected folders.", len(folders))
             else:
                 logger.warning("File monitoring is enabled but no folders are selected.")
+        if self.config.get("categories", {}).get("apps", False):
+            self._process_collector = ProcessCollector(
+                self.record_event,
+                excluded_processes=self.config.get("excluded_processes", []),
+            )
+            self._process_collector.start()
+            logger.info("Process collector started.")
+
         logger.info("Observer core started.")
         return True
 
@@ -52,6 +62,9 @@ class ObserverManager:
         if self._file_collector:
             self._file_collector.stop()
             self._file_collector = None
+        if self._process_collector:
+            self._process_collector.stop()
+            self._process_collector = None
 
     def record_event(self, category: str, event_type: str, source: str,
                      object_name: str | None = None, object_path: str | None = None,
