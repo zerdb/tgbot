@@ -64,6 +64,35 @@ def analyze_patterns(store, days: int = 7, minimum: int = 3) -> list[dict]:
                 "Если это часть ежедневного старта, можно добавить её в будущий утренний сценарий.",
                 days_seen,
             ))
+
+    # Detect recurring ordered sequences of foreground applications.
+    focus_events = sorted(
+        (e for e in events if e.get("category") == "focus"
+         and e.get("event_type") == "focus_session" and e.get("object_name")),
+        key=lambda item: item.get("occurred_at", ""),
+    )
+    sessions = []
+    for event in focus_events:
+        app = str(event.get("object_name")).strip()
+        if not app:
+            continue
+        if not sessions or sessions[-1] != app:
+            sessions.append(app)
+    sequence_counts = Counter(
+        tuple(sessions[index:index + 3])
+        for index in range(max(0, len(sessions) - 2))
+    )
+    for sequence, count in sequence_counts.most_common(5):
+        if count >= 2 and len(set(sequence)) == 3:
+            readable = " → ".join(sequence)
+            suggestions.append(_suggest(
+                "work-sequence:" + "|".join(item.casefold() for item in sequence),
+                f"Повторяющийся сценарий: {readable}",
+                f"Одинаковая последовательность из трёх приложений встретилась {count} раза. "
+                "Можно превратить её в быстрый рабочий сценарий.",
+                count,
+            ))
+
     return suggestions
 
 
