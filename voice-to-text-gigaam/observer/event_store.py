@@ -86,7 +86,7 @@ class EventStore:
         occurred_at: str | None = None,
         deduplication_key: str | None = None,
     ) -> int | None:
-        allowed = {"files", "apps", "printing", "usb", "browser", "voice"}
+        allowed = {"files", "apps", "focus", "clipboard", "printing", "usb", "browser", "voice"}
         if category not in allowed:
             raise ValueError(f"Unsupported event category: {category}")
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
