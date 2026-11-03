@@ -11,23 +11,23 @@ OBSERVER_DIR = APP_DIR / "observer"
 CONFIG_PATH = OBSERVER_DIR / "config.json"
 
 DEFAULT_CONFIG = {
-    "enabled": False,
-    "start_with_assistant": False,
+    "enabled": True,
+    "start_with_assistant": True,
     "retention": "forever",
     "analysis_schedule": "daily",
     "categories": {
-        "files": False,
-        "apps": False,
-        "focus": False,
+        "files": True,
+        "apps": True,
+        "focus": True,
         "clipboard": False,
         "printing": False,
         "usb": False,
-        "browser": False
+        "browser": True
     },
     "watched_folders": [],
     "excluded_folders": [],
     "excluded_processes": [],
-    "created_with_consent": False,
+    "created_with_consent": True,
     "ai": {
         "enabled": False,
         "provider": "openai_compatible",
