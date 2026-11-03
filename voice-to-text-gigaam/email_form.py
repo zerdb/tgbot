@@ -67,9 +67,14 @@ def open_email_form(initial_subject: str = ""):
         contacts = [f"{name} <{address}>" for name, address in book.items()]
         ttk.Label(outer, text="Получатель").pack(anchor="w")
         recipient_var = tk.StringVar()
-        recipient = ttk.Combobox(outer, textvariable=recipient_var, values=contacts)
+        contact_addresses = {f"{name} <{address}>": address for name, address in book.items()}
+        recipient = ttk.Combobox(outer, textvariable=recipient_var, values=contacts, state="normal")
         recipient.pack(fill="x", pady=(3, 10))
-        recipient.bind("<<ComboboxSelected>>", lambda _e: recipient_var.set(recipient_var.get().split("<")[-1].rstrip(">")))
+        def select_contact(_event=None):
+            selected = recipient_var.get().strip()
+            if selected in contact_addresses:
+                recipient_var.set(contact_addresses[selected])
+        recipient.bind("<<ComboboxSelected>>", select_contact)
 
         ttk.Label(outer, text="Тема").pack(anchor="w")
         subject_var = tk.StringVar(value=initial_subject or "Файлы")
@@ -88,12 +93,22 @@ def open_email_form(initial_subject: str = ""):
         listbox.configure(yscrollcommand=scrollbar.set)
         attachment_paths: list[str] = []
 
+        def update_subject_from_files():
+            if initial_subject.strip():
+                return
+            names = [Path(path).name for path in attachment_paths]
+            if names:
+                subject_var.set(", ".join(names)[:240])
+            else:
+                subject_var.set("Файлы")
+
         def add_paths(paths):
             for item in paths:
                 path = str(Path(item))
                 if Path(path).is_file() and path not in attachment_paths:
                     attachment_paths.append(path)
                     listbox.insert("end", f"{Path(path).name}  —  {path}")
+            update_subject_from_files()
 
         add_paths(copied_file_paths())
 
@@ -107,6 +122,7 @@ def open_email_form(initial_subject: str = ""):
             for index in reversed(selected):
                 listbox.delete(index)
                 attachment_paths.pop(index)
+            update_subject_from_files()
         ttk.Button(controls, text="Добавить файлы…", command=add_files).pack(side="left")
         ttk.Button(controls, text="Убрать выбранные", command=remove_files).pack(side="left", padx=8)
 
@@ -118,8 +134,10 @@ def open_email_form(initial_subject: str = ""):
             status_var.set(f"Вложений: {len(attachment_paths)}")
         def send():
             address = recipient_var.get().strip()
-            if " <" in address and address.endswith(">"):
-                address = address.rsplit(" <", 1)[1][:-1]
+            if address in contact_addresses:
+                address = contact_addresses[address]
+            elif "<" in address and ">" in address:
+                address = address.rsplit("<", 1)[1].split(">", 1)[0].strip()
             if not address:
                 messagebox.showwarning("Нет получателя", "Выберите контакт или введите email.", parent=root)
                 recipient.focus_set()
