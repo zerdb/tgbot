@@ -1,9 +1,0 @@
-{
-  "manifest_version": 3,
-  "name": "GigaAM Observer — Browser Tabs",
-  "version": "1.0.0",
-  "description": "Передаёт локальному GigaAM Observer только заголовки и URL открытых вкладок.",
-  "permissions": ["tabs", "alarms"],
-  "host_permissions": ["http://127.0.0.1:8765/*"],
-  "background": {"service_worker": "background.js"}
-}
