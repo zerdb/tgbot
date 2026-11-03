@@ -81,7 +81,7 @@ def begin_email(text: str):
     subject = re.sub(
         r"^\s*отправ(?:ь|ить)\s+на\s+почту\s+(?:текст\s+)?",
         "", text, flags=re.IGNORECASE,
-    ).strip().strip(" .,!?:;«»\\"'")
+    ).strip().strip(" .,!?:;«»")
     if not subject:
         print("Укажите тему письма после команды.")
         return
