@@ -75,16 +75,37 @@ def open_observer_history(parent, manager):
             return
         details = event.get("details") or {}
         if event.get("category") == "clipboard":
-            body = details.get("text") or "Текст отсутствует в этой записи."
-            heading = "Скопированный текст"
+            history = details.get("history") or []
+            if history:
+                chunks = []
+                for index, item in enumerate(history, 1):
+                    copied_at = item.get("copied_at", "")
+                    try:
+                        copied_at = datetime.fromisoformat(copied_at).astimezone().strftime("%d.%m.%Y %H:%M:%S")
+                    except (ValueError, TypeError):
+                        pass
+                    chunks.append(f"--- Копирование {index} · {copied_at} ---\\n{item.get('text', '')}")
+                body = "\\n\\n".join(chunks)
+            else:
+                body = details.get("text") or "Текст отсутствует в этой записи."
+            heading = f"История буфера · копирований: {len(history) or details.get('copies', 1)}"
         elif event.get("category") == "focus":
+            titles = details.get("window_titles") or ([details.get("window_title")] if details.get("window_title") else [])
             body = (
-                f"Программа: {event.get('object_name') or ''}\n"
-                f"Заголовок окна: {details.get('window_title', '')}\n"
-                f"Длительность: {_format_duration(details.get('duration_seconds'))}\n"
-                f"PID: {details.get('pid', '')}"
+                f"Программа: {event.get('object_name') or ''}\\n"
+                f"Суммарная активность: {_format_duration(details.get('duration_seconds'))}\\n"
+                f"Количество сеансов: {details.get('sessions', 1)}\\n"
+                f"Последний PID: {details.get('last_pid', details.get('pid', ''))}\\n"
+                f"Заголовки окон: {'; '.join(titles)}"
             )
-            heading = "Сеанс активности"
+            heading = "Суммарная активность приложения"
+        elif event.get("category") == "apps":
+            body = (
+                f"Программа: {event.get('object_name') or ''}\\n"
+                f"Запусков: {details.get('starts', 0)}\\n"
+                f"Завершений: {details.get('stops', 0)}"
+            )
+            heading = "Статистика запусков программы"
         else:
             heading = "Подробности события"
             body = json.dumps(details, ensure_ascii=False, indent=2) if details else (
@@ -119,7 +140,9 @@ def open_observer_history(parent, manager):
             duration = _format_duration(details.get("duration_seconds")) if event.get("category") == "focus" else ""
             name = event.get("object_name") or ""
             if event.get("category") == "clipboard":
-                name = "Текст буфера (открой событие)"
+                name = f"История копирования · {details.get('copies', len(details.get('history', [])))}"
+            elif event.get("category") == "apps":
+                name = f"{name} · запусков: {details.get('starts', 0)}"
             tree.insert("", "end", iid=str(event["id"]), values=(
                 stamp, CATEGORY_LABELS.get(event["category"], event["category"]),
                 event["event_type"], name, duration, event.get("object_path") or "",
