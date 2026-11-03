@@ -11,6 +11,14 @@ from pathlib import Path
 
 logger = logging.getLogger("gigaam.observer.processes")
 
+DEFAULT_EXCLUDED_PROCESSES = {
+    "svchost.exe", "services.exe", "lsass.exe", "csrss.exe", "wininit.exe",
+    "winlogon.exe", "smss.exe", "system", "registry", "fontdrvhost.exe",
+    "dwm.exe", "sihost.exe", "ctfmon.exe", "runtimebroker.exe",
+    "searchindexer.exe", "searchhost.exe", "securityhealthservice.exe",
+    "spoolsv.exe", "taskhostw.exe", "dllhost.exe", "conhost.exe",
+}
+
 
 def _system_processes():
     try:
@@ -41,7 +49,7 @@ class ProcessCollector:
                  process_provider=None):
         self.callback = callback
         self.interval = max(1.0, float(interval))
-        self.excluded_processes = {
+        self.excluded_processes = DEFAULT_EXCLUDED_PROCESSES | {
             str(item).casefold() for item in (excluded_processes or []) if str(item).strip()
         }
         self.process_provider = process_provider or _system_processes
