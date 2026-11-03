@@ -20,10 +20,8 @@ from email_form import open_email_form
 from contact_form import open_contact_form
 from file_search import search_web, search_files
 from assistant_window import AssistantWindow
-from observer import ObserverManager
-from observer_settings_window import open_observer_settings
-from observer_history_window import open_observer_history
-from observer_insights_window import open_observer_insights
+from skills_runtime.workflows import build_default_registry
+from skills_window import open_skills_window
 
 _STARTUP_TIME = time.perf_counter()
 
@@ -66,7 +64,7 @@ _recording_mode = "text"
 _lock = threading.Lock()
 _transcription_lock = threading.Lock()
 _ui = None
-_observer = None
+_skill_registry = None
 
 
 def update_ui_status(listening=None):
@@ -322,7 +320,7 @@ def transcribe_and_execute(audio_data: np.ndarray):
 
 
 def main():
-    global _ui, _observer
+    global _ui, _skill_registry
     progress("Проверяю микрофон...")
     microphone_found = check_microphone()
     progress("Настраиваю FFmpeg...")
@@ -330,8 +328,7 @@ def main():
     progress("Начинаю загрузку GigaAM...")
     load_model()
     start_reminder_service()
-    _observer = ObserverManager()
-    _observer.start()  # Starts approved metadata collection; clipboard stays opt-in.
+    _skill_registry = build_default_registry()
     progress("Голосовой ввод и голосовые команды готовы.")
     keyboard.add_hotkey(TEXT_HOTKEY, lambda: start_recording("text"), suppress=False)
     keyboard.add_hotkey(TEXT_HOTKEY, lambda: stop_recording(), suppress=False, trigger_on_release=True)
@@ -340,9 +337,7 @@ def main():
     _ui = AssistantWindow(
         on_close=shutdown,
         microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН",
-        on_observer_settings=lambda: open_observer_settings(_ui.root, _observer),
-        on_observer_history=lambda: open_observer_history(_ui.root, _observer),
-        on_observer_insights=lambda: open_observer_insights(_ui.root, _observer),
+        on_skills=lambda: open_skills_window(_ui.root, _skill_registry),
     )
     _ui.run()
 
@@ -353,8 +348,6 @@ def shutdown():
     if active:
         stop_recording()
     keyboard.unhook_all()
-    if _observer is not None:
-        _observer.stop()
     print("Работа программы завершена.")
 
 if __name__ == "__main__":
