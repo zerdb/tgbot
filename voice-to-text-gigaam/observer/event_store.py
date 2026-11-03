@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -25,7 +26,7 @@ class EventStore:
         return connection
 
     def initialize(self):
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS observer_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +92,7 @@ class EventStore:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         occurred_at = occurred_at or now
         payload = json.dumps(details or {}, ensure_ascii=False, separators=(",", ":"))
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             if deduplication_key:
                 exists = db.execute(
                     """SELECT id FROM observer_events
@@ -116,7 +117,7 @@ class EventStore:
         if not cleaned:
             raise ValueError("Note cannot be empty")
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             cursor = db.execute(
                 "INSERT INTO observer_notes(created_at, note, related_event_id) VALUES (?, ?, ?)",
                 (now, cleaned, related_event_id),
@@ -132,7 +133,7 @@ class EventStore:
             params.append(category)
         query += " ORDER BY occurred_at DESC, id DESC LIMIT ?"
         params.append(limit)
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             rows = db.execute(query, params).fetchall()
         result = []
         for row in rows:
@@ -142,5 +143,5 @@ class EventStore:
         return result
 
     def count_events(self) -> int:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             return int(db.execute("SELECT COUNT(*) FROM observer_events").fetchone()[0])
