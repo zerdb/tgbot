@@ -46,7 +46,7 @@ progress("Библиотеки загружены.")
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
-TEXT_HOTKEY = "right shift"
+TEXT_HOTKEY = "left ctrl+left shift"
 COMMAND_HOTKEY = "right ctrl"
 MAX_CHUNK_SECONDS = 24
 
@@ -126,7 +126,7 @@ def start_recording(mode: str):
     try:
         _stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32", callback=audio_callback)
         _stream.start()
-        key_name = "правый Shift" if mode == "text" else "правый Ctrl"
+        key_name = "Ctrl+Shift" if mode == "text" else "правый Ctrl"
         purpose = "для ввода текста" if mode == "text" else "для голосовой команды"
         print(f"Идёт запись {purpose}. Отпустите {key_name}, чтобы выполнить.")
         update_ui_status("ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ")
@@ -223,53 +223,71 @@ def normalize_command(text: str) -> str:
 def handle_command(text: str):
     command_text = normalize_command(text)
     print(f"Распознана голосовая команда: {text}")
-    if command_text in {"добавить контакт", "добавь контакт", "создать контакт", "новый контакт"}:
-        open_contact_form()
-        return
-    elif command_text in {"покажи контакты", "покажи адресную книгу", "список контактов"}:
-        list_email_contacts()
-        return
-    elif re.match(
-        r"^(?:"
-        r"отправ(?:ь|ить)(?:\s+мне)?\s+(?:это\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)|"
-        r"скинь(?:те)?\s+(?:это\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)|"
-        r"пришли(?:те)?\s+(?:это\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)|"
-        r"пошли(?:те)?\s+(?:это\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)|"
-        r"перешли(?:те)?\s+(?:это\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)|"
-        r"сбрось(?:те)?\s+(?:это\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)|"
-        r"открой\s+(?:форму\s+)?отправки\s+почты"
-        r")(?:\s|$)",
-        command_text,
-    ):
+
+    def exact(*phrases):
+        return command_text in {normalize_command(item) for item in phrases}
+
+    def begins(*phrases):
+        return any(command_text.startswith(normalize_command(item) + " ") for item in phrases)
+
+    # Email: common conversational variants and ASR-friendly wording.
+    email_starts = (
+        "отправь на почту", "отправить на почту", "отправь по почте", "отправить по почте",
+        "скинь на почту", "скинь по почте", "пришли на почту", "пришли по почте",
+        "пошли на почту", "пошли по почте", "перешли на почту", "перешли по почте",
+        "сбрось на почту", "отправь на email", "отправить на email", "скинь на email",
+        "пришли на email", "отправь письмо на", "отправить письмо на",
+    )
+    if exact("отправь на почту", "отправить на почту", "отправь письмо",
+             "открыть отправку почты", "открой почту", "создай письмо",
+             "новое письмо", "написать письмо", "открой отправку письма") or begins(*email_starts):
         subject = re.sub(
-            r"^\s*(?:"
-            r"отправ(?:ь|ить)(?:\s+мне)?|скинь(?:те)?|пришли(?:те)?|пошли(?:те)?|перешли(?:те)?|сбрось(?:те)?"
-            r")\s+(?:это\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)\s*",
+            r"^\s*(?:отправ(?:ь|ить)|скинь|пришли|пошли|перешли|сбрось)"
+            r"(?:\s+мне)?\s+(?:это\s+)?(?:письмо\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)\s*",
             "", text, flags=re.IGNORECASE,
         ).strip(" .,!?:;«»")
         open_email_form(subject)
         return
-    if command_text in {"блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
-                        "заблокируй комп", "заблокируй экран", "заблокируй пк",
-                        "блокируй компьютер", "блокируй комп", "закблокируй компьютер",
-                        "закблокируй комп", "заблокировать компьютер", "заблокировать комп",
-                        "lock computer", "lock screen"}:
+
+    if exact("добавить контакт", "добавь контакт", "создать контакт", "новый контакт",
+             "сохрани контакт", "запиши контакт", "добавить адрес", "новый адрес"):
+        open_contact_form()
+    elif exact("покажи контакты", "покажи адресную книгу", "список контактов",
+               "мои контакты", "открой контакты", "покажи почтовые контакты"):
+        list_email_contacts()
+    elif exact("блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
+               "заблокируй комп", "заблокируй экран", "заблокируй пк",
+               "блокируй компьютер", "блокируй комп", "закблокируй компьютер",
+               "закблокируй комп", "заблокировать компьютер", "заблокировать комп",
+               "выключи экран", "lock computer", "lock screen"):
         lock_computer()
-    elif command_text in {"перезагрузи компьютер", "перезагрузи комп", "перезагрузка компьютера"}:
+    elif exact("перезагрузи компьютер", "перезагрузи комп", "перезагрузка компьютера",
+               "перезапусти компьютер", "перезапусти комп", "сделай перезагрузку",
+               "рестарт компьютера", "перезагрузить пк"):
         reboot_computer()
-    elif command_text in {"покажи загрузки", "открой загрузки", "открой папку загрузки"}:
+    elif exact("покажи загрузки", "открой загрузки", "открой папку загрузки",
+               "папка загрузки", "открой скачанное", "покажи скачанные файлы",
+               "открой downloads"):
         open_downloads()
-    elif command_text in {"открой настройки", "открой настройки windows"}:
+    elif exact("открой настройки", "открой настройки windows", "настройки системы",
+               "системные настройки", "параметры windows", "открой параметры"):
         open_settings()
-    elif command_text in {"очисти корзину", "очистить корзину"}:
+    elif exact("очисти корзину", "очистить корзину", "опустоши корзину",
+               "удали содержимое корзины", "почисти корзину", "очистка корзины"):
         empty_recycle_bin()
-    elif command_text in {"сделай скриншот", "сделай снимок экрана", "скриншот"}:
+    elif exact("сделай скриншот", "сделай снимок экрана", "скриншот",
+               "сними экран", "сохрани экран", "сделай снимок", "заскринь экран"):
         take_screenshot()
-    elif command_text.startswith("напомни "):
+    elif begins("напомни", "создай напоминание", "добавь напоминание",
+                "поставь напоминание", "напоминание"):
         add_reminder(text)
-    elif command_text.startswith("найди в интернете "):
+    elif begins("найди в интернете", "поищи в интернете", "загугли",
+                "найди в сети", "веб поиск", "поиск в интернете"):
         search_web(text)
-    elif command_text.startswith("найди файл ") or command_text.startswith("найди "):
+    elif begins("найди файл", "найди файлы", "поищи файл", "поищи файлы",
+                "найди на компьютере", "найди документ", "поиск файла", "поиск файлов"):
+        search_files(text)
+    elif begins("найди"):
         search_files(text)
     else:
         print("Команда не распознана. Проверьте формулировку и попробуйте ещё раз.")
@@ -308,8 +326,8 @@ def main():
     load_model()
     start_reminder_service()
     progress("Голосовой ввод и голосовые команды готовы.")
-    keyboard.on_press_key(TEXT_HOTKEY, lambda _: start_recording("text"), suppress=False)
-    keyboard.on_release_key(TEXT_HOTKEY, lambda _: stop_recording(), suppress=False)
+    keyboard.add_hotkey(TEXT_HOTKEY, lambda: start_recording("text"), suppress=False)
+    keyboard.add_hotkey(TEXT_HOTKEY, lambda: stop_recording(), suppress=False, trigger_on_release=True)
     keyboard.on_press_key(COMMAND_HOTKEY, lambda _: start_recording("command"), suppress=False)
     keyboard.on_release_key(COMMAND_HOTKEY, lambda _: stop_recording(), suppress=False)
     _ui = AssistantWindow(on_close=shutdown, microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
