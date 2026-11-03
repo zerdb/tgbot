@@ -4,7 +4,7 @@ GigaAM Observer is an opt-in, local activity-awareness subsystem for the Windows
 
 ## Current status
 
-The main assistant window now includes Observer settings and a local event-history window with category filtering, manual notes, periodic refresh, and CSV export. Monitoring stays off by default; the user must explicitly enable it, choose file and/or app monitoring, and confirm consent. Saving settings applies the selected collectors immediately; disabling Observer stops them. Only file and process categories are currently implemented.
+The main assistant window includes Observer settings, a local event-history window with category filtering, manual notes and CSV export, plus a local insights window. The insights engine detects repeated application launches, recurring daily applications and busy folders, then stores explainable suggestions for user review and acceptance/dismissal. Monitoring stays off by default; the user must explicitly enable it, choose file and/or app monitoring, and confirm consent. Saving settings applies the selected collectors immediately; disabling Observer stops them. Only file and process categories are currently implemented.
 
 This first milestone contains only the storage and configuration foundation:
 - SQLite event history and indexes;
@@ -46,3 +46,8 @@ History has no automatic expiration. The history window can export the selected 
 - No document contents are collected by default.\n- Process monitoring does not collect command lines, window titles, keystrokes, or process memory.
 - Collectors will be individually configurable and visibly indicated.
 - The database remains local. Any future AI request will send only a minimized, user-approved summary, never the raw event database.
+
+
+## Local insights
+
+The "Анализ привычек" window runs deterministic analysis over the latest seven days of stored metadata. It can identify repeated application starts, applications seen across multiple days, and folders with repeated file changes. Each suggestion includes its evidence count/context, is deduplicated, and can be accepted or dismissed. The analysis does not call an internet AI service and does not inspect document contents. The user starts analysis manually; there is no automatic daily job yet.
