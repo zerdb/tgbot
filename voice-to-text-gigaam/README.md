@@ -112,7 +112,11 @@ file discovery -> read-only workbook extraction -> deterministic grouped calcula
 creation of a separate report workbook. The source workbook is never edited and the writer
 refuses to overwrite an existing destination.
 
-This is an incremental migration. Existing voice commands and legacy modules are deliberately
-kept intact until each replacement has equivalent behavior and tests. The Excel workflow is
-currently callable from Python and covered by integration tests; it is not yet exposed as a
-free-form voice command. Do not delete legacy modules as part of this first foundation step.
+The main assistant window exposes installed skills through the «Навыки» button. The first
+available scenario is a guided Excel summary report: choose a workbook, optionally choose a
+sheet, enter exact grouping and numeric column names, and select a new report path. The workflow
+is explicit and does not guess which calculation the user intended.
+
+The legacy activity observer, event history, habit analysis and observer settings have been
+removed from the application and startup sequence. Core dictation, email, contacts, reminders,
+file search and Windows voice commands remain separate from the skills runtime.
