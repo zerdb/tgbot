@@ -141,7 +141,8 @@ def open_email_form(initial_subject: str = ""):
                         send_button.configure(state="normal")
                         cancel_button.configure(state="normal")
                         status_var.set("Не удалось отправить письмо")
-                        messagebox.showerror("Ошибка отправки", str(exc), parent=root)
+                        messagebox.showerror("Ошибка отправки", error_text, parent=root)
+                    error_text = str(exc)
                     root.after(0, failed)
             threading.Thread(target=worker, daemon=True, name="email-sender").start()
 
