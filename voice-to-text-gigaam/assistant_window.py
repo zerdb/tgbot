@@ -5,7 +5,7 @@ from tkinter import ttk
 
 
 class AssistantWindow:
-    def __init__(self, on_close, microphone_status="ПРОВЕРКА", on_observer_settings=None, on_observer_history=None):
+    def __init__(self, on_close, microphone_status="ПРОВЕРКА", on_observer_settings=None, on_observer_history=None, on_observer_insights=None):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
         self.root.geometry("820x720")
@@ -13,6 +13,7 @@ class AssistantWindow:
         self.on_close = on_close
         self.on_observer_settings = on_observer_settings
         self.on_observer_history = on_observer_history
+        self.on_observer_insights = on_observer_insights
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._build()
@@ -33,6 +34,7 @@ class AssistantWindow:
         observer_buttons.pack(anchor="w", pady=(0, 10))
         ttk.Button(observer_buttons, text="Настройки наблюдателя", command=self._open_observer_settings).pack(side="left")
         ttk.Button(observer_buttons, text="История событий", command=self._open_observer_history).pack(side="left", padx=(8, 0))
+        ttk.Button(observer_buttons, text="Анализ привычек", command=self._open_observer_insights).pack(side="left", padx=(8, 0))
         ttk.Label(outer, text="Как пользоваться", font=("Segoe UI", 13, "bold")).pack(anchor="w")
         guide = (
             "1. Диктовка текста: зажмите Right Alt + Right Shift, произнесите текст и отпустите клавиши. "
@@ -80,6 +82,10 @@ class AssistantWindow:
     def _open_observer_history(self):
         if self.on_observer_history is not None:
             self.on_observer_history()
+
+    def _open_observer_insights(self):
+        if self.on_observer_insights is not None:
+            self.on_observer_insights()
 
     def set_status(self, listening=None, microphone=None):
         def apply():
