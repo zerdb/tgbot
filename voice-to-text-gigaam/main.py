@@ -23,6 +23,7 @@ from assistant_window import AssistantWindow
 from observer import ObserverManager
 from observer_settings_window import open_observer_settings
 from observer_history_window import open_observer_history
+from observer_insights_window import open_observer_insights
 
 _STARTUP_TIME = time.perf_counter()
 
@@ -341,6 +342,7 @@ def main():
         microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН",
         on_observer_settings=lambda: open_observer_settings(_ui.root, _observer),
         on_observer_history=lambda: open_observer_history(_ui.root, _observer),
+        on_observer_insights=lambda: open_observer_insights(_ui.root, _observer),
     )
     _ui.run()
 
