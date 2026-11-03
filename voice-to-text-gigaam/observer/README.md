@@ -1,62 +1,41 @@
 # GigaAM Observer
 
-GigaAM Observer is an opt-in, local activity-awareness subsystem for the Windows voice assistant.
+GigaAM Observer is a local activity-awareness subsystem for the Windows voice assistant.
 
-## Current status
+## Automatic collection
 
-The main assistant window includes Observer settings, a local event-history window with category filtering, manual notes and CSV export, plus a local insights window. The insights engine detects repeated application launches, recurring daily applications and busy folders, then stores explainable suggestions for user review and acceptance/dismissal. Monitoring stays off by default; the user must explicitly enable it, choose file and/or app monitoring, and confirm consent. Saving settings applies the selected collectors immediately; disabling Observer stops them. Only file and process categories are currently implemented.
+Observer starts with the assistant. No category permissions or general enable switch are shown in settings; the user has approved these metadata categories:
 
-This first milestone contains only the storage and configuration foundation:
-- SQLite event history and indexes;
-- provider-agnostic internet AI adapter for OpenAI-compatible APIs;
-- separate JSON configuration with safe defaults;
-- an Observer lifecycle manager;
-- opt-in file metadata monitoring for selected folders (Desktop, Documents, Pictures, Downloads);\n- opt-in process start/stop monitoring (process name, PID and executable path only);
+- **Files and folders:** records created, modified and deleted file metadata (name, path and timestamps) in configured user folders. It does not read file contents.
+- **Programs:** records application/process starts and exits with process name, PID and executable path. Common Windows infrastructure processes are excluded.
+- **Active window and focus duration:** records foreground application, window title and how long it remained active.
+- **Repeated-work scenarios:** local analysis can identify recurring application launches and combinations/sequences where event history provides enough evidence. Suggestions are stored locally for review and acceptance/dismissal.
 
-Observer is **disabled by default**. Creating its database does not mean monitoring is enabled. Event collection starts only after explicit opt-in and category selection.
+The assistant does not record keystrokes, screen contents, microphone audio, document contents, browser tabs, page contents, cookies or passwords.
 
-## Data location
+## Clipboard — optional
 
-`%LOCALAPPDATA%\GigaAMVoiceAssistant\observer\`
-- `config.json` — preferences;
-- `observer.sqlite3` — event history, notes, and suggestions.
+The only permission checkbox is “Собирать текст буфера обмена”. It is off by default. When enabled, changed plain-text clipboard content is polled and stored locally only if it passes conservative secret-pattern checks. Likely passwords, access tokens, API keys, email addresses and oversized text are discarded. This is best-effort filtering, not a guarantee; clipboard history must not be treated as a secure vault. Uncheck the option to stop clipboard collection.
 
-The file collector takes an initial baseline and then polls every 10 seconds for created, modified and deleted files. The process collector takes an initial baseline and polls every 3 seconds for process starts and exits; very short-lived processes may be missed. It does not read file contents. Existing files are not imported into history. Only folders resolved from Windows known-folder locations are proposed by default; no whole-drive scan is performed. File monitoring remains off unless both Observer and the `files` category are explicitly enabled in config. Process monitoring remains off unless both Observer and the `apps` category are explicitly enabled.
+## Local storage
 
-History has no automatic expiration. The history window can export the selected view to CSV. Manual event deletion is not yet exposed in the UI; the database remains local.
+%LOCALAPPDATA%\GigaAMVoiceAssistant\observer\
 
-## Planned milestones
+- config.json — settings;
+- observer.sqlite3 — event history, notes and suggestions.
 
-1. Storage, configuration, and lifecycle foundation (current).
-2. File collector for the four selected user folders and process lifecycle collector (implemented).
-3. USB and print event collectors.
-4. Daily repetition analysis and suggestion engine.
-5. Observer history window, tray integration, and richer folder/exclusion controls (settings dialog started).
-6. Optional internet AI adapter for explaining detected patterns and drafting suggestions.
-7. Windows startup integration and final acceptance checks.
+History has no automatic expiration. The history window supports filtering and CSV export. The database remains on this computer. No raw event database is uploaded.
 
-## Internet AI brain
+## Insights and internet AI
 
-`ai_client.py` supports OpenAI-compatible chat-completions endpoints without a provider SDK. Configure `ai.enabled`, `ai.base_url`, and `ai.model` in `config.json`. If the provider requires a key, place it in the environment variable named by `ai.api_key_env` (default: `GIGAAM_OBSERVER_API_KEY`). The key is never stored in the config or database. The caller must explicitly pass a minimized summary to `explain_summary()`; the adapter does not read the event database or upload events on its own. This lets a free hosted model be used now and a paid API later by changing configuration.
+The “Анализ привычек” action runs deterministic local analysis over recent event history and stores explainable suggestions that can be accepted or dismissed. It does not call an internet service.
 
-## Privacy
+An optional OpenAI-compatible adapter exists for future use. It is disabled by default and does not read the database or upload events automatically. Any future call must receive a minimized, user-approved summary only.
 
-- No browser tracking is included in the agreed scope.
-- No keystroke logging, clipboard capture, screen recording, or microphone surveillance.
-- No document contents are collected by default.\n- Process monitoring does not collect command lines, window titles, keystrokes, or process memory.
-- Collectors will be individually configurable and visibly indicated.
-- The database remains local. Any future AI request will send only a minimized, user-approved summary, never the raw event database.
+## Limitations
 
-
-## Local insights
-
-The "Анализ привычек" window runs deterministic analysis over the latest seven days of stored metadata. It can identify repeated application starts, applications seen across multiple days, and folders with repeated file changes. Each suggestion includes its evidence count/context, is deduplicated, and can be accepted or dismissed. The analysis does not call an internet AI service and does not inspect document contents. The user starts analysis manually; there is no automatic daily job yet.
-
-
-## Additional activity collectors
-
-- Foreground-window focus sessions record application name, executable path, PID, window title (up to 300 characters), and elapsed focus duration. Enable the `focus` category after reviewing the updated consent controls.
-- Clipboard monitoring is opt-in and stores changed plain text locally only after conservative secret-pattern checks. Likely password/token strings, email addresses, and oversized text are discarded. This is a best-effort filter, not a guarantee that every sensitive value is detected; do not use it as a secure vault.
-- Common Windows infrastructure processes are excluded from the process event stream by default.
-- Browser-tab collection is not implemented in this milestone. A supported browser integration/extension is needed to enumerate tabs reliably without scraping page contents.
-- Automatic start remains tied to the Observer's saved enabled state and explicit consent; newly introduced categories require review in settings before they collect.
+- File monitoring watches configured user folders; it is not a whole-disk index.
+- Process and focus monitoring are polling-based, so very short-lived events can be missed.
+- Printing and USB collectors are not implemented.
+- Browser monitoring is deliberately excluded.
+- Clipboard secret filtering is heuristic and cannot guarantee that every secret is detected.
