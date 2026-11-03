@@ -6,6 +6,7 @@ GigaAM Observer is an opt-in, local activity-awareness subsystem for the Windows
 
 This first milestone contains only the storage and configuration foundation:
 - SQLite event history and indexes;
+- provider-agnostic internet AI adapter for OpenAI-compatible APIs;
 - separate JSON configuration with safe defaults;
 - an Observer lifecycle manager;
 - no file, process, print, USB, browser, keyboard, or screen monitoring yet.
@@ -29,6 +30,10 @@ History has no automatic expiration. Users will have manual export and deletion 
 5. Observer settings/history window and tray integration.
 6. Optional internet AI adapter for explaining detected patterns and drafting suggestions.
 7. Windows startup integration and final acceptance checks.
+
+## Internet AI brain
+
+`ai_client.py` supports OpenAI-compatible chat-completions endpoints without a provider SDK. Configure `ai.enabled`, `ai.base_url`, and `ai.model` in `config.json`. If the provider requires a key, place it in the environment variable named by `ai.api_key_env` (default: `GIGAAM_OBSERVER_API_KEY`). The key is never stored in the config or database. The caller must explicitly pass a minimized summary to `explain_summary()`; the adapter does not read the event database or upload events on its own. This lets a free hosted model be used now and a paid API later by changing configuration.
 
 ## Privacy
 
