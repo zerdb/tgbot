@@ -21,6 +21,21 @@ class PatternAnalyzerTests(unittest.TestCase):
             found = analyze_patterns(store)
             self.assertTrue(any(item["title"] == "Часто запускается: editor.exe" for item in found))
 
+    def test_repeated_ordered_focus_sequence_is_detected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = EventStore(Path(temp) / "events.sqlite3")
+            sequence = ["editor.exe", "explorer.exe", "terminal.exe",
+                        "editor.exe", "explorer.exe", "terminal.exe"]
+            for index, app in enumerate(sequence):
+                store.add_event(
+                    "focus", "focus_session", "foreground_window",
+                    object_name=app,
+                    occurred_at=(datetime.now(timezone.utc) - timedelta(minutes=20-index)).isoformat(timespec="seconds"),
+                )
+            found = analyze_patterns(store)
+            self.assertTrue(any(item["title"].startswith("Повторяющийся сценарий:")
+                                for item in found))
+
     def test_old_events_are_ignored(self):
         with tempfile.TemporaryDirectory() as temp:
             store = EventStore(Path(temp) / "events.sqlite3")
