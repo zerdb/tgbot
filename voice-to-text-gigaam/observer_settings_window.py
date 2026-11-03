@@ -16,9 +16,12 @@ def open_observer_settings(parent, manager):
     dialog.resizable(False, False)
     dialog.grab_set()
 
-    clipboard_var = tk.BooleanVar(
-        value=bool(current.get("categories", {}).get("clipboard", False))
-    )
+    original_clipboard = bool(current.get("categories", {}).get("clipboard", False))
+    clipboard_var = tk.BooleanVar(value=original_clipboard)
+
+    def apply_clipboard_toggle():
+        # Reflect the checkbox in the running observer immediately.
+        manager.set_clipboard_enabled(clipboard_var.get())
 
     outer = ttk.Frame(dialog, padding=18)
     outer.pack(fill="both", expand=True)
@@ -43,6 +46,7 @@ def open_observer_settings(parent, manager):
         group,
         text="Собирать текст буфера обмена (распознаваемые секреты отбрасываются)",
         variable=clipboard_var,
+        command=apply_clipboard_toggle,
     ).pack(anchor="w")
 
     watched = current.get("watched_folders", [])
@@ -82,14 +86,18 @@ def open_observer_settings(parent, manager):
             "usb": False,
         })
         categories.pop("browser", None)
-        save_config(updated, manager.data_dir / "config.json")
-        manager.stop()
         manager.config = updated
-        manager.start()
+        manager.set_clipboard_enabled(bool(clipboard_var.get()))
+        save_config(updated, manager.data_dir / "config.json")
         dialog.destroy()
 
     ttk.Button(buttons, text="Сохранить", command=save_and_close).pack(side="right")
-    ttk.Button(buttons, text="Отмена", command=dialog.destroy).pack(side="right", padx=(0, 8))
+    def cancel_and_close():
+        clipboard_var.set(original_clipboard)
+        manager.set_clipboard_enabled(original_clipboard)
+        dialog.destroy()
+
+    ttk.Button(buttons, text="Отмена", command=cancel_and_close).pack(side="right", padx=(0, 8))
     dialog.update_idletasks()
     x = parent.winfo_rootx() + max(0, (parent.winfo_width() - dialog.winfo_width()) // 2)
     y = parent.winfo_rooty() + max(0, (parent.winfo_height() - dialog.winfo_height()) // 2)
