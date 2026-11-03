@@ -80,6 +80,24 @@ class ObserverManager:
         logger.info("Observer core started.")
         return True
 
+    def set_clipboard_enabled(self, enabled: bool) -> None:
+        """Apply clipboard opt-in immediately without restarting other collectors."""
+        enabled = bool(enabled)
+        categories = self.config.setdefault("categories", {})
+        categories["clipboard"] = enabled
+        if not self.started:
+            return
+        if enabled:
+            if self._clipboard_collector is None:
+                self._clipboard_collector = ClipboardCollector(self.record_event)
+                self._clipboard_collector.start()
+                logger.info("Clipboard collector started.")
+        elif self._clipboard_collector is not None:
+            collector = self._clipboard_collector
+            self._clipboard_collector = None
+            collector.stop()
+            logger.info("Clipboard collector stopped.")
+
     def analyze_now(self, days: int = 7) -> int:
         """Run deterministic local analysis; no network or raw data leaves the PC."""
         patterns = analyze_patterns(self.store, days=days)
