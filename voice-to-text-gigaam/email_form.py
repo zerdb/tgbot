@@ -51,7 +51,7 @@ def copied_file_paths() -> list[str]:
 
 
 def open_email_form(initial_subject: str = ""):
-    """Open the email form in its own Tk thread."""
+    """Open a desktop email composer with explicit contact and manual-address fields."""
     def show():
         root = tk.Tk()
         root.title("GigaAM — отправка почты")
@@ -63,28 +63,26 @@ def open_email_form(initial_subject: str = ""):
         outer.pack(fill="both", expand=True)
         ttk.Label(outer, text="Новое письмо", font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(0, 12))
 
-        book = load_address_book()
-        contacts = [f"{name} <{address}>" for name, address in book.items()]
-        ttk.Label(outer, text="Получатель").pack(anchor="w")
-        recipient_var = tk.StringVar()
-        selected_address = tk.StringVar()
-        contact_addresses = {f"{name} <{address}>": address for name, address in book.items()}
-        # Also accept a contact's display name if the combobox text is edited.
-        name_addresses = {str(name).strip().casefold(): str(address).strip()
-                          for name, address in book.items()}
-        recipient = ttk.Combobox(outer, textvariable=recipient_var, values=contacts, state="normal")
-        recipient.pack(fill="x", pady=(3, 10))
+        book_items = list(load_address_book().items())
+        contact_names = [name for name, _address in book_items]
+        ttk.Label(outer, text="Контакт из адресной книги").pack(anchor="w")
+        contact_var = tk.StringVar()
+        recipient = ttk.Combobox(outer, textvariable=contact_var, values=contact_names, state="readonly")
+        recipient.pack(fill="x", pady=(3, 8))
+        selected_address = {"value": ""}
+
         def select_contact(_event=None):
-            selected = recipient_var.get().strip()
-            address = contact_addresses.get(selected)
-            if address:
-                selected_address.set(address)
-                recipient_var.set(selected)
+            index = recipient.current()
+            selected_address["value"] = book_items[index][1].strip() if 0 <= index < len(book_items) else ""
+
         recipient.bind("<<ComboboxSelected>>", select_contact)
-        recipient.bind("<KeyRelease>", lambda _event: selected_address.set(""))
+
+        ttk.Label(outer, text="Или введите email вручную").pack(anchor="w")
+        manual_address_var = tk.StringVar()
+        ttk.Entry(outer, textvariable=manual_address_var).pack(fill="x", pady=(3, 10))
 
         ttk.Label(outer, text="Тема").pack(anchor="w")
-        subject_var = tk.StringVar(value=initial_subject or "Файлы")
+        subject_var = tk.StringVar(value=initial_subject.strip() or "Файлы")
         ttk.Entry(outer, textvariable=subject_var).pack(fill="x", pady=(3, 10))
 
         ttk.Label(outer, text="Текст письма").pack(anchor="w")
@@ -103,10 +101,9 @@ def open_email_form(initial_subject: str = ""):
         def update_subject_from_files():
             names = [Path(path).name for path in attachment_paths]
             if names:
-                # Attachment names take priority over the generic voice-command subject.
                 subject_var.set(", ".join(names)[:240])
             elif not subject_var.get().strip():
-                subject_var.set(initial_subject or "Файлы")
+                subject_var.set(initial_subject.strip() or "Файлы")
 
         def add_paths(paths):
             for item in paths:
@@ -115,20 +112,28 @@ def open_email_form(initial_subject: str = ""):
                     attachment_paths.append(path)
                     listbox.insert("end", f"{Path(path).name}  —  {path}")
             update_subject_from_files()
+            refresh_count()
+
+        def refresh_count():
+            status_var.set(f"Вложений: {len(attachment_paths)}")
 
         add_paths(copied_file_paths())
 
         controls = ttk.Frame(outer)
         controls.pack(fill="x", pady=(8, 0))
+
         def add_files():
             selected = filedialog.askopenfilenames(parent=root, title="Выберите файлы")
             add_paths(selected)
+
         def remove_files():
             selected = list(listbox.curselection())
             for index in reversed(selected):
                 listbox.delete(index)
                 attachment_paths.pop(index)
             update_subject_from_files()
+            refresh_count()
+
         ttk.Button(controls, text="Добавить файлы…", command=add_files).pack(side="left")
         ttk.Button(controls, text="Убрать выбранные", command=remove_files).pack(side="left", padx=8)
 
@@ -136,52 +141,52 @@ def open_email_form(initial_subject: str = ""):
         buttons.pack(fill="x", pady=(14, 0))
         status_var = tk.StringVar(value=f"Вложений: {len(attachment_paths)}")
         ttk.Label(buttons, textvariable=status_var).pack(side="left")
-        def refresh_count():
-            status_var.set(f"Вложений: {len(attachment_paths)}")
+
         def send():
-            entered = recipient_var.get().strip()
-            address = selected_address.get().strip()
+            manual_address = manual_address_var.get().strip()
+            address = manual_address or selected_address["value"]
             if not address:
-                address = contact_addresses.get(entered, "")
-            if not address:
-                address = name_addresses.get(entered.casefold(), "")
-            if not address and "<" in entered and ">" in entered:
-                address = entered.rsplit("<", 1)[1].split(">", 1)[0].strip()
-            if not address and "@" in entered:
-                address = entered
-            if not address:
-                messagebox.showwarning("Нет получателя", "Выберите контакт или введите email.", parent=root)
+                messagebox.showwarning(
+                    "Нет получателя",
+                    "Выберите имя в поле «Контакт из адресной книги» или введите email вручную.",
+                    parent=root,
+                )
                 recipient.focus_set()
                 return
-            if not attachment_paths and not messagebox.askyesno("Без вложений", "Отправить письмо без файлов?", parent=root):
+            if not attachment_paths and not messagebox.askyesno(
+                "Без вложений", "Отправить письмо без файлов?", parent=root
+            ):
                 return
+
             subject = subject_var.get().strip() or "Файлы"
             content = body.get("1.0", "end-1c")
             paths = list(attachment_paths)
             send_button.configure(state="disabled")
             cancel_button.configure(state="disabled")
             status_var.set("Отправляю письмо…")
+
             def worker():
                 try:
                     send_email(address, subject, content, paths)
-                    root.after(0, lambda: (messagebox.showinfo("Готово", "Письмо успешно отправлено.", parent=root), root.destroy()))
+                    def sent():
+                        messagebox.showinfo("Готово", "Письмо успешно отправлено.", parent=root)
+                        root.destroy()
+                    root.after(0, sent)
                 except Exception as exc:
+                    error_text = str(exc)
                     def failed():
                         send_button.configure(state="normal")
                         cancel_button.configure(state="normal")
                         status_var.set("Не удалось отправить письмо")
                         messagebox.showerror("Ошибка отправки", error_text, parent=root)
-                    error_text = str(exc)
                     root.after(0, failed)
+
             threading.Thread(target=worker, daemon=True, name="email-sender").start()
 
         send_button = ttk.Button(buttons, text="Отправить", command=send)
         send_button.pack(side="right")
         cancel_button = ttk.Button(buttons, text="Отмена", command=root.destroy)
         cancel_button.pack(side="right", padx=(0, 8))
-        def on_selection(_event=None):
-            refresh_count()
-        listbox.bind("<<ListboxSelect>>", on_selection)
         root.bind("<Escape>", lambda _event: root.destroy())
         root.mainloop()
 
