@@ -76,7 +76,7 @@ def open_observer_history(parent, manager):
         category = next((key for key, label in CATEGORY_LABELS.items() if label == choice), None)
         events = manager.store.list_events(limit=1000, category=category)
         with open(filename, "w", newline="", encoding="utf-8-sig") as stream:
-            writer = csv.DictWriter(stream, fieldnames=[
+            writer = csv.DictWriter(stream, extrasaction="ignore", fieldnames=[
                 "id", "occurred_at", "category", "event_type", "source",
                 "object_name", "object_path", "details",
             ])
