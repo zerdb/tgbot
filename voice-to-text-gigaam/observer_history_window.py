@@ -94,7 +94,7 @@ def open_observer_history(parent, manager):
             return
         related = selected_event_id()
         manager.store.add_note(note, related_event_id=related)
-        manager.record_event(
+        manager.store.add_event(
             "voice", "manual_note", "user",
             object_name=note[:160],
             details={"related_event_id": related} if related else {},
