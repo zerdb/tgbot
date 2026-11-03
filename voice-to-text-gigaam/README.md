@@ -99,3 +99,20 @@ The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAss
 ## Tkinter interface
 
 After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Left Ctrl + Left Shift for dictation or Right Ctrl for a voice command; release the keys to process the audio. Close the window to exit.
+
+## Modular skills architecture (new foundation)
+
+The voice assistant remains the application entry point and speech interface. New capabilities
+are being moved into independent modules under `skills/`, coordinated by `skills_runtime/`.
+Skills exchange versionable structured messages (`task_id`, sender, recipient, action, inputs)
+and return a uniform success/failure result.
+
+The first four-skill Excel workflow is documented in [skills/README.md](skills/README.md):
+file discovery -> read-only workbook extraction -> deterministic grouped calculations ->
+creation of a separate report workbook. The source workbook is never edited and the writer
+refuses to overwrite an existing destination.
+
+This is an incremental migration. Existing voice commands and legacy modules are deliberately
+kept intact until each replacement has equivalent behavior and tests. The Excel workflow is
+currently callable from Python and covered by integration tests; it is not yet exposed as a
+free-form voice command. Do not delete legacy modules as part of this first foundation step.
