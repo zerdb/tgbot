@@ -206,6 +206,11 @@ def open_email_form(initial_subject: str = ""):
         send_button.pack(side="right")
         cancel_button = ttk.Button(buttons, text="Отмена", command=root.destroy)
         cancel_button.pack(side="right", padx=(0, 8))
+
+        # Final initialization: after every form widget has been created,
+        # fill the subject field with attachment file names only (no paths).
+        update_subject_from_files()
+
         root.bind("<Escape>", lambda _event: root.destroy())
         root.mainloop()
 
