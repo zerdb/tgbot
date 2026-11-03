@@ -230,7 +230,7 @@ def handle_command(text: str):
         list_email_contacts()
         return
     elif command_text in {"отправь на почту", "отправить на почту", "отправь письмо", "открыть отправку почты"} or command_text.startswith(("отправь на почту ", "отправить на почту ")):
-        subject = re.sub(r"^\\s*отправ(?:ь|ить)\\s+на\\s+почту\\s*", "", text, flags=re.IGNORECASE).strip(" .,!?:;«»\\"")
+        subject = re.sub(r"^\s*отправ(?:ь|ить)\s+на\s+почту\s*", "", text, flags=re.IGNORECASE).strip(" .,!?:;«»")
         open_email_form(subject)
         return
     if command_text in {"блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
