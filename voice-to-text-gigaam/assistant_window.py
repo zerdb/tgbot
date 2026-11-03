@@ -5,13 +5,12 @@ from tkinter import ttk
 
 
 class AssistantWindow:
-    def __init__(self, on_close, microphone_status="ПРОВЕРКА", on_skills=None):
+    def __init__(self, on_close, microphone_status="ПРОВЕРКА"):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
         self.root.geometry("820x720")
         self.root.minsize(680, 560)
         self.on_close = on_close
-        self.on_skills = on_skills
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._build()
@@ -28,10 +27,6 @@ class AssistantWindow:
         ttk.Label(status, textvariable=self.microphone_var, foreground="#16723b").grid(row=0, column=1, sticky="w")
         ttk.Label(status, text="Прослушивание команд:", font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         ttk.Label(status, textvariable=self.listening_var, foreground="#1558a6").grid(row=1, column=1, sticky="w", pady=(6, 0))
-        skills_bar = ttk.Frame(outer)
-        skills_bar.pack(anchor="w", pady=(0, 10))
-        ttk.Button(skills_bar, text="Навыки", command=self._open_skills).pack(side="left")
-        ttk.Label(skills_bar, text="   Самостоятельные инструменты и сценарии помощника").pack(side="left")
         ttk.Label(outer, text="Как пользоваться", font=("Segoe UI", 13, "bold")).pack(anchor="w")
         guide = (
             "1. Диктовка текста: зажмите Right Alt + Right Shift, произнесите текст и отпустите клавиши. "
@@ -71,10 +66,6 @@ class AssistantWindow:
         text.tag_configure("title", font=("Segoe UI", 10, "bold"))
         text.configure(state="disabled")
         ttk.Label(outer, text="Примечание: для диктовки удерживайте правые Alt+Shift; для команды произносите фразу после нажатия Right Ctrl и отпускайте клавишу только после окончания фразы.", wraplength=760).pack(anchor="w")
-    
-    def _open_skills(self):
-        if self.on_skills is not None:
-            self.on_skills()
 
     def set_status(self, listening=None, microphone=None):
         def apply():
