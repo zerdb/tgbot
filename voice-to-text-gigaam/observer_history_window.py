@@ -11,6 +11,8 @@ from tkinter import filedialog, messagebox, ttk
 CATEGORY_LABELS = {
     "files": "Файлы",
     "apps": "Программы",
+    "focus": "Активные окна",
+    "clipboard": "Буфер обмена",
     "voice": "Заметки",
     "printing": "Печать",
     "usb": "USB",
