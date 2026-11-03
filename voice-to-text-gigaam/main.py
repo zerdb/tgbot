@@ -46,7 +46,7 @@ progress("Библиотеки загружены.")
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
-TEXT_HOTKEY = "left ctrl+left shift"
+TEXT_HOTKEY = "right alt+right shift"
 COMMAND_HOTKEY = "right ctrl"
 MAX_CHUNK_SECONDS = 24
 
@@ -126,7 +126,7 @@ def start_recording(mode: str):
     try:
         _stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32", callback=audio_callback)
         _stream.start()
-        key_name = "Ctrl+Shift" if mode == "text" else "правый Ctrl"
+        key_name = "Right Alt+Right Shift" if mode == "text" else "правый Ctrl"
         purpose = "для ввода текста" if mode == "text" else "для голосовой команды"
         print(f"Идёт запись {purpose}. Отпустите {key_name}, чтобы выполнить.")
         update_ui_status("ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ")
