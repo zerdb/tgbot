@@ -123,7 +123,15 @@ def open_email_form(initial_subject: str = ""):
         add_paths(copied_file_paths())
         # Explorer may briefly keep the clipboard open while the voice command
         # launches this window. Retry once after the window has initialized.
-        root.after(350, lambda: add_paths(copied_file_paths()))
+        clipboard_attempts = {"count": 0}
+        def retry_clipboard_import():
+            # Explorer can hold or populate the clipboard slightly after Ctrl+C.
+            # Retry several times instead of relying on a single timing window.
+            clipboard_attempts["count"] += 1
+            add_paths(copied_file_paths())
+            if clipboard_attempts["count"] < 12:
+                root.after(300, retry_clipboard_import)
+        root.after(250, retry_clipboard_import)
 
         controls = ttk.Frame(outer)
         controls.pack(fill="x", pady=(8, 0))
@@ -163,10 +171,13 @@ def open_email_form(initial_subject: str = ""):
             ):
                 return
 
-            # Final synchronization prevents sending a stale/default subject even if
-            # the clipboard or file picker populated attachments just before Send.
-            update_subject_from_files()
-            subject = subject_var.get().strip() or "Файлы"
+            # Build the outgoing subject directly from the exact attachment list.
+            # This is the source of truth; it cannot be stale or depend on Tk events.
+            if attachment_paths:
+                subject = ", ".join(Path(path).name for path in attachment_paths)[:240]
+                subject_var.set(subject)
+            else:
+                subject = subject_var.get().strip() or "Файлы"
             content = body.get("1.0", "end-1c")
             paths = list(attachment_paths)
             send_button.configure(state="disabled")
