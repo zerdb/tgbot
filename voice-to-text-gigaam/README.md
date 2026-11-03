@@ -1,6 +1,6 @@
 # Voice to Text — Local GigaAM-v3
 
-Offline push-to-talk voice typing and voice commands for Windows. Hold **Left Ctrl + Left Shift** together to dictate text; hold **Right Ctrl** to issue a voice command. Release the key to process the recording with a locally stored GigaAM-v3 model.
+Offline push-to-talk voice typing and voice commands for Windows. Hold **Right Alt + Right Shift** together to dictate text; hold **Right Ctrl** to issue a voice command. Release the key to process the recording with a locally stored GigaAM-v3 model.
 
 **No Vosk. No API. No network access at inference time.** The model is loaded from a local directory using `local_files_only=True`.
 
@@ -70,7 +70,7 @@ $env:GIGAAM_MODEL_DIR="D:\\AI\\GigaAM-v3"
 py main.py
 ```
 
-Dictation hotkey: `left ctrl+left shift`. Voice-command hotkey: `right ctrl`.
+Dictation hotkey: `right alt+right shift`. Voice-command hotkey: `right ctrl`.
 
 ## Notes
 
