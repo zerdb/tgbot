@@ -15,8 +15,17 @@ def copied_file_paths() -> list[str]:
     """Read CF_HDROP (files copied in Explorer with Ctrl+C) without extra packages."""
     if os.name != "nt":
         return []
+    from ctypes import wintypes
     user32 = ctypes.windll.user32
     shell32 = ctypes.windll.shell32
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.OpenClipboard.restype = wintypes.BOOL
+    user32.GetClipboardData.argtypes = [wintypes.UINT]
+    user32.GetClipboardData.restype = wintypes.HANDLE
+    user32.CloseClipboard.argtypes = []
+    user32.CloseClipboard.restype = wintypes.BOOL
+    shell32.DragQueryFileW.argtypes = [wintypes.HANDLE, wintypes.UINT, wintypes.LPWSTR, wintypes.UINT]
+    shell32.DragQueryFileW.restype = wintypes.UINT
     CF_HDROP = 15
     if not user32.OpenClipboard(None):
         return []
