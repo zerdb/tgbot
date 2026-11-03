@@ -42,14 +42,14 @@ def open_observer_history(parent, manager):
     dialog.minsize(800, 520)
     dialog.transient(parent)
 
-    category_var = tk.StringVar(value="Все события")
     status_var = tk.StringVar()
-    columns = ("time", "category", "event", "name", "duration", "path")
+    columns = ("time", "name", "duration", "path")
     tree = ttk.Treeview(dialog, columns=columns, show="headings", height=13)
     headings = {
-        "time": ("Время", 145), "category": ("Категория", 105),
-        "event": ("Событие", 130), "name": ("Программа / объект", 190),
-        "duration": ("Активность", 105), "path": ("Путь", 260),
+        "time": ("Последнее изменение", 165),
+        "name": ("Программа / объект", 260),
+        "duration": ("Активность", 120),
+        "path": ("Путь", 420),
     }
     for key, (label, width) in headings.items():
         tree.heading(key, text=label)
@@ -120,9 +120,7 @@ def open_observer_history(parent, manager):
     tree.bind("<<TreeviewSelect>>", show_details)
 
     def filtered_events():
-        choice = category_var.get()
-        category = next((key for key, label in CATEGORY_LABELS.items() if label == choice), None)
-        return manager.store.list_events(limit=500, category=category)
+        return manager.store.list_events(limit=500)
 
     def refresh_rows():
         selected = tree.selection()
@@ -143,9 +141,10 @@ def open_observer_history(parent, manager):
                 name = f"История копирования · {details.get('copies', len(details.get('history', [])))}"
             elif event.get("category") == "apps":
                 name = f"{name} · запусков: {details.get('starts', 0)}"
+            if event.get("category") == "files":
+                name = name + " · изменений: " + str(details.get("changes", 1))
             tree.insert("", "end", iid=str(event["id"]), values=(
-                stamp, CATEGORY_LABELS.get(event["category"], event["category"]),
-                event["event_type"], name, duration, event.get("object_path") or "",
+                stamp, name, duration, event.get("object_path") or "",
             ))
         status_var.set(
             f"Показано: {len(events)} из последних 500 · Всего в базе: {manager.store.count_events()}"
@@ -197,13 +196,6 @@ def open_observer_history(parent, manager):
 
     toolbar = ttk.Frame(dialog, padding=(12, 8, 12, 0))
     toolbar.pack(fill="x")
-    ttk.Label(toolbar, text="Фильтр:").pack(side="left")
-    filter_box = ttk.Combobox(
-        toolbar, textvariable=category_var, state="readonly",
-        values=["Все события", *CATEGORY_LABELS.values()], width=16,
-    )
-    filter_box.pack(side="left", padx=(6, 12))
-    filter_box.bind("<<ComboboxSelected>>", lambda _event: refresh_rows())
     ttk.Button(toolbar, text="Обновить", command=refresh_rows).pack(side="left")
     ttk.Button(toolbar, text="Экспорт CSV", command=export_csv).pack(side="right")
     ttk.Label(dialog, textvariable=status_var, padding=(12, 2)).pack(anchor="w")
