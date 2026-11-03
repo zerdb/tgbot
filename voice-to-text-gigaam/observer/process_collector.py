@@ -6,6 +6,7 @@ window titles, keystrokes, memory, or process contents.
 from __future__ import annotations
 
 import logging
+import ntpath
 import threading
 from pathlib import Path
 
@@ -17,6 +18,7 @@ DEFAULT_EXCLUDED_PROCESSES = {
     "dwm.exe", "sihost.exe", "ctfmon.exe", "runtimebroker.exe",
     "searchindexer.exe", "searchhost.exe", "securityhealthservice.exe",
     "spoolsv.exe", "taskhostw.exe", "dllhost.exe", "conhost.exe",
+    "sppsvc.exe", "mousocoreworker.exe", "smartscreen.exe",
 }
 
 
@@ -42,6 +44,21 @@ def _system_processes():
     return result
 
 
+# Windows infrastructure directories generate noise rather than useful app activity.
+SYSTEM_PATH_PARTS = (
+    r"\\windows\\system32\\",
+    r"\\windows\\syswow64\\",
+    r"\\windows\\winsxs\\",
+    r"\\windows\\servicing\\",
+    r"\\windows\\uus\\",
+)
+
+
+def _is_windows_system_path(path) -> bool:
+    normalized = ntpath.normcase(ntpath.normpath(str(path or ""))).replace("/", "\\\\")
+    return any(part in normalized for part in SYSTEM_PATH_PARTS)
+
+
 class ProcessCollector:
     """Poll process metadata and emit started/stopped events."""
 
@@ -64,6 +81,7 @@ class ProcessCollector:
             if str(data.get("name") or "").casefold() not in self.excluded_processes
             and (str(data.get("path") or "").casefold() not in self.excluded_processes)
             and bool(data.get("path"))
+            and not _is_windows_system_path(data.get("path"))
         }
 
     def scan_once(self, initial: bool = False) -> int:
