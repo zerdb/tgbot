@@ -93,8 +93,54 @@ class EventStore:
         occurred_at = occurred_at or now
         incoming = dict(details or {})
         with closing(self._connect()) as db, db:
-            # Keep one rolling row per app, and one rolling clipboard row.
-            if category in {"focus", "apps", "clipboard", "files"}:
+            # Keep one row for clipboard regardless of legacy object_name values.
+            if category == "clipboard":
+                rows = db.execute(
+                    """SELECT id, occurred_at, details_json, object_path
+                       FROM observer_events WHERE category='clipboard'
+                       ORDER BY id ASC"""
+                ).fetchall()
+                if rows:
+                    row = rows[0]
+                    old = json.loads(row["details_json"] or "{}")
+                    history = old.setdefault("history", [])
+                    seen = {item.get("sha256") for item in history if item.get("sha256")}
+                    for duplicate in rows[1:]:
+                        duplicate_details = json.loads(duplicate["details_json"] or "{}")
+                        for item in duplicate_details.get("history", []):
+                            digest = item.get("sha256")
+                            if not digest or digest not in seen:
+                                history.append(item)
+                                if digest:
+                                    seen.add(digest)
+                        if duplicate_details.get("text") and not history:
+                            old["text"] = duplicate_details["text"]
+                        db.execute("DELETE FROM observer_events WHERE id=?", (duplicate["id"],))
+                    text_value = incoming.get("text")
+                    digest = incoming.get("sha256")
+                    if text_value and (not history or history[-1].get("sha256") != digest):
+                        history.append({"copied_at": occurred_at, "text": text_value, "sha256": digest})
+                    old["text"] = text_value or old.get("text", "")
+                    old["sha256"] = digest or old.get("sha256")
+                    old["copies"] = len(history)
+                    db.execute(
+                        """UPDATE observer_events
+                           SET occurred_at=?, event_type=?, source=?, object_name=?,
+                               details_json=?, created_at=? WHERE id=?""",
+                        (occurred_at, event_type, source, "Буфер обмена",
+                         json.dumps(old, ensure_ascii=False, separators=(",", ":")),
+                         now, row["id"]),
+                    )
+                    return int(row["id"])
+                incoming["history"] = [{
+                    "copied_at": occurred_at,
+                    "text": incoming.get("text"),
+                    "sha256": incoming.get("sha256"),
+                }] if incoming.get("text") else []
+                incoming["copies"] = len(incoming["history"])
+
+            # Keep one rolling row per app and one row per file path.
+            if category in {"focus", "apps", "files"}:
                 key_name = (object_path if category == "files" else (object_name or category)) or ""
                 key_name = key_name.casefold()
                 if category == "files":
@@ -134,19 +180,6 @@ class EventStore:
                         counter = "starts" if event_type == "started" else "stops"
                         old[counter] = int(old.get(counter, 0) or 0) + 1
                         old["last_pid"] = incoming.get("pid", old.get("last_pid"))
-                    else:
-                        history = old.setdefault("history", [])
-                        text_value = incoming.get("text")
-                        digest = incoming.get("sha256")
-                        if text_value and (not history or history[-1].get("sha256") != digest):
-                            history.append({
-                                "copied_at": occurred_at,
-                                "text": text_value,
-                                "sha256": digest,
-                            })
-                        old["text"] = text_value or old.get("text", "")
-                        old["sha256"] = digest or old.get("sha256")
-                        old["copies"] = len(history)
                     db.execute(
                         """UPDATE observer_events
                            SET occurred_at=?, event_type=?, source=?, object_path=?,
@@ -168,14 +201,6 @@ class EventStore:
                 elif category == "apps":
                     incoming["starts"] = 1 if event_type == "started" else 0
                     incoming["stops"] = 1 if event_type == "stopped" else 0
-                elif category == "clipboard":
-                    text_value = incoming.get("text")
-                    incoming["history"] = [{
-                        "copied_at": occurred_at,
-                        "text": text_value,
-                        "sha256": incoming.get("sha256"),
-                    }] if text_value else []
-                    incoming["copies"] = len(incoming["history"])
 
             payload = json.dumps(incoming, ensure_ascii=False, separators=(",", ":"))
             if deduplication_key:
