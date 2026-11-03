@@ -331,7 +331,7 @@ def main():
     load_model()
     start_reminder_service()
     _observer = ObserverManager()
-    _observer.start()  # Remains inactive unless the user explicitly enabled it in settings.
+    _observer.start()  # Starts approved metadata collection; clipboard stays opt-in.
     progress("Голосовой ввод и голосовые команды готовы.")
     keyboard.add_hotkey(TEXT_HOTKEY, lambda: start_recording("text"), suppress=False)
     keyboard.add_hotkey(TEXT_HOTKEY, lambda: stop_recording(), suppress=False, trigger_on_release=True)
