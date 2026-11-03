@@ -18,6 +18,7 @@ from reminders import start_reminder_service, add_reminder
 from email_manager import list_email_contacts, begin_email, send_email_to_contact, has_pending_email, cancel_pending_email
 from contact_form import open_contact_form
 from file_search import search_web, search_files
+from assistant_window import AssistantWindow
 
 _STARTUP_TIME = time.perf_counter()
 
@@ -59,6 +60,12 @@ _recording = False
 _recording_mode = "text"
 _lock = threading.Lock()
 _transcription_lock = threading.Lock()
+_ui = None
+
+
+def update_ui_status(listening=None):
+    if _ui is not None:
+        _ui.set_status(listening=listening)
 
 
 def configure_ffmpeg():
@@ -121,11 +128,13 @@ def start_recording(mode: str):
         key_name = "правый Shift" if mode == "text" else "правый Ctrl"
         purpose = "для ввода текста" if mode == "text" else "для голосовой команды"
         print(f"Идёт запись {purpose}. Отпустите {key_name}, чтобы выполнить.")
+        update_ui_status("ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ")
     except (sd.PortAudioError, OSError) as exc:
         with _lock:
             _recording = False
         _stream = None
         print(f"Не удалось начать запись: {exc}")
+        update_ui_status("ОШИБКА ЗАПИСИ")
 
 
 def stop_recording():
@@ -142,8 +151,10 @@ def stop_recording():
             stream.stop()
         finally:
             stream.close()
+    update_ui_status("РАСПОЗНАЮ РЕЧЬ")
     if not chunks:
         print("Звук не записан: микрофон не передал аудиоданные.")
+        update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         return
     audio_data = np.concatenate(chunks, axis=0).reshape(-1)
     if audio_data.size == 0:
@@ -198,6 +209,7 @@ def transcribe_and_paste(audio_data: np.ndarray):
         traceback.print_exc()
     finally:
         _transcription_lock.release()
+        update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
 
 
 def normalize_command(text: str) -> str:
@@ -272,39 +284,34 @@ def transcribe_and_execute(audio_data: np.ndarray):
         traceback.print_exc()
     finally:
         _transcription_lock.release()
+        update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
 
 
 def main():
+    global _ui
     progress("Проверяю микрофон...")
-    if not check_microphone():
-        return
+    microphone_found = check_microphone()
     progress("Настраиваю FFmpeg...")
     configure_ffmpeg()
     progress("Начинаю загрузку GigaAM...")
     load_model()
     start_reminder_service()
     progress("Голосовой ввод и голосовые команды готовы.")
-    print("Правый Shift — диктовка текста; правый Ctrl — голосовые команды.")
-    print("Команды: заблокируй компьютер; перезагрузи компьютер; покажи загрузки; "
-          "открой настройки; очисти корзину; сделай скриншот; напомни ...; "
-          "найди в интернете ...; найди файл ...")
-    print("Для выхода нажмите Esc.")
     keyboard.on_press_key(TEXT_HOTKEY, lambda _: start_recording("text"), suppress=False)
     keyboard.on_release_key(TEXT_HOTKEY, lambda _: stop_recording(), suppress=False)
     keyboard.on_press_key(COMMAND_HOTKEY, lambda _: start_recording("command"), suppress=False)
     keyboard.on_release_key(COMMAND_HOTKEY, lambda _: stop_recording(), suppress=False)
-    try:
-        keyboard.wait("esc")
-    except KeyboardInterrupt:
-        pass
-    finally:
-        with _lock:
-            active = _recording
-        if active:
-            stop_recording()
-        keyboard.unhook_all()
-        print("Работа программы завершена.")
+    _ui = AssistantWindow(on_close=shutdown, microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
+    _ui.run()
 
+
+def shutdown():
+    with _lock:
+        active = _recording
+    if active:
+        stop_recording()
+    keyboard.unhook_all()
+    print("Работа программы завершена.")
 
 if __name__ == "__main__":
     main()
