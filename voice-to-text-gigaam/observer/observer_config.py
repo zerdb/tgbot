@@ -25,7 +25,15 @@ DEFAULT_CONFIG = {
     "watched_folders": [],
     "excluded_folders": [],
     "excluded_processes": [],
-    "created_with_consent": False
+    "created_with_consent": False,
+    "ai": {
+        "enabled": False,
+        "provider": "openai_compatible",
+        "base_url": "",
+        "model": "",
+        "api_key_env": "GIGAAM_OBSERVER_API_KEY",
+        "send_only_approved_summaries": True
+    }
 }
 
 _lock = RLock()
@@ -59,6 +67,9 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
                 k: bool(v) for k, v in categories.items()
                 if k in merged["categories"]
             })
+        ai = data.get("ai", {})
+        if isinstance(ai, dict):
+            merged["ai"].update({k: v for k, v in ai.items() if k in merged["ai"]})
         for key in ("watched_folders", "excluded_folders", "excluded_processes"):
             if not isinstance(merged.get(key), list):
                 merged[key] = []
@@ -78,6 +89,9 @@ def save_config(config: dict, path: Path = CONFIG_PATH) -> None:
                     k: bool(v) for k, v in categories.items()
                     if k in merged["categories"]
                 })
+        ai = config.get("ai", {}) if isinstance(config, dict) else {}
+        if isinstance(ai, dict):
+            merged["ai"].update({k: v for k, v in ai.items() if k in merged["ai"]})
         temp = path.with_suffix(".tmp")
         temp.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
         temp.replace(path)
