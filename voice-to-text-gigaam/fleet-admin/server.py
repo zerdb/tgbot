@@ -72,7 +72,7 @@ const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 document.querySelector('#rows').innerHTML=a.map(x=>'<tr><td><span class="dot '+(x.online?'':'off')+'"></span>'+(x.online?'В сети':'Нет связи')+'</td><td><b>'+esc(x.hostname)+'</b></td><td>'+esc(x.username)+'</td><td>'+esc(x.ip_address)+'</td><td>'+esc(x.os_name)+' '+esc(x.os_version)+'</td><td>'+esc(x.cpu)+' / '+esc(x.ram_gb)+' ГБ</td><td>'+esc(new Date(x.last_seen).toLocaleString())+'</td></tr>').join('')||'<tr><td colspan="7">Пока нет устройств</td></tr>';
  }catch(e){authMsg.textContent=e.message;document.querySelector('#rows').textContent='Введите токен сервера выше.'}}refresh();setInterval(refresh,15000);
 </script></html>"""
-                return self.reply(200, page.encode("utf-8"), "text/html; charset=utf-8")
+            return self.reply(200, page.encode("utf-8"), "text/html; charset=utf-8")
         if path == "/api/v1/computers":
             if not self.authorized():
                 return self.reply(401, {"error": "Authorization required"})
