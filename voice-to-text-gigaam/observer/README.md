@@ -4,7 +4,7 @@ GigaAM Observer is an opt-in, local activity-awareness subsystem for the Windows
 
 ## Current status
 
-The main assistant window now includes an Observer settings dialog. Monitoring stays off by default; the user must explicitly enable it, choose file and/or app monitoring, and confirm consent. Saving settings applies the selected collectors immediately; disabling Observer stops them. Only file and process categories are currently implemented.
+The main assistant window now includes Observer settings and a local event-history window with category filtering, manual notes, periodic refresh, and CSV export. Monitoring stays off by default; the user must explicitly enable it, choose file and/or app monitoring, and confirm consent. Saving settings applies the selected collectors immediately; disabling Observer stops them. Only file and process categories are currently implemented.
 
 This first milestone contains only the storage and configuration foundation:
 - SQLite event history and indexes;
@@ -23,7 +23,7 @@ Observer is **disabled by default**. Creating its database does not mean monitor
 
 The file collector takes an initial baseline and then polls every 10 seconds for created, modified and deleted files. The process collector takes an initial baseline and polls every 3 seconds for process starts and exits; very short-lived processes may be missed. It does not read file contents. Existing files are not imported into history. Only folders resolved from Windows known-folder locations are proposed by default; no whole-drive scan is performed. File monitoring remains off unless both Observer and the `files` category are explicitly enabled in config. Process monitoring remains off unless both Observer and the `apps` category are explicitly enabled.
 
-History has no automatic expiration. Users will have manual export and deletion controls in a later UI milestone.
+History has no automatic expiration. The history window can export the selected view to CSV. Manual event deletion is not yet exposed in the UI; the database remains local.
 
 ## Planned milestones
 
