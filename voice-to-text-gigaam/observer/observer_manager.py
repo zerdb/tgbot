@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 from .event_store import EventStore
-from .observer_config import OBSERVER_DIR, load_config
+from .file_collector import FileCollector, default_watch_folders
+from .observer_config import OBSERVER_DIR, load_config, save_config
 
 logger = logging.getLogger("gigaam.observer")
 
@@ -19,7 +20,11 @@ class ObserverManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.config = load_config(self.data_dir / "config.json")
         self.store = EventStore(self.data_dir / "observer.sqlite3")
+        if not self.config.get("watched_folders"):
+            self.config["watched_folders"] = default_watch_folders()
+            save_config(self.config, self.data_dir / "config.json")
         self.started = False
+        self._file_collector = None
 
     @property
     def is_enabled(self) -> bool:
@@ -31,11 +36,22 @@ class ObserverManager:
             logger.info("Observer is disabled; no activity is being collected.")
             return False
         self.started = True
-        logger.info("Observer core initialized. Event collectors are not yet enabled.")
+        if self.config.get("categories", {}).get("files", False):
+            folders = self.config.get("watched_folders", [])
+            if folders:
+                self._file_collector = FileCollector(folders, self.record_event)
+                self._file_collector.start()
+                logger.info("File collector started for %d selected folders.", len(folders))
+            else:
+                logger.warning("File monitoring is enabled but no folders are selected.")
+        logger.info("Observer core started.")
         return True
 
     def stop(self) -> None:
         self.started = False
+        if self._file_collector:
+            self._file_collector.stop()
+            self._file_collector = None
 
     def record_event(self, category: str, event_type: str, source: str,
                      object_name: str | None = None, object_path: str | None = None,
