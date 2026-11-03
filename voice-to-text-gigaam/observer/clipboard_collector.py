@@ -30,26 +30,51 @@ def redact_sensitive(text: str) -> str | None:
 
 
 def _read_clipboard_text():
+    """Read CF_UNICODETEXT using pointer-safe Win32 ctypes declarations."""
     if os.name != "nt":
         return None
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
+
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.OpenClipboard.restype = wintypes.BOOL
+    user32.GetClipboardData.argtypes = [wintypes.UINT]
+    user32.GetClipboardData.restype = wintypes.HANDLE
+    user32.CloseClipboard.argtypes = []
+    user32.CloseClipboard.restype = wintypes.BOOL
+
+    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalUnlock.restype = wintypes.BOOL
+
     CF_UNICODETEXT = 13
     if not user32.OpenClipboard(None):
         return None
+
     handle = None
+    pointer = None
     try:
         handle = user32.GetClipboardData(CF_UNICODETEXT)
         if not handle:
             return None
+
         pointer = kernel32.GlobalLock(handle)
         if not pointer:
             return None
-        try:
-            return ctypes.wstring_at(pointer)
-        finally:
-            kernel32.GlobalUnlock(handle)
+
+        # CF_UNICODETEXT is NUL-terminated UTF-16 text. The pointer is now
+        # correctly represented as a native-width void pointer on 64-bit Windows.
+        return ctypes.wstring_at(pointer)
+    except (OSError, ValueError):
+        logger.exception("Could not read Windows clipboard text")
+        return None
     finally:
+        if pointer and handle:
+            kernel32.GlobalUnlock(handle)
         user32.CloseClipboard()
 
 
