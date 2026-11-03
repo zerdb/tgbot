@@ -67,14 +67,21 @@ def open_email_form(initial_subject: str = ""):
         contacts = [f"{name} <{address}>" for name, address in book.items()]
         ttk.Label(outer, text="Получатель").pack(anchor="w")
         recipient_var = tk.StringVar()
+        selected_address = tk.StringVar()
         contact_addresses = {f"{name} <{address}>": address for name, address in book.items()}
+        # Also accept a contact's display name if the combobox text is edited.
+        name_addresses = {str(name).strip().casefold(): str(address).strip()
+                          for name, address in book.items()}
         recipient = ttk.Combobox(outer, textvariable=recipient_var, values=contacts, state="normal")
         recipient.pack(fill="x", pady=(3, 10))
         def select_contact(_event=None):
             selected = recipient_var.get().strip()
-            if selected in contact_addresses:
-                recipient_var.set(contact_addresses[selected])
+            address = contact_addresses.get(selected)
+            if address:
+                selected_address.set(address)
+                recipient_var.set(selected)
         recipient.bind("<<ComboboxSelected>>", select_contact)
+        recipient.bind("<KeyRelease>", lambda _event: selected_address.set(""))
 
         ttk.Label(outer, text="Тема").pack(anchor="w")
         subject_var = tk.StringVar(value=initial_subject or "Файлы")
@@ -94,13 +101,12 @@ def open_email_form(initial_subject: str = ""):
         attachment_paths: list[str] = []
 
         def update_subject_from_files():
-            if initial_subject.strip():
-                return
             names = [Path(path).name for path in attachment_paths]
             if names:
+                # Attachment names take priority over the generic voice-command subject.
                 subject_var.set(", ".join(names)[:240])
-            else:
-                subject_var.set("Файлы")
+            elif not subject_var.get().strip():
+                subject_var.set(initial_subject or "Файлы")
 
         def add_paths(paths):
             for item in paths:
@@ -133,11 +139,16 @@ def open_email_form(initial_subject: str = ""):
         def refresh_count():
             status_var.set(f"Вложений: {len(attachment_paths)}")
         def send():
-            address = recipient_var.get().strip()
-            if address in contact_addresses:
-                address = contact_addresses[address]
-            elif "<" in address and ">" in address:
-                address = address.rsplit("<", 1)[1].split(">", 1)[0].strip()
+            entered = recipient_var.get().strip()
+            address = selected_address.get().strip()
+            if not address:
+                address = contact_addresses.get(entered, "")
+            if not address:
+                address = name_addresses.get(entered.casefold(), "")
+            if not address and "<" in entered and ">" in entered:
+                address = entered.rsplit("<", 1)[1].split(">", 1)[0].strip()
+            if not address and "@" in entered:
+                address = entered
             if not address:
                 messagebox.showwarning("Нет получателя", "Выберите контакт или введите email.", parent=root)
                 recipient.focus_set()
