@@ -13,6 +13,7 @@ pyannote-audio==4.0.0
 torchcodec==0.7.0
 imageio-ffmpeg>=0.5.1
 Pillow>=10.0.0
+openpyxl>=3.1.2
 winotify>=1.1.0
 mftparser>=1.7.1
 psutil>=5.9.0
