@@ -142,6 +142,44 @@ class EventStore:
             result.append(item)
         return result
 
+
+    def save_suggestions(self, suggestions: list[dict]) -> int:
+        """Insert new pattern suggestions without overwriting user decisions."""
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        inserted = 0
+        with closing(self._connect()) as db, db:
+            for item in suggestions:
+                cursor = db.execute(
+                    """INSERT OR IGNORE INTO observer_suggestions
+                       (created_at, title, description, pattern_key, status)
+                       VALUES (?, ?, ?, ?, 'pending')""",
+                    (now, item["title"], item["description"], item["pattern_key"]),
+                )
+                inserted += max(0, cursor.rowcount)
+        return inserted
+
+    def list_suggestions(self, status: str | None = None, limit: int = 200) -> list[dict]:
+        limit = max(1, min(int(limit), 500))
+        query = "SELECT * FROM observer_suggestions"
+        params: list[Any] = []
+        if status:
+            query += " WHERE status=?"
+            params.append(status)
+        query += " ORDER BY created_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        with closing(self._connect()) as db, db:
+            return [dict(row) for row in db.execute(query, params).fetchall()]
+
+    def update_suggestion(self, suggestion_id: int, status: str, response: str | None = None) -> bool:
+        if status not in {"accepted", "dismissed", "pending"}:
+            raise ValueError("Unsupported suggestion status")
+        with closing(self._connect()) as db, db:
+            cursor = db.execute(
+                "UPDATE observer_suggestions SET status=?, user_response=? WHERE id=?",
+                (status, response, int(suggestion_id)),
+            )
+            return cursor.rowcount > 0
+
     def count_events(self) -> int:
         with closing(self._connect()) as db, db:
             return int(db.execute("SELECT COUNT(*) FROM observer_events").fetchone()[0])
