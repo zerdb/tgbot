@@ -22,6 +22,8 @@ def open_observer_settings(parent, manager):
     categories = current.setdefault("categories", {})
     files_var = tk.BooleanVar(value=bool(categories.get("files", False)))
     apps_var = tk.BooleanVar(value=bool(categories.get("apps", False)))
+    focus_var = tk.BooleanVar(value=bool(categories.get("focus", False)))
+    clipboard_var = tk.BooleanVar(value=bool(categories.get("clipboard", False)))
 
     outer = ttk.Frame(dialog, padding=18)
     outer.pack(fill="both", expand=True)
@@ -30,7 +32,7 @@ def open_observer_settings(parent, manager):
         outer,
         text=("Наблюдатель замечает выбранные системные события и хранит историю "
               "только на этом компьютере. Он не читает содержимое документов, "
-              "не записывает клавиатуру, экран, буфер обмена или браузер."),
+              "не записывает клавиатуру или экран. Буфер обмена сохраняется только после фильтрации секретов."),
         wraplength=470, justify="left"
     ).pack(anchor="w", pady=(8, 12))
 
@@ -44,6 +46,8 @@ def open_observer_settings(parent, manager):
                     variable=files_var).pack(anchor="w")
     ttk.Checkbutton(group, text="Запуск и завершение программ (имя, PID и путь)",
                     variable=apps_var).pack(anchor="w")
+    ttk.Checkbutton(group, text="Активное окно и длительность фокуса", variable=focus_var).pack(anchor="w")
+    ttk.Checkbutton(group, text="Текст буфера обмена (с отсечением распознаваемых секретов)", variable=clipboard_var).pack(anchor="w")
     watched = current.get("watched_folders", [])
     folders_text = "\\n".join(str(item) for item in watched) or "Папки не найдены — добавьте их в config.json."
     ttk.Label(group, text="Папки, которые проверяются на изменения:", foreground="#444444").pack(anchor="w", pady=(8, 2))
@@ -81,6 +85,8 @@ def open_observer_settings(parent, manager):
         updated["categories"].update({
             "files": bool(files_var.get()),
             "apps": bool(apps_var.get()),
+            "focus": bool(focus_var.get()),
+            "clipboard": bool(clipboard_var.get()),
             "printing": False,
             "usb": False,
             "browser": False,
@@ -88,6 +94,8 @@ def open_observer_settings(parent, manager):
         if not updated["enabled"]:
             updated["categories"]["files"] = False
             updated["categories"]["apps"] = False
+            updated["categories"]["focus"] = False
+            updated["categories"]["clipboard"] = False
         save_config(updated, manager.data_dir / "config.json")
         manager.stop()
         manager.config = updated
