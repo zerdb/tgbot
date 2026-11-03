@@ -1,4 +1,4 @@
-"""Persistent, explicit opt-in configuration for GigaAM Observer."""
+"""Persistent configuration for GigaAM Observer."""
 from __future__ import annotations
 
 import json
@@ -22,7 +22,6 @@ DEFAULT_CONFIG = {
         "clipboard": False,
         "printing": False,
         "usb": False,
-        "browser": True
     },
     "watched_folders": [],
     "excluded_folders": [],
