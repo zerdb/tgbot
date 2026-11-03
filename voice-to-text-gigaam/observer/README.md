@@ -51,3 +51,12 @@ History has no automatic expiration. The history window can export the selected 
 ## Local insights
 
 The "Анализ привычек" window runs deterministic analysis over the latest seven days of stored metadata. It can identify repeated application starts, applications seen across multiple days, and folders with repeated file changes. Each suggestion includes its evidence count/context, is deduplicated, and can be accepted or dismissed. The analysis does not call an internet AI service and does not inspect document contents. The user starts analysis manually; there is no automatic daily job yet.
+
+
+## Additional activity collectors
+
+- Foreground-window focus sessions record application name, executable path, PID, window title (up to 300 characters), and elapsed focus duration. Enable the `focus` category after reviewing the updated consent controls.
+- Clipboard monitoring is opt-in and stores changed plain text locally only after conservative secret-pattern checks. Likely password/token strings, email addresses, and oversized text are discarded. This is a best-effort filter, not a guarantee that every sensitive value is detected; do not use it as a secure vault.
+- Common Windows infrastructure processes are excluded from the process event stream by default.
+- Browser-tab collection is not implemented in this milestone. A supported browser integration/extension is needed to enumerate tabs reliably without scraping page contents.
+- Automatic start remains tied to the Observer's saved enabled state and explicit consent; newly introduced categories require review in settings before they collect.
