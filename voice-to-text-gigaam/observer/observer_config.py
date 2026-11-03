@@ -18,6 +18,8 @@ DEFAULT_CONFIG = {
     "categories": {
         "files": False,
         "apps": False,
+        "focus": False,
+        "clipboard": False,
         "printing": False,
         "usb": False,
         "browser": False
