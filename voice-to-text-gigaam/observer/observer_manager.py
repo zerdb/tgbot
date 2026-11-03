@@ -8,6 +8,8 @@ from pathlib import Path
 from .event_store import EventStore
 from .file_collector import FileCollector, default_watch_folders
 from .process_collector import ProcessCollector
+from .focus_collector import FocusCollector
+from .clipboard_collector import ClipboardCollector
 from .observer_config import OBSERVER_DIR, load_config, save_config
 from .pattern_analyzer import analyze_patterns
 
@@ -28,6 +30,8 @@ class ObserverManager:
         self.started = False
         self._file_collector = None
         self._process_collector = None
+        self._focus_collector = None
+        self._clipboard_collector = None
 
     @property
     def is_enabled(self) -> bool:
@@ -55,6 +59,16 @@ class ObserverManager:
             self._process_collector.start()
             logger.info("Process collector started.")
 
+        categories = self.config.get("categories", {})
+        excluded = self.config.get("excluded_processes", [])
+        if categories.get("focus", False):
+            self._focus_collector = FocusCollector(self.record_event, excluded=excluded)
+            self._focus_collector.start()
+            logger.info("Foreground focus collector started.")
+        if categories.get("clipboard", False):
+            self._clipboard_collector = ClipboardCollector(self.record_event)
+            self._clipboard_collector.start()
+            logger.info("Protected clipboard collector started.")
         logger.info("Observer core started.")
         return True
 
@@ -73,6 +87,12 @@ class ObserverManager:
         if self._process_collector:
             self._process_collector.stop()
             self._process_collector = None
+        if self._focus_collector:
+            self._focus_collector.stop()
+            self._focus_collector = None
+        if self._clipboard_collector:
+            self._clipboard_collector.stop()
+            self._clipboard_collector = None
 
     def record_event(self, category: str, event_type: str, source: str,
                      object_name: str | None = None, object_path: str | None = None,
