@@ -9,7 +9,7 @@ This first milestone contains only the storage and configuration foundation:
 - provider-agnostic internet AI adapter for OpenAI-compatible APIs;
 - separate JSON configuration with safe defaults;
 - an Observer lifecycle manager;
-- opt-in file metadata monitoring for selected folders (Desktop, Documents, Pictures, Downloads);
+- opt-in file metadata monitoring for selected folders (Desktop, Documents, Pictures, Downloads);\n- opt-in process start/stop monitoring (process name, PID and executable path only);
 
 Observer is **disabled by default**. Creating its database does not mean monitoring is enabled. Event collection starts only after explicit opt-in and category selection.
 
@@ -19,14 +19,14 @@ Observer is **disabled by default**. Creating its database does not mean monitor
 - `config.json` — preferences;
 - `observer.sqlite3` — event history, notes, and suggestions.
 
-The file collector takes an initial baseline and then polls every 10 seconds for created, modified and deleted files. It does not read file contents. Existing files are not imported into history. Only folders resolved from Windows known-folder locations are proposed by default; no whole-drive scan is performed. File monitoring remains off unless both Observer and the `files` category are explicitly enabled in config.
+The file collector takes an initial baseline and then polls every 10 seconds for created, modified and deleted files. The process collector takes an initial baseline and polls every 3 seconds for process starts and exits; very short-lived processes may be missed. It does not read file contents. Existing files are not imported into history. Only folders resolved from Windows known-folder locations are proposed by default; no whole-drive scan is performed. File monitoring remains off unless both Observer and the `files` category are explicitly enabled in config. Process monitoring remains off unless both Observer and the `apps` category are explicitly enabled.
 
 History has no automatic expiration. Users will have manual export and deletion controls in a later UI milestone.
 
 ## Planned milestones
 
 1. Storage, configuration, and lifecycle foundation (current).
-2. File collector for the four selected user folders (implemented); application launch collector (next).
+2. File collector for the four selected user folders and process lifecycle collector (implemented).
 3. USB and print event collectors.
 4. Daily repetition analysis and suggestion engine.
 5. Observer settings/history window and tray integration.
@@ -41,6 +41,6 @@ History has no automatic expiration. Users will have manual export and deletion 
 
 - No browser tracking is included in the agreed scope.
 - No keystroke logging, clipboard capture, screen recording, or microphone surveillance.
-- No document contents are collected by default.
+- No document contents are collected by default.\n- Process monitoring does not collect command lines, window titles, keystrokes, or process memory.
 - Collectors will be individually configurable and visibly indicated.
 - The database remains local. Any future AI request will send only a minimized, user-approved summary, never the raw event database.
