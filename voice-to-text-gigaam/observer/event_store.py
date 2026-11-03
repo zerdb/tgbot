@@ -91,8 +91,73 @@ class EventStore:
             raise ValueError(f"Unsupported event category: {category}")
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         occurred_at = occurred_at or now
-        payload = json.dumps(details or {}, ensure_ascii=False, separators=(",", ":"))
+        incoming = dict(details or {})
         with closing(self._connect()) as db, db:
+            # Keep one rolling row per app, and one rolling clipboard row.
+            if category in {"focus", "apps", "clipboard"}:
+                key_name = (object_name or category).casefold()
+                row = db.execute(
+                    """SELECT id, occurred_at, details_json, event_type, object_path
+                       FROM observer_events
+                       WHERE category=? AND lower(coalesce(object_name, ''))=?
+                       ORDER BY id DESC LIMIT 1""",
+                    (category, key_name),
+                ).fetchone()
+                if row:
+                    old = json.loads(row["details_json"] or "{}")
+                    if category == "focus":
+                        old_seconds = float(old.get("duration_seconds", 0) or 0)
+                        new_seconds = float(incoming.get("duration_seconds", 0) or 0)
+                        old["duration_seconds"] = round(old_seconds + new_seconds, 1)
+                        old["sessions"] = int(old.get("sessions", 0) or 0) + 1
+                        titles = old.setdefault("window_titles", [])
+                        title = incoming.get("window_title")
+                        if title and title not in titles:
+                            titles.append(title)
+                        old["last_pid"] = incoming.get("pid", old.get("last_pid"))
+                    elif category == "apps":
+                        counter = "starts" if event_type == "started" else "stops"
+                        old[counter] = int(old.get(counter, 0) or 0) + 1
+                        old["last_pid"] = incoming.get("pid", old.get("last_pid"))
+                    else:
+                        history = old.setdefault("history", [])
+                        text_value = incoming.get("text")
+                        digest = incoming.get("sha256")
+                        if text_value and (not history or history[-1].get("sha256") != digest):
+                            history.append({
+                                "copied_at": occurred_at,
+                                "text": text_value,
+                                "sha256": digest,
+                            })
+                        old["text"] = text_value or old.get("text", "")
+                        old["sha256"] = digest or old.get("sha256")
+                        old["copies"] = len(history)
+                    db.execute(
+                        """UPDATE observer_events
+                           SET occurred_at=?, event_type=?, source=?, object_path=?,
+                               details_json=?, created_at=?
+                           WHERE id=?""",
+                        (occurred_at, event_type, source, object_path or row["object_path"],
+                         json.dumps(old, ensure_ascii=False, separators=(",", ":")),
+                         now, row["id"]),
+                    )
+                    return int(row["id"])
+
+                if category == "focus":
+                    incoming["sessions"] = 1
+                elif category == "apps":
+                    incoming["starts"] = 1 if event_type == "started" else 0
+                    incoming["stops"] = 1 if event_type == "stopped" else 0
+                elif category == "clipboard":
+                    text_value = incoming.get("text")
+                    incoming["history"] = [{
+                        "copied_at": occurred_at,
+                        "text": text_value,
+                        "sha256": incoming.get("sha256"),
+                    }] if text_value else []
+                    incoming["copies"] = len(incoming["history"])
+
+            payload = json.dumps(incoming, ensure_ascii=False, separators=(",", ":"))
             if deduplication_key:
                 exists = db.execute(
                     """SELECT id FROM observer_events
@@ -179,6 +244,15 @@ class EventStore:
                 (status, response, int(suggestion_id)),
             )
             return cursor.rowcount > 0
+
+    def clear_history(self) -> None:
+        """Delete all event history, saved suggestions, and manual notes."""
+        with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM observer_notes")
+            db.execute("DELETE FROM observer_suggestions")
+            db.execute("DELETE FROM observer_events")
+            db.execute("DELETE FROM sqlite_sequence WHERE name IN "
+                       "('observer_events', 'observer_suggestions', 'observer_notes')")
 
     def count_events(self) -> int:
         with closing(self._connect()) as db, db:
