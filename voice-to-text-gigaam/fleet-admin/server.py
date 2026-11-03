@@ -51,27 +51,31 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/health":
             return self.reply(200, {"ok": True, "version": "0.1"})
-        if path == "/" or path == "/api/v1/computers":
-            if not self.authorized():
-                return self.reply(401, {"error": "Authorization required"})
-            if path == "/":
-                page = """<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        if path == "/":
+            page = """<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GigaAM IT</title><style>
 body{font:15px Segoe UI,Arial;background:#10151d;color:#e8edf5;margin:0;padding:28px}main{max-width:1200px;margin:auto}
 h1{font-size:26px}.muted{color:#9aa8ba}.cards{display:flex;gap:12px;margin:22px 0}.card{background:#1b2532;padding:18px;border-radius:12px;min-width:130px}
 .num{font-size:28px;font-weight:700}table{width:100%;border-collapse:collapse;background:#1b2532;border-radius:12px;overflow:hidden}
 th,td{text-align:left;padding:12px;border-bottom:1px solid #303b49}th{color:#9fb0c5}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#36c98f;margin-right:7px}.off{background:#e0a04b}
 </style><main><h1>GigaAM · IT-панель</h1><div class="muted">Инвентаризация · обновление каждые 15 секунд</div>
+<div style="margin:18px 0"><input id="token" type="password" placeholder="Токен из консоли сервера" style="padding:10px;width:320px;max-width:70%;background:#1b2532;color:white;border:1px solid #526174;border-radius:6px"><button id="save" style="padding:10px;margin-left:8px">Подключить</button><span id="auth" class="muted"></span></div>
 <section class="cards"><div class="card">Всего ПК<div class="num" id="total">—</div></div><div class="card">В сети<div class="num" id="online">—</div></div><div class="card">Не в сети<div class="num" id="offline">—</div></div></section>
 <table><thead><tr><th>Статус</th><th>Компьютер</th><th>Пользователь</th><th>IP</th><th>Windows</th><th>CPU / RAM</th><th>Последний контакт</th></tr></thead><tbody id="rows"><tr><td colspan="7">Загрузка…</td></tr></tbody></table></main>
 <script>
-async function refresh(){try{const r=await fetch('/api/v1/computers');if(!r.ok)throw Error('API '+r.status);const a=(await r.json()).computers,on=a.filter(x=>x.online).length;
+const tokenBox=document.querySelector('#token'),authMsg=document.querySelector('#auth');
+tokenBox.value=localStorage.getItem('gigaam_token')||'';
+document.querySelector('#save').onclick=()=>{localStorage.setItem('gigaam_token',tokenBox.value.trim());refresh()};
+async function refresh(){try{const r=await fetch('/api/v1/computers',{headers:{Authorization:'Bearer '+(localStorage.getItem('gigaam_token')||'')}});if(!r.ok)throw Error('Токен не принят (HTTP '+r.status+')');authMsg.textContent='Подключено';const a=(await r.json()).computers,on=a.filter(x=>x.online).length;
 document.querySelector('#total').textContent=a.length;document.querySelector('#online').textContent=on;document.querySelector('#offline').textContent=a.length-on;
 const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 document.querySelector('#rows').innerHTML=a.map(x=>'<tr><td><span class="dot '+(x.online?'':'off')+'"></span>'+(x.online?'В сети':'Нет связи')+'</td><td><b>'+esc(x.hostname)+'</b></td><td>'+esc(x.username)+'</td><td>'+esc(x.ip_address)+'</td><td>'+esc(x.os_name)+' '+esc(x.os_version)+'</td><td>'+esc(x.cpu)+' / '+esc(x.ram_gb)+' ГБ</td><td>'+esc(new Date(x.last_seen).toLocaleString())+'</td></tr>').join('')||'<tr><td colspan="7">Пока нет устройств</td></tr>';
-}catch(e){document.querySelector('#rows').textContent='Ошибка: '+e.message}}refresh();setInterval(refresh,15000);
+ }catch(e){authMsg.textContent=e.message;document.querySelector('#rows').textContent='Введите токен сервера выше.'}}refresh();setInterval(refresh,15000);
 </script></html>"""
                 return self.reply(200, page.encode("utf-8"), "text/html; charset=utf-8")
+        if path == "/api/v1/computers":
+            if not self.authorized():
+                return self.reply(401, {"error": "Authorization required"})
             with db_connect() as db:
                 rows = [dict(x) for x in db.execute("SELECT * FROM computers ORDER BY hostname COLLATE NOCASE")]
             for row in rows:
