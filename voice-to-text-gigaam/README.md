@@ -1,6 +1,6 @@
 # Voice to Text — Local GigaAM-v3
 
-Offline push-to-talk voice typing and voice commands for Windows. Hold **Right Shift** to dictate text; hold **Right Ctrl** to issue a voice command. Release the key to process the recording with a locally stored GigaAM-v3 model.
+Offline push-to-talk voice typing and voice commands for Windows. Hold **Left Ctrl + Left Shift** together to dictate text; hold **Right Ctrl** to issue a voice command. Release the key to process the recording with a locally stored GigaAM-v3 model.
 
 **No Vosk. No API. No network access at inference time.** The model is loaded from a local directory using `local_files_only=True`.
 
@@ -59,7 +59,7 @@ py main.py
 ```
 
 1. Wait for the model to load.
-2. Hold **Right Shift** and speak to dictate text, or hold **Right Ctrl** and speak a command.
+2. Hold **Left Ctrl + Left Shift** together and speak to dictate text, or hold **Right Ctrl** and speak a command.
 3. Release the key to process the recording.
 4. Press **Esc** to exit.
 
@@ -70,7 +70,7 @@ $env:GIGAAM_MODEL_DIR="D:\\AI\\GigaAM-v3"
 py main.py
 ```
 
-Optional setting: `PUSH_TO_TALK_KEY` changes the recording key (default: `right ctrl`).
+Dictation hotkey: `left ctrl+left shift`. Voice-command hotkey: `right ctrl`.
 
 ## Notes
 
@@ -98,4 +98,4 @@ The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAss
 
 ## Tkinter interface
 
-After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Right Shift for dictation or Right Ctrl for a voice command; release the key to process the audio. Close the window to exit.
+After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Left Ctrl + Left Shift for dictation or Right Ctrl for a voice command; release the keys to process the audio. Close the window to exit.
