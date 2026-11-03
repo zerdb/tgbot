@@ -17,7 +17,7 @@ logger = logging.getLogger("gigaam.observer")
 
 
 class ObserverManager:
-    """Owns Observer configuration and storage; collectors are added in later stages."""
+    """Owns Observer configuration, local storage, and collector lifecycles."""
 
     def __init__(self, data_dir: Path | None = None):
         self.data_dir = Path(data_dir) if data_dir else OBSERVER_DIR
@@ -47,7 +47,7 @@ class ObserverManager:
         return bool(self.config.get("enabled", False))
 
     def start(self) -> bool:
-        """Start only after explicit opt-in; currently initializes the safe core."""
+        """Start approved metadata collectors; clipboard remains opt-in."""
         if not self.is_enabled:
             logger.info("Observer is disabled; no activity is being collected.")
             return False
@@ -89,19 +89,18 @@ class ObserverManager:
         return created
 
     def stop(self) -> None:
+        # Keep event recording enabled while collectors flush their final state.
+        for attribute in (
+            "_file_collector", "_process_collector",
+            "_focus_collector", "_clipboard_collector",
+        ):
+            collector = getattr(self, attribute, None)
+            if collector:
+                try:
+                    collector.stop()
+                finally:
+                    setattr(self, attribute, None)
         self.started = False
-        if self._file_collector:
-            self._file_collector.stop()
-            self._file_collector = None
-        if self._process_collector:
-            self._process_collector.stop()
-            self._process_collector = None
-        if self._focus_collector:
-            self._focus_collector.stop()
-            self._focus_collector = None
-        if self._clipboard_collector:
-            self._clipboard_collector.stop()
-            self._clipboard_collector = None
 
     def record_event(self, category: str, event_type: str, source: str,
                      object_name: str | None = None, object_path: str | None = None,
