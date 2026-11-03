@@ -15,10 +15,7 @@ from pathlib import Path
 
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_settings, empty_recycle_bin, take_screenshot
 from reminders import start_reminder_service, add_reminder
-from email_manager import list_email_contacts
-from email_form import open_email_form
-from contact_form import open_contact_form
-from file_search import search_web, search_files
+from file_search import search_web, search_files, start_file_search_ui
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow
 
@@ -231,32 +228,7 @@ def handle_command(text: str):
     def begins(*phrases):
         return any(command_text.startswith(normalize_command(item) + " ") for item in phrases)
 
-    # Email: common conversational variants and ASR-friendly wording.
-    email_starts = (
-        "отправь на почту", "отправить на почту", "отправь по почте", "отправить по почте",
-        "скинь на почту", "скинь по почте", "пришли на почту", "пришли по почте",
-        "пошли на почту", "пошли по почте", "перешли на почту", "перешли по почте",
-        "сбрось на почту", "отправь на email", "отправить на email", "скинь на email",
-        "пришли на email", "отправь письмо на", "отправить письмо на",
-    )
-    if exact("отправь на почту", "отправить на почту", "отправь письмо",
-             "открыть отправку почты", "открой почту", "создай письмо",
-             "новое письмо", "написать письмо", "открой отправку письма") or begins(*email_starts):
-        subject = re.sub(
-            r"^\s*(?:отправ(?:ь|ить)|скинь|пришли|пошли|перешли|сбрось)"
-            r"(?:\s+мне)?\s+(?:это\s+)?(?:письмо\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)\s*",
-            "", text, flags=re.IGNORECASE,
-        ).strip(" .,!?:;«»")
-        open_email_form(subject, _ui.root if _ui is not None else None)
-        return
-
-    if exact("добавить контакт", "добавь контакт", "создать контакт", "новый контакт",
-             "сохрани контакт", "запиши контакт", "добавить адрес", "новый адрес"):
-        open_contact_form()
-    elif exact("покажи контакты", "покажи адресную книгу", "список контактов",
-               "мои контакты", "открой контакты", "покажи почтовые контакты"):
-        list_email_contacts()
-    elif exact("блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
+    if exact("блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
                "заблокируй комп", "заблокируй экран", "заблокируй пк",
                "блокируй компьютер", "блокируй комп", "закблокируй компьютер",
                "закблокируй комп", "заблокировать компьютер", "заблокировать комп",
@@ -338,6 +310,7 @@ def main():
         on_command=handle_command,
         microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН",
     )
+    start_file_search_ui(_ui.root)
     _ui.run()
 
 

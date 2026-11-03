@@ -30,12 +30,6 @@ class AssistantWindow:
         ttk.Label(outer, text="Горячие клавиши: диктовка — Right Alt + Right Shift; команда — Right Ctrl.",
                   wraplength=700).pack(anchor="w", pady=(0, 10))
 
-        mail = ttk.LabelFrame(outer, text="Почта", padding=9)
-        mail.pack(fill="x", pady=(0, 10))
-        ttk.Button(mail, text="Новое письмо", command=lambda: self.on_command("создай письмо")).pack(side="left", padx=(0, 6))
-        ttk.Button(mail, text="Отправить файлы на почту", command=lambda: self.on_command("создай письмо")).pack(side="left")
-        ttk.Label(mail, text="Вложения выбираются в форме письма.").pack(side="left", padx=10)
-
         ttk.Label(outer, text="Остальные команды — выберите раздел", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 5))
         row = ttk.Frame(outer)
         row.pack(fill="x", pady=(0, 8))
@@ -43,7 +37,6 @@ class AssistantWindow:
             ("Windows ▾", [("Заблокировать компьютер", "заблокируй компьютер"), ("Перезагрузить компьютер", "перезагрузи компьютер"), ("Открыть загрузки", "открой загрузки"), ("Открыть настройки", "открой настройки"), ("Очистить корзину", "очисти корзину"), ("Сделать скриншот", "сделай скриншот")]),
             ("Файлы ▾", [("Найти файл", "найди файл"), ("Разобрать папку", "разбери папку")]),
             ("Интернет ▾", [("Поиск в интернете", "найди в интернете"), ("Создать напоминание", "напомни")]),
-            ("Контакты ▾", [("Добавить контакт", "добавить контакт"), ("Показать контакты", "покажи контакты")]),
         ]
         for label, commands in groups:
             button = ttk.Menubutton(row, text=label)
