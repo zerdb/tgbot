@@ -82,7 +82,7 @@ def open_email_form(initial_subject: str = ""):
         ttk.Entry(outer, textvariable=manual_address_var).pack(fill="x", pady=(3, 10))
 
         ttk.Label(outer, text="Тема").pack(anchor="w")
-        subject_var = tk.StringVar(value=initial_subject.strip() or "Файлы")
+        subject_var = tk.StringVar(value=initial_subject.strip())
         ttk.Entry(outer, textvariable=subject_var).pack(fill="x", pady=(3, 10))
 
         ttk.Label(outer, text="Текст письма").pack(anchor="w")
@@ -99,11 +99,13 @@ def open_email_form(initial_subject: str = ""):
         attachment_paths: list[str] = []
 
         def update_subject_from_files():
+            # Always derive the automatic subject from the current attachment list.
+            # Only file names are used; full directory paths never enter the subject.
             names = [Path(path).name for path in attachment_paths]
             if names:
                 subject_var.set(", ".join(names)[:240])
-            elif not subject_var.get().strip():
-                subject_var.set(initial_subject.strip() or "Файлы")
+            else:
+                subject_var.set(initial_subject.strip())
 
         def add_paths(paths):
             for item in paths:
@@ -158,6 +160,9 @@ def open_email_form(initial_subject: str = ""):
             ):
                 return
 
+            # Final synchronization prevents sending a stale/default subject even if
+            # the clipboard or file picker populated attachments just before Send.
+            update_subject_from_files()
             subject = subject_var.get().strip() or "Файлы"
             content = body.get("1.0", "end-1c")
             paths = list(attachment_paths)
