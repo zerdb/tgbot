@@ -4,6 +4,8 @@ GigaAM Observer is an opt-in, local activity-awareness subsystem for the Windows
 
 ## Current status
 
+The main assistant window now includes an Observer settings dialog. Monitoring stays off by default; the user must explicitly enable it, choose file and/or app monitoring, and confirm consent. Saving settings applies the selected collectors immediately; disabling Observer stops them. Only file and process categories are currently implemented.
+
 This first milestone contains only the storage and configuration foundation:
 - SQLite event history and indexes;
 - provider-agnostic internet AI adapter for OpenAI-compatible APIs;
@@ -29,7 +31,7 @@ History has no automatic expiration. Users will have manual export and deletion 
 2. File collector for the four selected user folders and process lifecycle collector (implemented).
 3. USB and print event collectors.
 4. Daily repetition analysis and suggestion engine.
-5. Observer settings/history window and tray integration.
+5. Observer history window, tray integration, and richer folder/exclusion controls (settings dialog started).
 6. Optional internet AI adapter for explaining detected patterns and drafting suggestions.
 7. Windows startup integration and final acceptance checks.
 
