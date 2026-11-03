@@ -66,7 +66,7 @@ def open_email_form(initial_subject: str = ""):
         book_items = list(load_address_book().items())
         contact_names = [name for name, _address in book_items]
         ttk.Label(outer, text="Контакт из адресной книги").pack(anchor="w")
-        contact_var = tk.StringVar()
+        contact_var = tk.StringVar(master=root)
         recipient = ttk.Combobox(outer, textvariable=contact_var, values=contact_names, state="readonly")
         recipient.pack(fill="x", pady=(3, 8))
         selected_address = {"value": ""}
@@ -78,11 +78,11 @@ def open_email_form(initial_subject: str = ""):
         recipient.bind("<<ComboboxSelected>>", select_contact)
 
         ttk.Label(outer, text="Или введите email вручную").pack(anchor="w")
-        manual_address_var = tk.StringVar()
+        manual_address_var = tk.StringVar(master=root)
         ttk.Entry(outer, textvariable=manual_address_var).pack(fill="x", pady=(3, 10))
 
         ttk.Label(outer, text="Тема").pack(anchor="w")
-        subject_var = tk.StringVar(value=initial_subject.strip())
+        subject_var = tk.StringVar(master=root, value=initial_subject.strip())
         ttk.Entry(outer, textvariable=subject_var).pack(fill="x", pady=(3, 10))
 
         ttk.Label(outer, text="Текст письма").pack(anchor="w")
