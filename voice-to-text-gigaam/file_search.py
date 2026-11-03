@@ -20,10 +20,10 @@ def search_web(text: str):
     webbrowser.open("https://www.google.com/search?q=" + quote_plus(query))
     print(f"Открываю поиск в интернете: {query}")
 
-def show_file_results(paths: list[Path], query: str):
+def show_file_results(parent, paths: list[Path], query: str):
     import tkinter as tk
     from tkinter import ttk, messagebox
-    root = tk.Tk()
+    root = tk.Toplevel(parent)
     root.title(f"Результаты поиска: {query}")
     root.geometry("850x420")
     root.minsize(550, 260)
@@ -55,9 +55,11 @@ def show_file_results(paths: list[Path], query: str):
                 messagebox.showerror("Не удалось открыть файл", str(exc))
     listing.bind("<Double-Button-1>", open_selected)
     ttk.Button(root, text="Открыть выбранный файл", command=open_selected).pack(pady=(0, 12))
-    root.mainloop()
+    root.transient(parent)
+    root.lift()
+    root.focus_force()
 
-def search_files(text: str):
+def search_files(text: str, parent=None):
     # Поддерживаем обе формулировки: «найди файл ...» и «найди ...».
     query = re.sub(r"^\s*найди\s+(?:файл\s+)?", "", text, flags=re.IGNORECASE).strip().strip('"«»')
     # Убираем знаки препинания, которые распознавание речи часто добавляет в конце фразы.
@@ -67,9 +69,12 @@ def search_files(text: str):
     if not query:
         print("Не распознано имя файла. Скажите, например: «найди файл договор».")
         return
-    threading.Thread(target=run_file_search, args=(query,), daemon=True, name="file-search").start()
+    if parent is None:
+        print("Поиск файлов требует запущенного главного окна приложения.")
+        return
+    threading.Thread(target=run_file_search, args=(query, parent), daemon=True, name="file-search").start()
 
-def run_file_search(query: str):
+def run_file_search(query: str, parent):
     print(f"Ищу «{query}» по MFT и SQLite. Первое индексирование может занять некоторое время...")
     try:
         matches = refresh_and_search(
@@ -79,7 +84,7 @@ def run_file_search(query: str):
     except Exception as exc:
         print(f"Ошибка MFT-поиска: {exc}")
         try:
-            show_notification("Поиск файлов", str(exc))
+            parent.after(0, lambda: show_notification("Поиск файлов", str(exc)))
         except Exception:
             pass
         return
@@ -87,14 +92,14 @@ def run_file_search(query: str):
     if not matches:
         print(f"Файлы по запросу «{query}» не найдены.")
         try:
-            show_notification("Поиск файлов", f"Файлы «{query}» не найдены.")
+            parent.after(0, lambda: show_notification("Поиск файлов", f"Файлы «{query}» не найдены."))
         except Exception:
             pass
         return
 
     print(f"Найдено файлов: {len(matches)}")
     try:
-        show_file_results(matches, query)
+        parent.after(0, lambda: show_file_results(parent, matches, query))
     except Exception as exc:
         print(f"Не удалось открыть окно результатов: {exc}")
         traceback.print_exc()

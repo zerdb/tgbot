@@ -1,4 +1,4 @@
-"""Main Tkinter window with clickable command shortcuts and live status."""
+"""Compact main Tkinter window with dropdown command groups."""
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
@@ -7,8 +7,8 @@ class AssistantWindow:
     def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА"):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
-        self.root.geometry("900x760")
-        self.root.minsize(700, 580)
+        self.root.geometry("760x570")
+        self.root.minsize(620, 480)
         self.on_close = on_close
         self.on_command = on_command
         self.microphone_var = tk.StringVar(value=microphone_status)
@@ -17,65 +17,43 @@ class AssistantWindow:
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def _build(self):
-        outer = ttk.Frame(self.root, padding=16)
+        outer = ttk.Frame(self.root, padding=14)
         outer.pack(fill="both", expand=True)
-        ttk.Label(outer, text="Голосовой помощник GigaAM", font=("Segoe UI", 18, "bold")).pack(anchor="w")
-        ttk.Label(outer, text="Работает локально: распознавание речи выполняется на этом компьютере.").pack(anchor="w", pady=(2, 12))
-        status = ttk.LabelFrame(outer, text="Состояние системы", padding=10)
-        status.pack(fill="x", pady=(0, 12))
-        ttk.Label(status, text="Микрофон:", font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 8))
-        ttk.Label(status, textvariable=self.microphone_var, foreground="#16723b").grid(row=0, column=1, sticky="w")
-        ttk.Label(status, text="Прослушивание команд:", font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
-        ttk.Label(status, textvariable=self.listening_var, foreground="#1558a6").grid(row=1, column=1, sticky="w", pady=(6, 0))
-        ttk.Label(outer, text="Горячие клавиши", font=("Segoe UI", 12, "bold")).pack(anchor="w")
-        ttk.Label(outer, text="Диктовка: Right Alt + Right Shift. Голосовая команда: Right Ctrl. "
-                              "Если микрофон недоступен, используйте кнопки ниже.",
-                  wraplength=840).pack(anchor="w", pady=(3, 10))
-        ttk.Label(outer, text="Команды — нажмите для запуска", font=("Segoe UI", 13, "bold")).pack(anchor="w")
-        canvas_frame = ttk.Frame(outer)
-        canvas_frame.pack(fill="both", expand=True, pady=(6, 8))
-        canvas = tk.Canvas(canvas_frame, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
-        button_frame = ttk.Frame(canvas, padding=(2, 2))
-        button_frame.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=button_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        ttk.Label(outer, text="Голосовой помощник GigaAM", font=("Segoe UI", 17, "bold")).pack(anchor="w")
+        ttk.Label(outer, text="Распознавание речи работает локально на этом компьютере.").pack(anchor="w", pady=(2, 9))
+        status = ttk.LabelFrame(outer, text="Состояние", padding=8)
+        status.pack(fill="x", pady=(0, 9))
+        ttk.Label(status, text="Микрофон:", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(status, textvariable=self.microphone_var, foreground="#16723b").grid(row=0, column=1, sticky="w", padx=(6, 18))
+        ttk.Label(status, text="Команды:", font=("Segoe UI", 9, "bold")).grid(row=0, column=2, sticky="w")
+        ttk.Label(status, textvariable=self.listening_var, foreground="#1558a6").grid(row=0, column=3, sticky="w", padx=6)
+        ttk.Label(outer, text="Горячие клавиши: диктовка — Right Alt + Right Shift; команда — Right Ctrl.",
+                  wraplength=700).pack(anchor="w", pady=(0, 10))
+
+        mail = ttk.LabelFrame(outer, text="Почта", padding=9)
+        mail.pack(fill="x", pady=(0, 10))
+        ttk.Button(mail, text="Новое письмо", command=lambda: self.on_command("создай письмо")).pack(side="left", padx=(0, 6))
+        ttk.Button(mail, text="Отправить файлы на почту", command=lambda: self.on_command("создай письмо")).pack(side="left")
+        ttk.Label(mail, text="Вложения выбираются в форме письма.").pack(side="left", padx=10)
+
+        ttk.Label(outer, text="Остальные команды — выберите раздел", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 5))
+        row = ttk.Frame(outer)
+        row.pack(fill="x", pady=(0, 8))
         groups = [
-            ("Windows", [
-                ("Заблокировать компьютер", "заблокируй компьютер"),
-                ("Перезагрузить компьютер", "перезагрузи компьютер"),
-                ("Открыть загрузки", "открой загрузки"),
-                ("Открыть настройки", "открой настройки"),
-                ("Очистить корзину", "очисти корзину"),
-                ("Сделать скриншот", "сделай скриншот"),
-            ]),
-            ("Файлы и папки", [
-                ("Найти файл", "найди файл"),
-                ("Разобрать папку", "разбери папку"),
-            ]),
-            ("Интернет и напоминания", [
-                ("Поиск в интернете", "найди в интернете"),
-                ("Создать напоминание", "напомни"),
-            ]),
-            ("Контакты и почта", [
-                ("Добавить контакт", "добавить контакт"),
-                ("Показать контакты", "покажи контакты"),
-                ("Новое письмо", "создай письмо"),
-            ]),
+            ("Windows ▾", [("Заблокировать компьютер", "заблокируй компьютер"), ("Перезагрузить компьютер", "перезагрузи компьютер"), ("Открыть загрузки", "открой загрузки"), ("Открыть настройки", "открой настройки"), ("Очистить корзину", "очисти корзину"), ("Сделать скриншот", "сделай скриншот")]),
+            ("Файлы ▾", [("Найти файл", "найди файл"), ("Разобрать папку", "разбери папку")]),
+            ("Интернет ▾", [("Поиск в интернете", "найди в интернете"), ("Создать напоминание", "напомни")]),
+            ("Контакты ▾", [("Добавить контакт", "добавить контакт"), ("Показать контакты", "покажи контакты")]),
         ]
-        for group_name, commands in groups:
-            group = ttk.LabelFrame(button_frame, text=group_name, padding=8)
-            group.pack(fill="x", pady=(0, 8))
-            for index, (label, command) in enumerate(commands):
-                button = ttk.Button(group, text=label, command=lambda c=command: self._click_command(c))
-                button.grid(row=index // 2, column=index % 2, sticky="ew", padx=4, pady=4, ipady=5)
-            group.columnconfigure(0, weight=1)
-            group.columnconfigure(1, weight=1)
-        ttk.Label(outer, text="Кнопки запускают те же действия, что и голосовые команды. "
-                              "Для поиска и напоминаний появится поле ввода.",
-                  wraplength=840).pack(anchor="w")
+        for label, commands in groups:
+            button = ttk.Menubutton(row, text=label)
+            menu = tk.Menu(button, tearoff=False)
+            for title, command in commands:
+                menu.add_command(label=title, command=lambda c=command: self._click_command(c))
+            button["menu"] = menu
+            button.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ttk.Label(outer, text="Команды доступны голосом и через меню. Для поиска и напоминаний появится поле ввода.",
+                  wraplength=700).pack(anchor="w")
 
     def _click_command(self, command):
         if command == "найди файл":
@@ -93,12 +71,10 @@ class AssistantWindow:
             if value and value.strip():
                 self.on_command("напомни " + value.strip())
             return
-        if command == "перезагрузи компьютер":
-            if not messagebox.askyesno("Подтвердите перезагрузку", "Перезагрузить компьютер сейчас?", parent=self.root):
-                return
-        if command == "очисти корзину":
-            if not messagebox.askyesno("Подтвердите очистку", "Удалить содержимое корзины?", parent=self.root):
-                return
+        if command == "перезагрузи компьютер" and not messagebox.askyesno("Подтвердите перезагрузку", "Перезагрузить компьютер сейчас?", parent=self.root):
+            return
+        if command == "очисти корзину" and not messagebox.askyesno("Подтвердите очистку", "Удалить содержимое корзины?", parent=self.root):
+            return
         self.on_command(command)
 
     def set_status(self, listening=None, microphone=None):

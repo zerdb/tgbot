@@ -247,7 +247,7 @@ def handle_command(text: str):
             r"(?:\s+мне)?\s+(?:это\s+)?(?:письмо\s+)?(?:на\s+почту|по\s+почте|на\s+email|по\s+email)\s*",
             "", text, flags=re.IGNORECASE,
         ).strip(" .,!?:;«»")
-        open_email_form(subject)
+        open_email_form(subject, _ui.root if _ui is not None else None)
         return
 
     if exact("добавить контакт", "добавь контакт", "создать контакт", "новый контакт",
@@ -289,9 +289,9 @@ def handle_command(text: str):
         search_web(text)
     elif begins("найди файл", "найди файлы", "поищи файл", "поищи файлы",
                 "найди на компьютере", "найди документ", "поиск файла", "поиск файлов"):
-        search_files(text)
+        search_files(text, _ui.root if _ui is not None else None)
     elif begins("найди"):
-        search_files(text)
+        search_files(text, _ui.root if _ui is not None else None)
     else:
         print("Команда не распознана. Проверьте формулировку и попробуйте ещё раз.")
 

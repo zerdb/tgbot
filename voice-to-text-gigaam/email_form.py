@@ -50,10 +50,13 @@ def copied_file_paths() -> list[str]:
         user32.CloseClipboard()
 
 
-def open_email_form(initial_subject: str = ""):
+def open_email_form(initial_subject: str = "", parent=None):
     """Open a desktop email composer with explicit contact and manual-address fields."""
     def show():
-        root = tk.Tk()
+        if parent is None or not parent.winfo_exists():
+            print("Главное окно закрыто: форму почты открыть нельзя.")
+            return
+        root = tk.Toplevel(parent)
         root.title("GigaAM — отправка почты")
         root.geometry("650x590")
         root.minsize(560, 480)
@@ -212,6 +215,14 @@ def open_email_form(initial_subject: str = ""):
         update_subject_from_files()
 
         root.bind("<Escape>", lambda _event: root.destroy())
-        root.mainloop()
+        root.transient(parent)
+        root.lift()
+        root.focus_force()
 
-    threading.Thread(target=show, daemon=True, name="email-form").start()
+    if parent is None:
+        print("Для открытия почты требуется главное окно приложения.")
+        return
+    try:
+        parent.after(0, show)
+    except tk.TclError:
+        print("Не удалось открыть форму почты: главное окно уже закрыто.")
