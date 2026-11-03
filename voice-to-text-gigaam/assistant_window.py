@@ -5,13 +5,14 @@ from tkinter import ttk
 
 
 class AssistantWindow:
-    def __init__(self, on_close, microphone_status="ПРОВЕРКА", on_observer_settings=None):
+    def __init__(self, on_close, microphone_status="ПРОВЕРКА", on_observer_settings=None, on_observer_history=None):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
         self.root.geometry("820x720")
         self.root.minsize(680, 560)
         self.on_close = on_close
         self.on_observer_settings = on_observer_settings
+        self.on_observer_history = on_observer_history
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._build()
@@ -28,7 +29,10 @@ class AssistantWindow:
         ttk.Label(status, textvariable=self.microphone_var, foreground="#16723b").grid(row=0, column=1, sticky="w")
         ttk.Label(status, text="Прослушивание команд:", font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         ttk.Label(status, textvariable=self.listening_var, foreground="#1558a6").grid(row=1, column=1, sticky="w", pady=(6, 0))
-        ttk.Button(outer, text="Настройки наблюдателя", command=self._open_observer_settings).pack(anchor="w", pady=(0, 10))
+        observer_buttons = ttk.Frame(outer)
+        observer_buttons.pack(anchor="w", pady=(0, 10))
+        ttk.Button(observer_buttons, text="Настройки наблюдателя", command=self._open_observer_settings).pack(side="left")
+        ttk.Button(observer_buttons, text="История событий", command=self._open_observer_history).pack(side="left", padx=(8, 0))
         ttk.Label(outer, text="Как пользоваться", font=("Segoe UI", 13, "bold")).pack(anchor="w")
         guide = (
             "1. Диктовка текста: зажмите Right Alt + Right Shift, произнесите текст и отпустите клавиши. "
@@ -72,6 +76,10 @@ class AssistantWindow:
     def _open_observer_settings(self):
         if self.on_observer_settings is not None:
             self.on_observer_settings()
+
+    def _open_observer_history(self):
+        if self.on_observer_history is not None:
+            self.on_observer_history()
 
     def set_status(self, listening=None, microphone=None):
         def apply():
