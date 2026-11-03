@@ -1,16 +1,16 @@
-
-"""Main Tkinter help and live-status window."""
+"""Main Tkinter window with clickable command shortcuts and live status."""
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox, simpledialog
 
 
 class AssistantWindow:
-    def __init__(self, on_close, microphone_status="ПРОВЕРКА"):
+    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА"):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
-        self.root.geometry("820x720")
-        self.root.minsize(680, 560)
+        self.root.geometry("900x760")
+        self.root.minsize(700, 580)
         self.on_close = on_close
+        self.on_command = on_command
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._build()
@@ -27,46 +27,79 @@ class AssistantWindow:
         ttk.Label(status, textvariable=self.microphone_var, foreground="#16723b").grid(row=0, column=1, sticky="w")
         ttk.Label(status, text="Прослушивание команд:", font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         ttk.Label(status, textvariable=self.listening_var, foreground="#1558a6").grid(row=1, column=1, sticky="w", pady=(6, 0))
-        ttk.Label(outer, text="Как пользоваться", font=("Segoe UI", 13, "bold")).pack(anchor="w")
-        guide = (
-            "1. Диктовка текста: зажмите Right Alt + Right Shift, произнесите текст и отпустите клавиши. "
-            "Распознанный текст будет вставлен в активное поле.\n"
-            "2. Голосовая команда: зажмите Right Ctrl, произнесите одну команду и отпустите клавишу. "
-            "Дождитесь распознавания и выполнения.\n"
-            "3. Во время записи держите клавишу нажатой; после отпускания запись автоматически обрабатывается.\n"
-            "4. Для выхода закройте это окно."
-        )
-        ttk.Label(outer, text=guide, wraplength=760, justify="left").pack(anchor="w", pady=(5, 12))
-        ttk.Label(outer, text="Список голосовых команд", font=("Segoe UI", 13, "bold")).pack(anchor="w")
-        frame = ttk.Frame(outer)
-        frame.pack(fill="both", expand=True, pady=(5, 10))
-        text = tk.Text(frame, wrap="word", height=18, font=("Segoe UI", 10), padx=8, pady=8)
-        scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
-        text.configure(yscrollcommand=scroll.set)
-        text.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
-        commands = [
-            ("«Заблокируй компьютер» / «Заблокируй экран» / «Блокируй комп»", "Блокирует текущий сеанс Windows."),
-            ("«Перезагрузи компьютер» / «Перезапусти ПК» / «Сделай перезагрузку»", "Перезагружает Windows."),
-            ("«Покажи загрузки» / «Открой скачанное» / «Папка загрузки»", "Открывает папку «Загрузки»."),
-            ("«Открой настройки» / «Параметры Windows» / «Настройки системы»", "Открывает системные настройки Windows."),
-            ("«Очисти корзину» / «Опустоши корзину» / «Почисти корзину»", "Очищает корзину."),
-            ("«Сделай скриншот» / «Сними экран» / «Сделай снимок»", "Сохраняет снимок всех экранов в папку «Скриншоты»."),
-            ("«Напомни ...» / «Поставь напоминание ...» / «Создай напоминание ...»", "Создаёт напоминание. Например: «Напомни через 10 минут проверить духовку»."),
-            ("«Найди в интернете ...» / «Поищи в сети ...» / «Загугли ...»", "Выполняет поиск в интернете по произнесённому запросу."),
-            ("«Найди файл ...» / «Поищи файл ...» / «Найди документ ...»", "Ищет файлы на компьютере по названию или запросу."),
-            ("«Разбери папку» / «Организуй папку»", "Показывает предварительное распределение файлов по категориям; перемещение — только после подтверждения."),
-            ("«Отправь на почту» / «Скинь по почте» / «Пришли на email» / «Перешли на почту»", "Открывает окно письма. Скопированные в Проводнике файлы добавляются во вложения; тема формируется из имён файлов."),
-            ("«Добавить контакт» / «Сохрани контакт» / «Запиши контакт»", "Открывает форму для добавления имени и адреса электронной почты."),
-            ("«Покажи контакты» / «Мои контакты» / «Открой контакты»", "Показывает сохранённые контакты."),
-            ("«Отмена»", "В окне письма отменяет отправку и закрывает форму без отправки."),
+        ttk.Label(outer, text="Горячие клавиши", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        ttk.Label(outer, text="Диктовка: Right Alt + Right Shift. Голосовая команда: Right Ctrl. "
+                              "Если микрофон недоступен, используйте кнопки ниже.",
+                  wraplength=840).pack(anchor="w", pady=(3, 10))
+        ttk.Label(outer, text="Команды — нажмите для запуска", font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        canvas_frame = ttk.Frame(outer)
+        canvas_frame.pack(fill="both", expand=True, pady=(6, 8))
+        canvas = tk.Canvas(canvas_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        button_frame = ttk.Frame(canvas, padding=(2, 2))
+        button_frame.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=button_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        groups = [
+            ("Windows", [
+                ("Заблокировать компьютер", "заблокируй компьютер"),
+                ("Перезагрузить компьютер", "перезагрузи компьютер"),
+                ("Открыть загрузки", "открой загрузки"),
+                ("Открыть настройки", "открой настройки"),
+                ("Очистить корзину", "очисти корзину"),
+                ("Сделать скриншот", "сделай скриншот"),
+            ]),
+            ("Файлы и папки", [
+                ("Найти файл", "найди файл"),
+                ("Разобрать папку", "разбери папку"),
+            ]),
+            ("Интернет и напоминания", [
+                ("Поиск в интернете", "найди в интернете"),
+                ("Создать напоминание", "напомни"),
+            ]),
+            ("Контакты и почта", [
+                ("Добавить контакт", "добавить контакт"),
+                ("Показать контакты", "покажи контакты"),
+                ("Новое письмо", "создай письмо"),
+            ]),
         ]
-        for title, description in commands:
-            text.insert("end", title + "\n", "title")
-            text.insert("end", "   " + description + "\n\n")
-        text.tag_configure("title", font=("Segoe UI", 10, "bold"))
-        text.configure(state="disabled")
-        ttk.Label(outer, text="Примечание: для диктовки удерживайте правые Alt+Shift; для команды произносите фразу после нажатия Right Ctrl и отпускайте клавишу только после окончания фразы.", wraplength=760).pack(anchor="w")
+        for group_name, commands in groups:
+            group = ttk.LabelFrame(button_frame, text=group_name, padding=8)
+            group.pack(fill="x", pady=(0, 8))
+            for index, (label, command) in enumerate(commands):
+                button = ttk.Button(group, text=label, command=lambda c=command: self._click_command(c))
+                button.grid(row=index // 2, column=index % 2, sticky="ew", padx=4, pady=4, ipady=5)
+            group.columnconfigure(0, weight=1)
+            group.columnconfigure(1, weight=1)
+        ttk.Label(outer, text="Кнопки запускают те же действия, что и голосовые команды. "
+                              "Для поиска и напоминаний появится поле ввода.",
+                  wraplength=840).pack(anchor="w")
+
+    def _click_command(self, command):
+        if command == "найди файл":
+            value = simpledialog.askstring("Поиск файла", "Что найти? Укажите имя или часть имени:", parent=self.root)
+            if value and value.strip():
+                self.on_command("найди файл " + value.strip())
+            return
+        if command == "найди в интернете":
+            value = simpledialog.askstring("Поиск в интернете", "Что найти в интернете?", parent=self.root)
+            if value and value.strip():
+                self.on_command("найди в интернете " + value.strip())
+            return
+        if command == "напомни":
+            value = simpledialog.askstring("Новое напоминание", "Например: через 10 минут проверить духовку", parent=self.root)
+            if value and value.strip():
+                self.on_command("напомни " + value.strip())
+            return
+        if command == "перезагрузи компьютер":
+            if not messagebox.askyesno("Подтвердите перезагрузку", "Перезагрузить компьютер сейчас?", parent=self.root):
+                return
+        if command == "очисти корзину":
+            if not messagebox.askyesno("Подтвердите очистку", "Удалить содержимое корзины?", parent=self.root):
+                return
+        self.on_command(command)
 
     def set_status(self, listening=None, microphone=None):
         def apply():

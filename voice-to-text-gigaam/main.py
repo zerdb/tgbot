@@ -335,6 +335,7 @@ def main():
     keyboard.on_release_key(COMMAND_HOTKEY, lambda _: stop_recording(), suppress=False)
     _ui = AssistantWindow(
         on_close=shutdown,
+        on_command=handle_command,
         microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН",
     )
     _ui.run()
