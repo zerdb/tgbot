@@ -175,14 +175,13 @@ def save_clipboard_as_note():
         print("Буфер обмена пуст. Сначала скопируйте текст.")
         return
     NOTES_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    destination = NOTES_DIR / f"Заметка_{stamp}.txt"
-    counter = 1
-    while destination.exists():
-        destination = NOTES_DIR / f"Заметка_{stamp}_{counter}.txt"
-        counter += 1
-    destination.write_text(content, encoding="utf-8-sig")
-    print(f"Заметка сохранена: {destination}")
+    destination = NOTES_DIR / "Мои заметки.txt"
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with destination.open("a", encoding="utf-8") as note_file:
+        if destination.exists() and destination.stat().st_size > 0:
+            note_file.write("\\n\\n" + "=" * 48 + "\\n")
+        note_file.write(f"[{stamp}]\\n{content.strip()}\\n")
+    print(f"Заметка добавлена в общий документ: {destination}")
 
 
 def clean_clipboard_text():
