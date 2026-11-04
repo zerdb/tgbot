@@ -16,3 +16,4 @@ Pillow>=10.0.0
 winotify>=1.1.0
 mftparser>=1.7.1
 psutil>=5.9.0
+openpyxl>=3.1.0

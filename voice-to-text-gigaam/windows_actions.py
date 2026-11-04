@@ -1,6 +1,8 @@
 """Windows-specific actions used by the voice assistant."""
 from __future__ import annotations
 
+import csv
+import io
 import os
 import subprocess
 import time
@@ -10,17 +12,22 @@ import pyperclip
 from pathlib import Path
 from datetime import datetime
 from PIL import ImageGrab
+from openpyxl import Workbook
 
 SCREENSHOT_DIR = Path(__file__).resolve().parent / "Скриншоты"
+CLIPBOARD_TABLES_DIR = Path(__file__).resolve().parent / "Таблицы"
+
 
 def windows_only():
     if os.name != "nt":
         raise OSError("Эта команда поддерживается только в Windows.")
 
+
 def confirm_action(title: str, message: str) -> bool:
     windows_only()
     import ctypes
     return ctypes.windll.user32.MessageBoxW(None, message, title, 0x4 | 0x20) == 6
+
 
 def lock_computer():
     windows_only()
@@ -29,11 +36,13 @@ def lock_computer():
         raise OSError("Windows не смогла заблокировать рабочую станцию.")
     print("Компьютер заблокирован.")
 
+
 def reboot_computer():
     if not confirm_action("Подтверждение перезагрузки", "Перезагрузить компьютер сейчас? Сохраните открытые документы."):
         print("Перезагрузка отменена.")
         return
     subprocess.Popen(["shutdown", "/r", "/t", "0"], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
 
 def _bring_window_to_front(title_parts: tuple[str, ...], timeout: float = 3.0):
     """Restore and foreground an already-open Windows window by its title."""
@@ -65,11 +74,8 @@ def _bring_window_to_front(title_parts: tuple[str, ...], timeout: float = 3.0):
         target = None
         user32.EnumWindows(enum_callback, 0)
         if target:
-            SW_RESTORE = 9
-            user32.ShowWindow(target, SW_RESTORE)
+            user32.ShowWindow(target, 9)
             user32.BringWindowToTop(target)
-            # Windows may deny foreground activation to a background process.
-            # Attach input queues briefly so the existing window gets focus.
             foreground = user32.GetForegroundWindow()
             current_thread = kernel32.GetCurrentThreadId()
             target_thread = user32.GetWindowThreadProcessId(target, None)
@@ -92,6 +98,7 @@ def _bring_window_to_front(title_parts: tuple[str, ...], timeout: float = 3.0):
             return
         time.sleep(0.15)
 
+
 def open_downloads():
     windows_only()
     path = Path.home() / "Downloads"
@@ -100,10 +107,12 @@ def open_downloads():
     os.startfile(str(path))
     _bring_window_to_front(("Загрузки", "Downloads"))
 
+
 def open_settings():
     windows_only()
     os.startfile("ms-settings:")
     _bring_window_to_front(("Параметры", "Settings"))
+
 
 def empty_recycle_bin():
     if not confirm_action("Очистка корзины", "Безвозвратно удалить все файлы из корзины? Это действие нельзя отменить."):
@@ -114,6 +123,7 @@ def empty_recycle_bin():
     if result:
         raise OSError(f"Не удалось очистить корзину (код {result}).")
     print("Корзина очищена.")
+
 
 def take_screenshot():
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -132,10 +142,8 @@ def take_screenshot():
         print(f"Скриншот сохранён, но не удалось открыть его автоматически: {exc}")
 
 
-
-
 def paste_clipboard_to_excel():
-    """Open Excel and paste tab/newline-delimited clipboard data at A1."""
+    """Create an XLSX workbook from tab/newline-delimited clipboard data and open it."""
     windows_only()
     content = pyperclip.paste()
     if not isinstance(content, str) or not content.strip():
@@ -146,21 +154,35 @@ def paste_clipboard_to_excel():
         return
 
     try:
-        # Keep the exact table text on the clipboard while Excel starts.
-        pyperclip.copy(content)
-        subprocess.Popen(
-            ["cmd", "/c", "start", "", "excel.exe"],
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-        _bring_window_to_front(("Excel", "Microsoft Excel"), timeout=20.0)
-        # Excel can show its window before the workbook is ready for input.
-        time.sleep(2.0)
-        keyboard.send("ctrl+home")
-        time.sleep(0.3)
-        keyboard.send("ctrl+v")
-        print("Команда вставки отправлена в Excel.")
+        rows = csv.reader(io.StringIO(content, newline=""), delimiter="\t", quotechar='"')
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Данные"
+
+        row_count = 0
+        for row_count, row in enumerate(rows, start=1):
+            for column, value in enumerate(row, start=1):
+                worksheet.cell(row=row_count, column=column, value=value)
+
+        if row_count == 0:
+            print("В буфере не удалось найти строки таблицы.")
+            return
+
+        worksheet.freeze_panes = "A2"
+        worksheet.auto_filter.ref = worksheet.dimensions
+        CLIPBOARD_TABLES_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        destination = CLIPBOARD_TABLES_DIR / f"Таблица_{stamp}.xlsx"
+        counter = 1
+        while destination.exists():
+            destination = CLIPBOARD_TABLES_DIR / f"Таблица_{stamp}_{counter}.xlsx"
+            counter += 1
+
+        workbook.save(destination)
+        os.startfile(str(destination))
+        print(f"Таблица создана и открыта в Excel: {destination}")
     except Exception as exc:
-        print(f"Не удалось вставить данные в Excel: {exc}")
+        print(f"Не удалось создать таблицу Excel: {exc}")
         raise
 
 
@@ -168,7 +190,7 @@ NOTES_DIR = Path(__file__).resolve().parent / "Заметки"
 
 
 def save_clipboard_as_note():
-    """Save clipboard text as a timestamped UTF-8 note."""
+    """Append clipboard text to the shared timestamped notes document."""
     windows_only()
     content = pyperclip.paste()
     if not isinstance(content, str) or not content.strip():
@@ -177,10 +199,11 @@ def save_clipboard_as_note():
     NOTES_DIR.mkdir(parents=True, exist_ok=True)
     destination = NOTES_DIR / "Мои заметки.txt"
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    is_new = not destination.exists() or destination.stat().st_size == 0
     with destination.open("a", encoding="utf-8") as note_file:
-        if destination.exists() and destination.stat().st_size > 0:
-            note_file.write("\\n\\n" + "=" * 48 + "\\n")
-        note_file.write(f"[{stamp}]\\n{content.strip()}\\n")
+        if not is_new:
+            note_file.write("\n\n" + "=" * 48 + "\n")
+        note_file.write(f"[{stamp}]\n{content.strip()}\n")
     print(f"Заметка добавлена в общий документ: {destination}")
 
 
@@ -197,6 +220,7 @@ def clean_clipboard_text():
     for character in ("\u00ad", "\u200b", "\u200c", "\u200d", "\ufeff"):
         cleaned = cleaned.replace(character, "")
     cleaned = cleaned.replace("\t", " ")
+    import re
     paragraphs = re.split(r"\n\s*\n+", cleaned.strip())
     normalized = []
     for paragraph in paragraphs:
