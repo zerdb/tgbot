@@ -50,7 +50,7 @@ def copied_file_paths() -> list[str]:
         user32.CloseClipboard()
 
 
-def open_email_form(initial_subject: str = "", parent=None):
+def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: bool = False):
     """Open a desktop email composer with explicit contact and manual-address fields."""
     def show():
         if parent is None or not parent.winfo_exists():
@@ -152,6 +152,8 @@ def open_email_form(initial_subject: str = "", parent=None):
             refresh_count()
 
         ttk.Button(controls, text="Добавить файлы…", command=add_files).pack(side="left")
+        if add_files_on_open:
+            root.after(200, add_files)
         ttk.Button(controls, text="Убрать выбранные", command=remove_files).pack(side="left", padx=8)
 
         buttons = ttk.Frame(outer)

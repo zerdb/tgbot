@@ -16,6 +16,7 @@ from pathlib import Path
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_settings, empty_recycle_bin, take_screenshot
 from reminders import start_reminder_service, add_reminder
 from file_search import search_web, search_files, start_file_search_ui
+from email_form import open_email_form
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow
 
@@ -228,7 +229,11 @@ def handle_command(text: str):
     def begins(*phrases):
         return any(command_text.startswith(normalize_command(item) + " ") for item in phrases)
 
-    if exact("блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
+    if exact("создай письмо", "новое письмо", "написать письмо"):
+        open_email_form(parent=_ui.root if _ui is not None else None)
+    elif exact("отправить файлы на почту", "отправь файлы на почту"):
+        open_email_form(parent=_ui.root if _ui is not None else None, add_files_on_open=True)
+    elif exact("блокировка экрана", "блокировка компьютера", "заблокируй компьютер",
                "заблокируй комп", "заблокируй экран", "заблокируй пк",
                "блокируй компьютер", "блокируй комп", "закблокируй компьютер",
                "закблокируй комп", "заблокировать компьютер", "заблокировать комп",
