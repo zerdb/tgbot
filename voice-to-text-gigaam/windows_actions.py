@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
+
+import keyboard
+import pyperclip
 from pathlib import Path
 from datetime import datetime
 from PIL import ImageGrab
@@ -127,3 +131,32 @@ def take_screenshot():
     except OSError as exc:
         print(f"Скриншот сохранён, но не удалось открыть его автоматически: {exc}")
 
+
+
+
+def paste_clipboard_to_excel():
+    """Open Excel and paste tab/newline-delimited clipboard data at A1."""
+    windows_only()
+    content = pyperclip.paste()
+    if not isinstance(content, str) or not content.strip():
+        print("Буфер обмена пуст. Сначала скопируйте таблицу.")
+        return
+    if "\t" not in content and "\n" not in content and "\r" not in content:
+        print("В буфере нет табуляции или переносов строк. Скопируйте таблицу.")
+        return
+
+    try:
+        # Start Excel through the Windows shell (it reuses the running instance).
+        subprocess.Popen(
+            ["cmd", "/c", "start", "", "excel.exe"],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        _bring_window_to_front(("Excel", "Microsoft Excel"), timeout=20.0)
+        time.sleep(0.8)
+        keyboard.send("ctrl+n")
+        time.sleep(1.0)
+        keyboard.send("ctrl+v")
+        print("Данные из буфера вставлены в Excel начиная с ячейки A1.")
+    except Exception as exc:
+        print(f"Не удалось вставить данные в Excel: {exc}")
+        raise
