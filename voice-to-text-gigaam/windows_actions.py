@@ -192,19 +192,19 @@ def clean_clipboard_text():
     if not isinstance(content, str) or not content.strip():
         print("Буфер обмена пуст. Сначала скопируйте текст.")
         return
-    cleaned = content.replace("\\r\\n", "\\n").replace("\\r", "\\n")
-    for character in ("\\u00a0", "\\u202f"):
+    cleaned = content.replace("\r\n", "\n").replace("\r", "\n")
+    for character in ("\u00a0", "\u202f"):
         cleaned = cleaned.replace(character, " ")
-    for character in ("\\u00ad", "\\u200b", "\\u200c", "\\u200d", "\\ufeff"):
+    for character in ("\u00ad", "\u200b", "\u200c", "\u200d", "\ufeff"):
         cleaned = cleaned.replace(character, "")
-    cleaned = cleaned.replace("\\t", " ")
-    paragraphs = re.split(r"\\n\\s*\\n+", cleaned.strip())
+    cleaned = cleaned.replace("\t", " ")
+    paragraphs = re.split(r"\n\s*\n+", cleaned.strip())
     normalized = []
     for paragraph in paragraphs:
-        paragraph = re.sub(r"\\s*\\n\\s*", " ", paragraph)
-        paragraph = re.sub(r"[ \\f\\v]+", " ", paragraph).strip()
+        paragraph = re.sub(r"\s*\n\s*", " ", paragraph)
+        paragraph = re.sub(r"[ \f\v]+", " ", paragraph).strip()
         if paragraph:
             normalized.append(paragraph)
-    result = "\\n\\n".join(normalized)
+    result = "\n\n".join(normalized)
     pyperclip.copy(result)
     print(f"Текст очищен и возвращён в буфер обмена ({len(result)} символов).")
