@@ -146,17 +146,19 @@ def paste_clipboard_to_excel():
         return
 
     try:
-        # Start Excel through the Windows shell (it reuses the running instance).
+        # Keep the exact table text on the clipboard while Excel starts.
+        pyperclip.copy(content)
         subprocess.Popen(
             ["cmd", "/c", "start", "", "excel.exe"],
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         _bring_window_to_front(("Excel", "Microsoft Excel"), timeout=20.0)
-        time.sleep(0.8)
-        keyboard.send("ctrl+n")
-        time.sleep(1.0)
+        # Excel can show its window before the workbook is ready for input.
+        time.sleep(2.0)
+        keyboard.send("ctrl+home")
+        time.sleep(0.3)
         keyboard.send("ctrl+v")
-        print("Данные из буфера вставлены в Excel начиная с ячейки A1.")
+        print("Команда вставки отправлена в Excel.")
     except Exception as exc:
         print(f"Не удалось вставить данные в Excel: {exc}")
         raise
