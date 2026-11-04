@@ -9,6 +9,7 @@ import time
 
 import keyboard
 import pyperclip
+from winotify import Notification
 from pathlib import Path
 from datetime import datetime
 from PIL import ImageGrab
@@ -168,6 +169,11 @@ def paste_clipboard_to_excel():
             print("В буфере не удалось найти строки таблицы.")
             return
 
+        for column_cells in worksheet.columns:
+            max_length = max((len(str(cell.value)) for cell in column_cells if cell.value is not None), default=0)
+            column_letter = column_cells[0].column_letter
+            worksheet.column_dimensions[column_letter].width = min(max(max_length + 2, 10), 255)
+
         worksheet.freeze_panes = "A2"
         worksheet.auto_filter.ref = worksheet.dimensions
         CLIPBOARD_TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -205,6 +211,10 @@ def save_clipboard_as_note():
             note_file.write("\n\n" + "=" * 48 + "\n")
         note_file.write(f"[{stamp}]\n{content.strip()}\n")
     print(f"Заметка добавлена в общий документ: {destination}")
+    try:
+        Notification(app_id="GigaAM — голосовой помощник", title="Заметка сохранена", msg=f"Текст добавлен в «Мои заметки.txt»\\n{destination}", duration="short").show()
+    except Exception as exc:
+        print(f"Не удалось показать всплывающее уведомление: {exc}")
 
 
 def clean_clipboard_text():

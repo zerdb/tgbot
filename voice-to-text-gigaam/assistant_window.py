@@ -13,6 +13,7 @@ class AssistantWindow:
         self.on_command = on_command
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
+        self._recording_overlay = None
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -35,7 +36,7 @@ class AssistantWindow:
         row.pack(fill="x", pady=(0, 8))
         groups = [
             ("Windows ▾", [("Заблокировать компьютер", "заблокируй компьютер"), ("Перезагрузить компьютер", "перезагрузи компьютер"), ("Открыть загрузки", "открой загрузки"), ("Открыть настройки", "открой настройки"), ("Очистить корзину", "очисти корзину"), ("Сделать скриншот", "сделай скриншот")]),
-            ("Файлы ▾", [("Найти файл", "найди файл"), ("Разобрать папку", "разбери папку"), ("Вставить таблицу в Excel", "перенеси в excel"), ("Сохранить как заметку", "сохрани как заметку"), ("Очистить текст в буфере", "очисти текст")]),
+            ("Файлы ▾", [("Найти файл", "найди файл"), ("Разобрать папку", "разбери папку"), ("Вставить таблицу в Excel", "перенеси в excel"), ("Сохранить как заметку", "сохрани как заметку")]),
             ("Интернет ▾", [("Поиск в интернете", "найди в интернете"), ("Создать напоминание", "напомни")]),
             ("Почта ▾", [("Новое письмо", "создай письмо"), ("Отправить файлы на почту", "отправить файлы на почту")]),
         ]
@@ -70,6 +71,38 @@ class AssistantWindow:
         if command == "очисти корзину" and not messagebox.askyesno("Подтвердите очистку", "Удалить содержимое корзины?", parent=self.root):
             return
         self.on_command(command)
+
+    def set_recording_overlay(self, active, mode=None):
+        def apply():
+            if active:
+                if self._recording_overlay is None or not self._recording_overlay.winfo_exists():
+                    overlay = tk.Toplevel(self.root)
+                    overlay.overrideredirect(True)
+                    overlay.attributes("-topmost", True)
+                    overlay.attributes("-alpha", 0.94)
+                    overlay.configure(bg="#202124")
+                    frame = tk.Frame(overlay, bg="#202124", padx=24, pady=18)
+                    frame.pack()
+                    tk.Label(frame, text="🎙", font=("Segoe UI Emoji", 46), fg="#ff3b30", bg="#202124").pack()
+                    self._overlay_label = tk.Label(frame, text="", font=("Segoe UI", 11, "bold"), fg="white", bg="#202124")
+                    self._overlay_label.pack(pady=(5, 0))
+                    self._recording_overlay = overlay
+                self._overlay_label.configure(text="СЛУШАЮ КОМАНДУ" if mode == "command" else "ИДЁТ ДИКТОВКА")
+                self._recording_overlay.update_idletasks()
+                w, h = self._recording_overlay.winfo_reqwidth(), self._recording_overlay.winfo_reqheight()
+                x = (self.root.winfo_screenwidth() - w) // 2
+                y = (self.root.winfo_screenheight() - h) // 2
+                self._recording_overlay.geometry(f"+{x}+{y}")
+                self._recording_overlay.deiconify()
+                self._recording_overlay.lift()
+            elif self._recording_overlay is not None:
+                self._recording_overlay.destroy()
+                self._recording_overlay = None
+                self._overlay_label = None
+        try:
+            self.root.after(0, apply)
+        except tk.TclError:
+            pass
 
     def set_status(self, listening=None, microphone=None):
         def apply():

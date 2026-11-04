@@ -13,7 +13,7 @@ import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from windows_actions import lock_computer, reboot_computer, open_downloads, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note, clean_clipboard_text
+from windows_actions import lock_computer, reboot_computer, open_downloads, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
 from reminders import start_reminder_service, add_reminder
 from file_search import search_web, search_files, start_file_search_ui
 from email_form import open_email_form
@@ -63,9 +63,11 @@ _transcription_lock = threading.Lock()
 _ui = None
 
 
-def update_ui_status(listening=None):
+def update_ui_status(listening=None, recording=None):
     if _ui is not None:
         _ui.set_status(listening=listening)
+        if recording is not None:
+            _ui.set_recording_overlay(bool(recording), mode=recording if recording else None)
 
 
 def configure_ffmpeg():
@@ -128,13 +130,13 @@ def start_recording(mode: str):
         key_name = "Right Alt+Right Shift" if mode == "text" else "правый Ctrl"
         purpose = "для ввода текста" if mode == "text" else "для голосовой команды"
         print(f"Идёт запись {purpose}. Отпустите {key_name}, чтобы выполнить.")
-        update_ui_status("ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ")
+        update_ui_status("ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ", recording=mode)
     except (sd.PortAudioError, OSError) as exc:
         with _lock:
             _recording = False
         _stream = None
         print(f"Не удалось начать запись: {exc}")
-        update_ui_status("ОШИБКА ЗАПИСИ")
+        update_ui_status("ОШИБКА ЗАПИСИ", recording=False)
 
 
 def stop_recording():
@@ -151,7 +153,7 @@ def stop_recording():
             stream.stop()
         finally:
             stream.close()
-    update_ui_status("РАСПОЗНАЮ РЕЧЬ")
+    update_ui_status("РАСПОЗНАЮ РЕЧЬ", recording=False)
     if not chunks:
         print("Звук не записан: микрофон не передал аудиоданные.")
         update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
@@ -231,8 +233,6 @@ def handle_command(text: str):
 
     if exact("сохрани как заметку", "сохрани заметку", "сделай заметку"):
         save_clipboard_as_note()
-    elif exact("очисти текст", "почисти текст", "очисти буфер", "почисти буфер обмена"):
-        clean_clipboard_text()
     elif exact("перенеси в excel", "вставь в excel", "открой excel", "открой эксель", "перенеси в эксель", "вставь в эксель"):
         paste_clipboard_to_excel()
     elif exact("создай письмо", "новое письмо", "написать письмо"):
