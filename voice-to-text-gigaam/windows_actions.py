@@ -162,3 +162,49 @@ def paste_clipboard_to_excel():
     except Exception as exc:
         print(f"Не удалось вставить данные в Excel: {exc}")
         raise
+
+
+NOTES_DIR = Path(__file__).resolve().parent / "Заметки"
+
+
+def save_clipboard_as_note():
+    """Save clipboard text as a timestamped UTF-8 note."""
+    windows_only()
+    content = pyperclip.paste()
+    if not isinstance(content, str) or not content.strip():
+        print("Буфер обмена пуст. Сначала скопируйте текст.")
+        return
+    NOTES_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    destination = NOTES_DIR / f"Заметка_{stamp}.txt"
+    counter = 1
+    while destination.exists():
+        destination = NOTES_DIR / f"Заметка_{stamp}_{counter}.txt"
+        counter += 1
+    destination.write_text(content, encoding="utf-8-sig")
+    print(f"Заметка сохранена: {destination}")
+
+
+def clean_clipboard_text():
+    """Normalize copied web/PDF text while preserving paragraph boundaries."""
+    windows_only()
+    content = pyperclip.paste()
+    if not isinstance(content, str) or not content.strip():
+        print("Буфер обмена пуст. Сначала скопируйте текст.")
+        return
+    cleaned = content.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    for character in ("\\u00a0", "\\u202f"):
+        cleaned = cleaned.replace(character, " ")
+    for character in ("\\u00ad", "\\u200b", "\\u200c", "\\u200d", "\\ufeff"):
+        cleaned = cleaned.replace(character, "")
+    cleaned = cleaned.replace("\\t", " ")
+    paragraphs = re.split(r"\\n\\s*\\n+", cleaned.strip())
+    normalized = []
+    for paragraph in paragraphs:
+        paragraph = re.sub(r"\\s*\\n\\s*", " ", paragraph)
+        paragraph = re.sub(r"[ \\f\\v]+", " ", paragraph).strip()
+        if paragraph:
+            normalized.append(paragraph)
+    result = "\\n\\n".join(normalized)
+    pyperclip.copy(result)
+    print(f"Текст очищен и возвращён в буфер обмена ({len(result)} символов).")
