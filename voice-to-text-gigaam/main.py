@@ -446,13 +446,17 @@ def main():
     import torch
     from transformers import AutoModel
 
-    _splash.destroy()
-
     _ui = AssistantWindow(
         on_close=shutdown,
         on_command=handle_command,
         microphone_status="ПРОВЕРКА",
     )
+    # Сначала создаём и отображаем главное окно, затем убираем заставку —
+    # между ними не должно быть пустой паузы.
+    _ui.root.update_idletasks()
+    _ui.root.update()
+    _splash.destroy()
+
     microphone_found = check_microphone()
     _ui.set_status(microphone="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
     configure_ffmpeg()
