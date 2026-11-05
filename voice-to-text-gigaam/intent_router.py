@@ -78,7 +78,7 @@ def understand_command(user_text: str) -> dict:
         return {"action": "open_tasks", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
         return {"action": "read_unread_mail", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\b(найди|поищи|поиск)\\b.*\\b(в документах|в содержимом|в файлах)\\b", normalized):
+    if re.search(r"\b(найди|поищи|поиск)\b.*\b(в документах|в содержимом|в файлах)\b", normalized):
         return {"action": "search_documents", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
