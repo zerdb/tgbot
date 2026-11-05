@@ -95,7 +95,7 @@ def open_camera_viewer(parent):
             else:
                 image = Image.fromarray(payload)
                 image.thumbnail((920, 510))
-                photo = ImageTk.PhotoImage(image)
+                photo = ImageTk.PhotoImage(image, master=win)
                 video_label.configure(image=photo, text="")
                 video_label.image = photo
                 status.set("Камера подключена")
