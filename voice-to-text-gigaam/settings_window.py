@@ -35,10 +35,10 @@ def open_settings_window(parent):
         vars_ = {}
         for key, label in fields:
             ttk.Label(frame, text=label).pack(anchor="w")
-            var = tk.StringVar(value=str(values.get(key, "")))
+            var = tk.StringVar(master=window, value=str(values.get(key, "")))
             ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(2, 8))
             vars_[key] = var
-        remember = tk.BooleanVar(value=bool(values.get("remember_chat_history", True)))
+        remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(2, 8))
         status = (
             "OpenRouter API key: настроен" if os.getenv("OPENROUTER_API_KEY") else "OpenRouter API key: не настроен"
