@@ -412,14 +412,25 @@ def _ask_ai_worker(question: str):
 
 def main():
     global _ui, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
-    # Сначала поднимаем наше основное окно и фирменную плашку,
-    # только потом начинаем долгую проверку устройств и загрузку модели.
-    _ui = AssistantWindow(
-        on_close=shutdown,
-        on_command=handle_command,
-        microphone_status="ПРОВЕРКА",
-    )
-    progress("Запуск Python: загружаю аудиобиблиотеки…")
+
+    # Мгновенно показываем отдельную заставку до тяжёлых импортов.
+    import tkinter as tk
+    splash = tk.Tk()
+    splash.overrideredirect(True)
+    splash.attributes("-topmost", True)
+    width, height = 300, 76
+    x = (splash.winfo_screenwidth() - width) // 2
+    y = (splash.winfo_screenheight() - height) // 2
+    splash.geometry(f"{width}x{height}+{x}+{y}")
+    splash.configure(bg="#20242b")
+    tk.Label(
+        splash, text="⏳  Загружается голосовой помощник…",
+        bg="#20242b", fg="white", font=("Segoe UI", 11), padx=18, pady=22
+    ).pack(fill="both", expand=True)
+    splash.update_idletasks()
+    splash.update()
+
+    # Долгая загрузка проходит за заставкой; главное окно пока не открываем.
     import imageio_ffmpeg
     import keyboard
     import numpy as np
@@ -428,14 +439,17 @@ def main():
     import soundfile as sf
     from PIL import ImageGrab
     from winotify import audio
-
-    progress("Аудиобиблиотеки готовы. Загружаю PyTorch…")
     import torch
-
-    progress("PyTorch готов. Загружаю Transformers…")
     from transformers import AutoModel
 
-    progress("Библиотеки загружены. Проверяю микрофон…")
+    splash.destroy()
+
+    _ui = AssistantWindow(
+        on_close=shutdown,
+        on_command=handle_command,
+        microphone_status="ПРОВЕРКА",
+    )
+    progress("Проверяю микрофон…")
     microphone_found = check_microphone()
     _ui.set_status(microphone="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
     progress("Настраиваю аудиосистему и FFmpeg…")
