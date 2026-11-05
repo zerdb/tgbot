@@ -27,3 +27,5 @@ pytesseract>=0.3.10
 tkinterweb>=4.0.0
 
 opencv-python>=4.9.0
+
+keyring>=25.0.0
