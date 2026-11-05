@@ -9,6 +9,7 @@ ACTIONS = {
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
  "inspect_camera_image": "Получить кадр RTSP-камеры и проверить через подключённую модель ИИ наличие белого автомобиля Lada Niva.",
+ "camera_question": "Получить свежий кадр камеры и ответить на вопрос пользователя по изображению; question — вопрос.",
  "save_note": "Сохранить буфер обмена как заметку.",
  "clipboard_to_excel": "Создать Excel из данных буфера обмена.",
  "lock_computer": "Заблокировать компьютер.",
@@ -138,6 +139,9 @@ def understand_command(user_text: str) -> dict:
         query = re.sub(r"\b(?:в интернете|в интернет|в сети|в google)\b", "", query).strip()
         return {"action": "search_web", "confidence": 1.0, "arguments": {"query": query or user_text.strip()}}
 
+    # Вопросы о наблюдении всегда отправляем на анализ свежего кадра, а не в обычный чат ИИ.
+    if re.search(r"\\b(камера|камере|камеру|видеонаблюдени|на парковке|во дворе|у ворот)\\b", normalized) and re.search(r"\\b(что|кто|сколько|есть|видно|видишь|опиши|день|ночь|машин|людей|человек)\\b", normalized):
+        return {"action": "camera_question", "confidence": 1.0, "arguments": {"question": user_text.strip()}}
     if "проверь белую машину на камере" in normalized or "белая нива на камере" in normalized:
         return {"action": "inspect_camera_image", "confidence": 1.0, "arguments": {}}
     if "начальник" in normalized or "белая нива" in normalized or "нива на месте" in normalized:
