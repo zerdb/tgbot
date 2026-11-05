@@ -89,6 +89,7 @@ def open_document_search(parent):
         ttk.Label(frame, text="Что нужно найти?").pack(anchor="w")
         ttk.Entry(frame, textvariable=query_var).pack(fill="x", pady=(3, 8))
         ttk.Label(frame, text="Ищет по содержимому TXT, PDF, Word, Excel, Markdown, CSV и исходников. Файлы не изменяются.", wraplength=760).pack(anchor="w")
+        ttk.Label(frame, text="Важно: найденные фрагменты будут отправлены подключённой модели OpenRouter для анализа. Не выбирай папки с конфиденциальными документами.", wraplength=760).pack(anchor="w", pady=(3, 6))
         output = tk.Text(frame, wrap="word", height=18, font=("Segoe UI", 10))
         output.pack(fill="both", expand=True, pady=8)
         status = tk.StringVar(value="Выбери папку и введи запрос.")
