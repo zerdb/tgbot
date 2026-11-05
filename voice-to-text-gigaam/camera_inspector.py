@@ -22,7 +22,12 @@ def _ask_moondream(image_data: str, api_key: str) -> bool:
     req = urllib.request.Request(
         "https://api.moondream.ai/v1/query",
         data=json.dumps(payload).encode("utf-8"),
-        headers={"X-Moondream-Auth": api_key, "Content-Type": "application/json"},
+        headers={
+            "X-Moondream-Auth": api_key,
+            "Content-Type": "application/json",
+            "User-Agent": "GigaAMVoiceAssistant/1.0 (Windows; camera vision client)",
+            "Accept": "application/json",
+        },
         method="POST",
     )
     try:
