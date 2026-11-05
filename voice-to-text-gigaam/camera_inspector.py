@@ -44,9 +44,11 @@ def _ask_moondream(image_data: str, api_key: str, question: str = None):
         # Сначала сам вопрос, затем короткие требования к ответу. Некоторые
         # версии vision-модели ошибочно копируют последнюю часть длинного промпта.
         prompt = (
-            "На изображении с камеры наблюдения ответь на вопрос: " + question +
-            "\\nОтвечай только по-русски и только по содержимому кадра. "
-            "Кратко, 1-2 предложения. Если не можешь уверенно определить — так и скажи."
+            "Посмотри на само изображение с камеры. Определи видимые объекты и действия. "
+            "Ответь на вопрос пользователя: " + question +
+            "\nОтвечай только по-русски, опирайся только на видимые детали кадра. "
+            "Не перефразируй и не повторяй вопрос. Не рассуждай о камерах как устройствах. "
+            "Если изображение не позволяет ответить, прямо скажи: «На кадре не удаётся разобрать происходящее»."
         )
     payload = {
         "model": "moondream3.1-9B-A2B",
@@ -149,6 +151,13 @@ def _compact_camera_answer(answer: str) -> str:
     )
     if any(marker in answer.lower() for marker in leaked_prompt):
         return "ИИ повторил инструкцию вместо анализа кадра. Повтори вопрос."
+    # Частый сбой vision-модели: она повторяет вопрос, а затем сочиняет
+    # текст, не связанный с изображением. Такой ответ не выдаём за анализ.
+    question = getattr(_compact_camera_answer, "_question", "")
+    normalized_answer = re.sub(r"[^а-яa-z0-9]+", " ", answer.lower().replace("ё", "е")).strip()
+    normalized_question = re.sub(r"[^а-яa-z0-9]+", " ", question.lower().replace("ё", "е")).strip()
+    if normalized_question and normalized_answer.startswith(normalized_question):
+        return "ИИ повторил вопрос вместо анализа изображения. Попробуй спросить конкретнее: например, какие машины или люди видны."
     parts = re.split(r"(?<=[.!?])\s+", answer)
     unique = []
     seen = set()
@@ -185,7 +194,11 @@ def inspect_camera_question(question: str) -> str:
     else:
         print("[Камера] Moondream не настроен — пробую OpenRouter vision.", flush=True)
         answer = _ask_openrouter(image_data, question)
-    return _compact_camera_answer(answer)
+    _compact_camera_answer._question = question
+    try:
+        return _compact_camera_answer(answer)
+    finally:
+        _compact_camera_answer._question = ""
 
 def speak(text):
     encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
