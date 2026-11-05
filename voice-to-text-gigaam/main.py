@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import queue
 import time
 import traceback
 import webbrowser
@@ -54,6 +55,7 @@ WM_KEYDOWN, WM_KEYUP = 0x0100, 0x0101
 WM_SYSKEYDOWN, WM_SYSKEYUP = 0x0104, 0x0105
 VK_RSHIFT, VK_RCONTROL = 0xA1, 0xA3
 _pressed_physical_right = set()
+_keyboard_events = queue.SimpleQueue()
 _keyboard_hook = None
 _keyboard_hook_proc = None
 
@@ -177,28 +179,46 @@ user32.UnhookWindowsHookEx.argtypes = (wintypes.HHOOK,)
 user32.UnhookWindowsHookEx.restype = wintypes.BOOL
 
 def _native_keyboard_event(n_code, w_param, l_param):
-    if n_code >= 0:
-        vk = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents.vkCode
-        if vk in (VK_RCONTROL, VK_RSHIFT):
-            if w_param in (WM_KEYDOWN, WM_SYSKEYDOWN) and vk not in _pressed_physical_right:
-                _pressed_physical_right.add(vk)
-                if vk == VK_RCONTROL:
-                    start_recording("text" if VK_RSHIFT in _pressed_physical_right else "command")
-                elif VK_RCONTROL in _pressed_physical_right:
-                    with _lock:
-                        active = _recording
-                    if active:
-                        promote_to_dictation()
-            elif w_param in (WM_KEYUP, WM_SYSKEYUP):
-                _pressed_physical_right.discard(vk)
-                if vk == VK_RSHIFT:
-                    with _lock:
-                        should_stop = _recording and _recording_mode == "text"
-                    if should_stop:
-                        stop_recording()
-                elif vk == VK_RCONTROL:
-                    stop_recording()
+    # Не запускаем запись и не трогаем состояние приложения из системного callback.
+    # Только передаём событие в очередь для обработки главным потоком Tkinter.
+    if n_code >= 0 and w_param in (WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP):
+        try:
+            vk = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents.vkCode
+            if vk in (VK_RCONTROL, VK_RSHIFT):
+                _keyboard_events.put((vk, w_param))
+        except Exception:
+            pass
     return user32.CallNextHookEx(_keyboard_hook, n_code, w_param, l_param)
+
+
+def process_keyboard_events():
+    """Обрабатывает физические Right Ctrl/Shift только в главном потоке GUI."""
+    while True:
+        try:
+            vk, event = _keyboard_events.get_nowait()
+        except queue.Empty:
+            break
+
+        if event in (WM_KEYDOWN, WM_SYSKEYDOWN):
+            if vk in _pressed_physical_right:
+                continue
+            _pressed_physical_right.add(vk)
+            if vk == VK_RCONTROL:
+                start_recording("text" if VK_RSHIFT in _pressed_physical_right else "command")
+            elif VK_RCONTROL in _pressed_physical_right:
+                with _lock:
+                    active = _recording
+                if active:
+                    promote_to_dictation()
+        else:
+            _pressed_physical_right.discard(vk)
+            if vk == VK_RSHIFT:
+                with _lock:
+                    should_stop = _recording and _recording_mode == "text"
+                if should_stop:
+                    stop_recording()
+            elif vk == VK_RCONTROL:
+                stop_recording()
 
 def install_right_only_keyboard_hook():
     global _keyboard_hook, _keyboard_hook_proc
@@ -444,14 +464,15 @@ def main():
     # Таймер очереди напоминаний обслуживается главным потоком Tkinter.
     start_reminder_service()
 
-    def process_reminders():
+    def process_background_events():
+        process_keyboard_events()
         deliver_due_reminders()
         try:
-            _ui.root.after(250, process_reminders)
+            _ui.root.after(25, process_background_events)
         except Exception:
             pass
 
-    _ui.root.after(250, process_reminders)
+    _ui.root.after(25, process_background_events)
     _ui.run()
 
 
