@@ -2,7 +2,8 @@
 from __future__ import annotations
 import json, os, re, urllib.error, urllib.request
 ACTIONS = {
- "add_contact": "Добавить нового человека в локальную адресную книгу контактов.",
+ "add_contact": "Добавить нового человека в локальную адресную книгу контактов и открыть пустую карточку.",
+ "open_contacts": "Открыть общую адресную книгу контактов.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
  "save_note": "Сохранить буфер обмена как заметку.",
@@ -26,6 +27,8 @@ SYSTEM_PROMPT = """Ты — классификатор намерений рус
 Верни только JSON: action, confidence (0..1), arguments.
 Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string), question (string), app (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
 Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
+Если пользователь просит показать, открыть или посмотреть список контактов — выбери open_contacts.
+Фразы «добавь в контакты», «добавь контакт», «сохрани в адресную книгу», «запиши контакт» означают add_contact.
 Просьба отправить/переслать файл или документ по почте => email_compose и attach_copied_files=true.
 Просто создать письмо => email_compose и attach_copied_files=false.
 Для напоминания передай исходную фразу в reminder_text.
@@ -58,6 +61,13 @@ def _is_natural_information_question(text: str) -> bool:
 
 
 def understand_command(user_text: str) -> dict:
+    # Простые команды адресной книги обрабатываем локально: они не должны
+    # зависеть от доступности OpenRouter или точности ответа классификатора.
+    normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
+    if re.search(r"\b(добавь|добавить|запиши|записать|сохрани|сохранить)\b.*\b(в контакты|контакт|адресную книгу)\b|\b(добавь|добавить)\s+в\s+контакты\b", normalized):
+        return {"action": "add_contact", "confidence": 1.0, "arguments": {}}
+    if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
+        return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
     key = os.getenv("OPENROUTER_API_KEY", "").strip()
