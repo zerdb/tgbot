@@ -52,6 +52,17 @@ def open_camera_viewer(parent):
     video_label.pack(fill="both", expand=True)
     ttk.Label(frame, textvariable=status).pack(anchor="w", pady=(8, 0))
 
+    # Вопросы к ИИ по свежему кадру камеры.
+    question_row = ttk.Frame(frame)
+    question_row.pack(fill="x", pady=(9, 0))
+    question_var = tk.StringVar()
+    question_entry = ttk.Entry(question_row, textvariable=question_var)
+    question_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+    question_entry.insert(0, "Например: сколько человек в кадре?")
+
+    ask_button = ttk.Button(question_row, text="Спросить ИИ")
+    ask_button.pack(side="right")
+
     frames = queue.Queue(maxsize=1)
     stop_event = threading.Event()
     capture_holder = {"capture": None}
@@ -153,6 +164,47 @@ def open_camera_viewer(parent):
         except queue.Empty:
             pass
         win.after(30, update_image)
+
+    question_placeholder = "Например: сколько человек в кадре?"
+
+    def ask_about_camera():
+        question = question_var.get().strip()
+        if not question or question == question_placeholder:
+            messagebox.showinfo("Вопрос к ИИ", "Напиши, что нужно узнать по изображению с камеры.", parent=win)
+            question_entry.focus_set()
+            return
+        ask_button.configure(state="disabled")
+        status.set("Получаю свежий кадр и задаю вопрос ИИ…")
+
+        def worker():
+            try:
+                from camera_inspector import inspect_camera_question
+                answer = inspect_camera_question(question)
+                result = (answer, None)
+            except Exception as exc:
+                result = (None, str(exc))
+
+            def show_result():
+                if not win.winfo_exists():
+                    return
+                ask_button.configure(state="normal")
+                answer, error = result
+                if error:
+                    status.set("Не удалось получить ответ ИИ")
+                    messagebox.showerror("Ошибка анализа камеры", error, parent=win)
+                else:
+                    status.set("Ответ ИИ получен")
+                    messagebox.showinfo("Ответ по камере", answer, parent=win)
+
+            try:
+                win.after(0, show_result)
+            except tk.TclError:
+                pass
+
+        threading.Thread(target=worker, daemon=True, name="camera-question-ui").start()
+
+    ask_button.configure(command=ask_about_camera)
+    question_entry.bind("<Return>", lambda _event: ask_about_camera())
 
     def close():
         stop_event.set()
