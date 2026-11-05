@@ -66,13 +66,14 @@ def _is_natural_information_question(text: str) -> bool:
 
 
 def understand_command(user_text: str) -> dict:
-    # Настройки помощника — простое локальное действие, не отправляем в ИИ-классификатор.
-    if re.search(r"\\b(открой|открыть|покажи|показать|зайди в|перейди в)\\b.*\\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
+    normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
+
+    # Настройки помощника — локальное действие, не зависящее от ИИ и интернет-квоты.
+    if re.search(r"\b(открой|открыть|покажи|показать|зайди в|перейди в)\b.*\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
 
     # Простые команды адресной книги обрабатываем локально: они не должны
     # зависеть от доступности OpenRouter или точности ответа классификатора.
-    normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
     if re.search(r"\b(добавь|добавить|запиши|записать|сохрани|сохранить)\b.*\b(в контакты|контакт|адресную книгу)\b|\b(добавь|добавить)\s+в\s+контакты\b", normalized):
         return {"action": "add_contact", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
