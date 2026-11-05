@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 
-from agent_core import load_settings, save_settings
+from agent_core import load_settings, save_settings, remember_note, forget_notes
 from dialog_utils import activate_modal
 
 
@@ -56,6 +56,25 @@ def open_settings_window(parent):
             messagebox.showinfo("Настройки", "Настройки сохранены. Перезапусти помощника для применения ко всем модулям.", parent=window)
             window.destroy()
 
+        memory = ttk.LabelFrame(frame, text="Память помощника", padding=8)
+        memory.pack(fill="x", pady=(6, 10))
+        ttk.Label(memory, text="В память попадают только заметки, которые ты явно попросишь сохранить.").pack(anchor="w")
+        def add_memory():
+            note = simpledialog.askstring("Память помощника", "Что помощник должен помнить?", parent=window)
+            if note and note.strip():
+                try:
+                    remember_note(note)
+                    messagebox.showinfo("Память", "Заметка сохранена локально.", parent=window)
+                except OSError as exc:
+                    messagebox.showerror("Память", str(exc), parent=window)
+        def clear_memory():
+            if messagebox.askyesno("Очистить память", "Удалить сохранённые заметки памяти? История диалога останется.", parent=window):
+                forget_notes()
+                messagebox.showinfo("Память", "Сохранённые заметки очищены.", parent=window)
+        memory_buttons = ttk.Frame(memory)
+        memory_buttons.pack(fill="x", pady=(5, 0))
+        ttk.Button(memory_buttons, text="Запомнить заметку…", command=add_memory).pack(side="left")
+        ttk.Button(memory_buttons, text="Очистить заметки", command=clear_memory).pack(side="left", padx=8)
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", side="bottom")
         ttk.Button(buttons, text="Сохранить", command=save).pack(side="left")
