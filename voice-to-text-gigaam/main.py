@@ -20,6 +20,7 @@ from windows_actions import lock_computer, reboot_computer, open_downloads, open
 from reminders import start_reminder_service, add_reminder, deliver_due_reminders
 from file_search import search_web, search_files, start_file_search_ui
 from email_form import open_email_form
+from contact_form import open_contact_form
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow
 
@@ -337,7 +338,9 @@ def handle_command(text: str):
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
-    if action == "email_compose":
+    if action == "add_contact":
+        open_contact_form(parent=parent)
+    elif action == "email_compose":
         open_email_form(parent=parent, add_files_on_open=bool(args.get("attach_copied_files", False)))
     elif action == "save_note": save_clipboard_as_note()
     elif action == "clipboard_to_excel": paste_clipboard_to_excel()

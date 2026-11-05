@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json, os, re, urllib.error, urllib.request
 ACTIONS = {
+ "add_contact": "Добавить нового человека в локальную адресную книгу контактов.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
  "save_note": "Сохранить буфер обмена как заметку.",
  "clipboard_to_excel": "Создать Excel из данных буфера обмена.",
@@ -20,7 +21,7 @@ ACTIONS = {
 SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
 Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
 Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string).
+Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string).\nЕсли пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
 Просьба отправить/переслать файл или документ по почте => email_compose и attach_copied_files=true.
 Просто создать письмо => email_compose и attach_copied_files=false.
 Для напоминания передай исходную фразу в reminder_text.
