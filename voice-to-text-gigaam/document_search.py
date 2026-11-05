@@ -116,7 +116,8 @@ def open_document_search(parent):
                         answer = ask_ai(
                             "Найди ответ на запрос пользователя, опираясь только на приведённые документы. "
                             "Укажи названия файлов и не додумывай отсутствующие факты. "
-                            f"Запрос: {query}\n\nДокументы:\n{context[:26000]}"
+                            f"Запрос: {query}\n\nДокументы:\n{context[:26000]}",
+                            remember=False,
                         )
                     result = (candidates if 'candidates' in locals() else [], answer, None)
                 except Exception as exc:
