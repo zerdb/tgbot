@@ -67,7 +67,7 @@ def open_contact_form(parent=None):
         print("Для открытия контактов требуется главное окно приложения.")
         return
     try:
-        parent.after(0, show)
-    except tk.TclError:
-        print("Не удалось открыть форму контактов: главное окно уже закрыто.")
+        show()
+    except tk.TclError as exc:
+        print(f"Не удалось открыть форму контактов: {exc}")
 

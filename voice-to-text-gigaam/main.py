@@ -72,6 +72,7 @@ _recording_mode = "text"
 _lock = threading.Lock()
 _transcription_lock = threading.Lock()
 _ui = None
+_ui_actions = queue.SimpleQueue()
 
 
 def update_ui_status(listening=None, recording=None):
@@ -339,9 +340,10 @@ def handle_command(text: str):
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
     if action == "add_contact":
-        open_contact_form(parent=parent)
+        # Tkinter-операции выполняются только главным GUI-потоком.
+        _ui_actions.put(("add_contact", None))
     elif action == "email_compose":
-        open_email_form(parent=parent, add_files_on_open=bool(args.get("attach_copied_files", False)))
+        _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
     elif action == "save_note": save_clipboard_as_note()
     elif action == "clipboard_to_excel": paste_clipboard_to_excel()
     elif action == "lock_computer": lock_computer()
@@ -399,6 +401,15 @@ def main():
 
     def process_background_events():
         process_keyboard_events()
+        while True:
+            try:
+                ui_action, value = _ui_actions.get_nowait()
+            except queue.Empty:
+                break
+            if ui_action == "add_contact":
+                open_contact_form(parent=_ui.root)
+            elif ui_action == "email_compose":
+                open_email_form(parent=_ui.root, add_files_on_open=value)
         deliver_due_reminders()
         try:
             _ui.root.after(25, process_background_events)
