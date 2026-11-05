@@ -340,7 +340,10 @@ def handle_command(text: str):
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
-    if action == "add_contact":
+    if action == "ai_chat":
+        question = str(args.get("question") or text).strip()
+        _ui_actions.put(("ai_chat", question))
+    elif action == "add_contact":
         # Tkinter-операции выполняются только главным GUI-потоком.
         print("[GUI] Ставлю открытие формы контакта в очередь главного потока.", flush=True)
         _ui_actions.put(("add_contact", None))
