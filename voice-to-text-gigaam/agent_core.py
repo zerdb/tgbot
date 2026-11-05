@@ -86,6 +86,13 @@ def forget_notes() -> None:
         _write_memory(data)
 
 
+def clear_chat_history() -> None:
+    with _LOCK:
+        data = load_memory()
+        data["history"] = []
+        _write_memory(data)
+
+
 def get_ai_context() -> list[dict]:
     settings = load_settings()
     if not settings.get("remember_chat_history", True):
