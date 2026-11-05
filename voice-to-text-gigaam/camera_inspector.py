@@ -182,6 +182,29 @@ def _compact_camera_answer(answer: str) -> str:
     return result
 
 
+def _is_white_car_presence_question(question: str) -> bool:
+    q = re.sub(r"\\s+", " ", (question or "").lower().replace("ё", "е")).strip()
+    asks_presence = bool(re.search(r"\\b(есть|видно|видишь|присутствует|находится)\\b", q))
+    mentions_white = bool(re.search(r"\\b(бел(ая|ую|ого|ый|ое)?|светл(ая|ую|ый|ое)?)\\b", q))
+    mentions_car = bool(re.search(r"\\b(машин(а|у|ы|е)?|автомобил(ь|я|и)?|нива|лада)\\b", q))
+    return asks_presence and mentions_white and mentions_car
+
+
+def _yes_no_result(answer: str) -> str:
+    value = (answer or "").strip().lower()
+    first = re.sub(r"[^a-zа-я]+", " ", value).strip().split()
+    if not first:
+        return "Не удалось определить по кадру."
+    if first[0] in ("yes", "да", "true", "present"):
+        return "Да, белая машина видна на кадре."
+    if first[0] in ("no", "нет", "false", "absent"):
+        return "Нет, белой машины на кадре не видно."
+    # При неоднозначном ответе не превращаем предположение в факт.
+    if any(x in value for x in ("uncertain", "не уверен", "неразлич", "не могу определить")):
+        return "Не могу уверенно определить по этому кадру."
+    raise RuntimeError("Модель не дала однозначный ответ да/нет: " + value[:240])
+
+
 def inspect_camera_question(question: str) -> str:
     """Ask a natural-language question about a fresh camera frame."""
     from agent_core import get_moondream_api_key
@@ -190,6 +213,26 @@ def inspect_camera_question(question: str) -> str:
         question = "Опиши, что видно на изображении."
     image_data = _capture_camera_image()
     moondream_key = os.getenv("MOONDREAM_API_KEY", "").strip() or get_moondream_api_key()
+
+    # Для простого вопроса о наличии белой машины используем тот же
+    # проверенный бинарный сценарий, но без отдельной кнопки/команды.
+    if _is_white_car_presence_question(question):
+        binary_prompt = (
+            "Is a white car clearly visible in this surveillance image? "
+            "Answer with exactly YES or NO. Answer NO if no white car is visible "
+            "or if you are uncertain. Do not describe the question or guess."
+        )
+        print("[Камера] Распознан вопрос да/нет о белой машине.", flush=True)
+        if moondream_key:
+            try:
+                return _yes_no_result(_ask_moondream(image_data, moondream_key, binary_prompt))
+            except Exception as exc:
+                print("[Камера] Moondream binary check failed: %s" % exc, flush=True)
+        try:
+            return _yes_no_result(_ask_openrouter(image_data, binary_prompt))
+        except Exception as exc:
+            raise RuntimeError("Не удалось проверить белую машину ни одной vision-моделью: %s" % exc) from exc
+
     answer = ""
     moondream_error = None
     if moondream_key:
