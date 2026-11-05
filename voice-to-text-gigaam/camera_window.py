@@ -56,44 +56,92 @@ def open_camera_viewer(parent):
     stop_event = threading.Event()
     capture_holder = {"capture": None}
 
-    def reader():
-        capture = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-        capture_holder["capture"] = capture
-        if not capture.isOpened():
-            frames.put(("error", "Не удалось открыть RTSP-поток. Проверьте адрес, пароль и доступность камеры."))
-            return
-        while not stop_event.is_set():
-            ok, image = capture.read()
-            if not ok:
-                frames.put(("error", "Поток прервался. Переподключение…"))
-                capture.release()
-                if stop_event.wait(2):
-                    return
-                capture = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-                capture_holder["capture"] = capture
-                if not capture.isOpened():
-                    continue
-                continue
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    def publish(kind, payload):
+        """Не блокирует поток чтения, даже если очередь кадров заполнена."""
+        try:
+            frames.put_nowait((kind, payload))
+        except queue.Full:
             try:
-                frames.put_nowait(("frame", image))
+                frames.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                frames.put_nowait((kind, payload))
             except queue.Full:
+                pass
+
+    def reader():
+        # Владелец VideoCapture — только этот поток. Нельзя вызывать release()
+        # из GUI-потока одновременно с capture.read(): это может уронить OpenCV.
+        capture = None
+        try:
+            while not stop_event.is_set():
                 try:
-                    frames.get_nowait()
-                except queue.Empty:
-                    pass
+                    if capture is None or not capture.isOpened():
+                        if capture is not None:
+                            capture.release()
+                        publish("status", "Подключаюсь к камере…")
+                        capture = cv2.VideoCapture()
+                        # Ограничиваем ожидание RTSP, если камера недоступна.
+                        params = []
+                        if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC"):
+                            params += [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000]
+                        if hasattr(cv2, "CAP_PROP_READ_TIMEOUT_MSEC"):
+                            params += [cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000]
+                        opened = capture.open(url, cv2.CAP_FFMPEG, params) if params else capture.open(url, cv2.CAP_FFMPEG)
+                        if not opened or not capture.isOpened():
+                            publish("error", "Не удалось открыть RTSP-поток. Повтор подключения через 3 секунды…")
+                            capture.release()
+                            capture = None
+                            if stop_event.wait(3):
+                                break
+                            continue
+
+                    ok, image = capture.read()
+                    if not ok or image is None:
+                        publish("error", "Поток прервался. Переподключаюсь…")
+                        capture.release()
+                        capture = None
+                        if stop_event.wait(2):
+                            break
+                        continue
+
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    publish("frame", image)
+
+                except cv2.error as exc:
+                    publish("error", f"Ошибка OpenCV при чтении RTSP: {exc}. Переподключаюсь…")
+                    if capture is not None:
+                        try:
+                            capture.release()
+                        except Exception:
+                            pass
+                        capture = None
+                    if stop_event.wait(2):
+                        break
+                except Exception as exc:
+                    publish("error", f"Ошибка видеопотока: {exc}. Переподключаюсь…")
+                    if capture is not None:
+                        try:
+                            capture.release()
+                        except Exception:
+                            pass
+                        capture = None
+                    if stop_event.wait(2):
+                        break
+        finally:
+            if capture is not None:
                 try:
-                    frames.put_nowait(("frame", image))
-                except queue.Full:
+                    capture.release()
+                except Exception:
                     pass
-        capture.release()
 
     def update_image():
         if stop_event.is_set() or not win.winfo_exists():
             return
         try:
             kind, payload = frames.get_nowait()
-            if kind == "error":
+            if kind in ("error", "status"):
                 status.set(payload)
             else:
                 image = Image.fromarray(payload)
@@ -108,12 +156,8 @@ def open_camera_viewer(parent):
 
     def close():
         stop_event.set()
-        capture = capture_holder.get("capture")
-        if capture is not None:
-            try:
-                capture.release()
-            except Exception:
-                pass
+        # Освобождением VideoCapture занимается reader после выхода из read().
+        # Параллельный release из Tk-потока способен аварийно завершить OpenCV.
         win.destroy()
 
     win.protocol("WM_DELETE_WINDOW", close)
