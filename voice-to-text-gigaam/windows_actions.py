@@ -109,6 +109,31 @@ def open_downloads():
     _bring_window_to_front(("Загрузки", "Downloads"))
 
 
+def open_recycle_bin():
+    """Open the Recycle Bin without deleting anything."""
+    windows_only()
+    subprocess.Popen(["explorer.exe", "shell:RecycleBinFolder"])
+
+
+def open_application(app_name: str):
+    """Open a known Windows application using a strict allowlist."""
+    windows_only()
+    apps = {
+        "notepad": ["notepad.exe"],
+        "calculator": ["calc.exe"],
+        "word": ["cmd", "/c", "start", "", "winword"],
+        "excel": ["cmd", "/c", "start", "", "excel"],
+        "images": ["explorer.exe", "shell:MyPictures"],
+    }
+    if app_name == "browser":
+        import webbrowser
+        webbrowser.open("https://www.google.com")
+    elif app_name in apps:
+        subprocess.Popen(apps[app_name])
+    else:
+        raise ValueError("Неизвестное приложение.")
+
+
 def open_settings():
     windows_only()
     os.startfile("ms-settings:")

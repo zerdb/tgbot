@@ -15,6 +15,7 @@ from file_indexer import refresh_and_search
 _search_requests = queue.Queue()
 _search_results = queue.Queue()
 _polling_parent = None
+_busy_callback = None
 
 
 def search_web(text: str):
@@ -26,10 +27,11 @@ def search_web(text: str):
     print(f"Открываю поиск в интернете: {query}")
 
 
-def start_file_search_ui(parent):
+def start_file_search_ui(parent, busy_callback=None):
     """Start queue polling on Tk's main thread before mainloop()."""
-    global _polling_parent
+    global _polling_parent, _busy_callback
     _polling_parent = parent
+    _busy_callback = busy_callback
     parent.after(100, _poll_search_queues)
 
 
@@ -75,6 +77,8 @@ def _poll_search_queues():
             except queue.Empty:
                 break
             if request_parent is parent:
+                if _busy_callback:
+                    _busy_callback("Ищу файлы…")
                 threading.Thread(target=_search_worker, args=(query, parent), daemon=True, name="file-search").start()
 
         while True:
@@ -84,6 +88,8 @@ def _poll_search_queues():
                 break
             if result_parent is not parent:
                 continue
+            if _busy_callback:
+                _busy_callback(None)
             if status == "error":
                 query, error_text = payload
                 from tkinter import messagebox

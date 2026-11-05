@@ -16,7 +16,7 @@ from ctypes import wintypes
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from windows_actions import lock_computer, reboot_computer, open_downloads, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
+from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
 from reminders import start_reminder_service, add_reminder, deliver_due_reminders
 from file_search import search_web, search_files, start_file_search_ui
 from email_form import open_email_form
@@ -354,6 +354,8 @@ def handle_command(text: str):
     elif action == "lock_computer": lock_computer()
     elif action == "reboot_computer": reboot_computer()
     elif action == "open_downloads": open_downloads()
+    elif action == "open_recycle_bin": open_recycle_bin()
+    elif action == "open_application": open_application(str(args.get("app") or ""))
     elif action == "open_settings": open_settings()
     elif action == "empty_recycle_bin": empty_recycle_bin()
     elif action == "screenshot": take_screenshot()
@@ -409,7 +411,7 @@ def main():
         on_command=handle_command,
         microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН",
     )
-    start_file_search_ui(_ui.root)
+    start_file_search_ui(_ui.root, busy_callback=_ui.set_busy_overlay)
     # Таймер очереди напоминаний обслуживается главным потоком Tkinter.
     start_reminder_service()
 

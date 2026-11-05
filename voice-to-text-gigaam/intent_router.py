@@ -10,6 +10,8 @@ ACTIONS = {
  "lock_computer": "Заблокировать компьютер.",
  "reboot_computer": "Перезагрузить компьютер.",
  "open_downloads": "Открыть папку Загрузки.",
+ "open_recycle_bin": "Открыть Корзину Windows для просмотра; не очищать её.",
+ "open_application": "Открыть приложение из разрешённого списка; app — notepad, calculator, browser, word, excel или images.",
  "open_settings": "Открыть настройки Windows.",
  "empty_recycle_bin": "Очистить корзину.",
  "screenshot": "Сделать скриншот.",
@@ -22,12 +24,15 @@ ACTIONS = {
 SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
 Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
 Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string), question (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
+Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string), question (string), app (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
 Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
 Просьба отправить/переслать файл или документ по почте => email_compose и attach_copied_files=true.
 Просто создать письмо => email_compose и attach_copied_files=false.
 Для напоминания передай исходную фразу в reminder_text.
-Неясная задача => unknown. Не придумывай действия и параметры.
+Если просят открыть корзину/мусорное ведро — open_recycle_bin, НЕ open_downloads и НЕ empty_recycle_bin.
+Если просят очистить/опустошить корзину — empty_recycle_bin.
+Блокнот — open_application app="notepad"; калькулятор — app="calculator"; браузер — app="browser"; Word — app="word"; Excel — app="excel"; папка Изображения/Картинки/Фото — app="images".
+Не путай корзину с загрузками. Неясная задача => unknown. Не придумывай действия и параметры.
 Доступные действия: """ + json.dumps(ACTIONS, ensure_ascii=False)
 
 def _is_natural_information_question(text: str) -> bool:
@@ -79,5 +84,5 @@ def understand_command(user_text: str) -> dict:
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","query","question") and isinstance(v,(str,bool))}
+    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","query","question","app") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}
