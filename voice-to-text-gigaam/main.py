@@ -47,6 +47,10 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 COMMAND_HOTKEY = "right ctrl"
 DICTATION_MODIFIER = "right shift"
+# Windows scan codes: right Ctrl has the extended bit (285), right Shift is 54.
+RIGHT_CTRL_SCAN_CODE = 285
+RIGHT_SHIFT_SCAN_CODE = 54
+_pressed_right_keys: set[int] = set()
 MAX_CHUNK_SECONDS = 24
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -150,25 +154,36 @@ def promote_to_dictation():
     update_ui_status("ДИКТОВКА", recording="text")
 
 
-def on_right_ctrl_pressed(_event=None):
-    mode = "text" if keyboard.is_pressed(DICTATION_MODIFIER) else "command"
-    start_recording(mode)
+def on_keyboard_event(event):
+    """Accept only physical RIGHT Ctrl/RIGHT Shift scan codes; ignore left-side keys."""
+    scan_code = getattr(event, "scan_code", None)
+    if scan_code not in (RIGHT_CTRL_SCAN_CODE, RIGHT_SHIFT_SCAN_CODE):
+        return
 
+    if event.event_type == "down":
+        already_pressed = scan_code in _pressed_right_keys
+        _pressed_right_keys.add(scan_code)
+        if already_pressed:
+            return
+        if scan_code == RIGHT_CTRL_SCAN_CODE:
+            mode = "text" if RIGHT_SHIFT_SCAN_CODE in _pressed_right_keys else "command"
+            start_recording(mode)
+        elif RIGHT_CTRL_SCAN_CODE in _pressed_right_keys:
+            with _lock:
+                active = _recording
+            if active:
+                promote_to_dictation()
+        return
 
-def on_right_shift_pressed(_event=None):
-    # Supports both orders: Shift then Ctrl, or Ctrl then Shift.
-    if keyboard.is_pressed(COMMAND_HOTKEY):
-        with _lock:
-            active = _recording
-        if active:
-            promote_to_dictation()
-
-
-def on_right_shift_released(_event=None):
-    with _lock:
-        should_stop = _recording and _recording_mode == "text"
-    if should_stop:
-        stop_recording()
+    if event.event_type == "up":
+        _pressed_right_keys.discard(scan_code)
+        if scan_code == RIGHT_SHIFT_SCAN_CODE:
+            with _lock:
+                should_stop = _recording and _recording_mode == "text"
+            if should_stop:
+                stop_recording()
+        elif scan_code == RIGHT_CTRL_SCAN_CODE:
+            stop_recording()
 
 
 def stop_recording():
@@ -389,10 +404,10 @@ def main():
     load_model()
     start_reminder_service()
     progress("Голосовой ввод и голосовые команды готовы.")
-    keyboard.on_press_key(COMMAND_HOTKEY, on_right_ctrl_pressed, suppress=False)
-    keyboard.on_release_key(COMMAND_HOTKEY, lambda _: stop_recording(), suppress=False)
-    keyboard.on_press_key(DICTATION_MODIFIER, on_right_shift_pressed, suppress=False)
-    keyboard.on_release_key(DICTATION_MODIFIER, on_right_shift_released, suppress=False)
+    # Use physical scan codes instead of key-name hooks: generic Ctrl/Shift aliases
+    # can otherwise react to the left-hand keys on some Windows layouts.
+    _pressed_right_keys.clear()
+    keyboard.hook(on_keyboard_event, suppress=False)
     _ui = AssistantWindow(
         on_close=shutdown,
         on_command=handle_command,
