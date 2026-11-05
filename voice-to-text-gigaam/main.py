@@ -451,6 +451,7 @@ def _camera_inspection_worker():
             speak("Бага на месте")
             result = ("Бага на месте", None)
         else:
+            speak("Баги нет")
             result = ("Белая Нива не обнаружена", None)
     except Exception as exc:
         result = ("", str(exc))
