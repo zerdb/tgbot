@@ -5,7 +5,7 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from agent_core import load_settings, save_settings, remember_note, forget_notes, clear_chat_history, get_camera_password, set_camera_password, delete_camera_password
+from agent_core import load_settings, save_settings, remember_note, forget_notes, clear_chat_history, get_camera_password, set_camera_password, delete_camera_password, get_moondream_api_key, set_moondream_api_key, delete_moondream_api_key
 from dialog_utils import activate_modal
 
 
@@ -18,8 +18,8 @@ def open_settings_window(parent):
             return
         window = tk.Toplevel(parent)
         window.title("Настройки GigaAM")
-        window.geometry("620x640")
-        window.minsize(540, 560)
+        window.geometry("680x760")
+        window.minsize(580, 680)
         frame = ttk.Frame(window, padding=16)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Единые настройки помощника", font=("Segoe UI", 15, "bold")).pack(anchor="w")
@@ -62,6 +62,30 @@ def open_settings_window(parent):
                 messagebox.showerror("Камера", str(exc), parent=window)
         ttk.Button(camera_box, text="Сохранить", command=save_camera_secret).pack(side="left")
         ttk.Button(camera_box, text="Очистить", command=clear_camera_secret).pack(side="left", padx=6)
+
+        moondream_box = ttk.LabelFrame(frame, text="Moondream — альтернативная ИИ-модель для камеры", padding=8)
+        moondream_box.pack(fill="x", pady=(2, 8))
+        moondream_var = tk.StringVar(master=window)
+        ttk.Entry(moondream_box, textvariable=moondream_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
+        moondream_status = tk.StringVar(master=window, value="Ключ сохранён" if get_moondream_api_key() else "Ключ не задан")
+        ttk.Label(moondream_box, textvariable=moondream_status).pack(anchor="w", pady=(6, 0))
+        def save_moondream_secret():
+            try:
+                set_moondream_api_key(moondream_var.get())
+                moondream_var.set("")
+                moondream_status.set("Ключ сохранён в защищённом хранилище Windows")
+                messagebox.showinfo("Moondream", "Ключ сохранён. Проверка камеры теперь будет использовать Moondream.", parent=window)
+            except Exception as exc:
+                messagebox.showerror("Moondream", str(exc), parent=window)
+        def clear_moondream_secret():
+            try:
+                delete_moondream_api_key()
+                moondream_var.set("")
+                moondream_status.set("Ключ не задан — будет использован OpenRouter")
+            except Exception as exc:
+                messagebox.showerror("Moondream", str(exc), parent=window)
+        ttk.Button(moondream_box, text="Сохранить ключ", command=save_moondream_secret).pack(side="left")
+        ttk.Button(moondream_box, text="Очистить", command=clear_moondream_secret).pack(side="left", padx=6)
 
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(2, 8))
