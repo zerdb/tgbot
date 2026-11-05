@@ -185,7 +185,7 @@ def open_contact_form(parent=None, start_new=False):
                             "если это не имя человека.\n\nТЕКСТ:\n" + raw_text[:12000]
                         )
                         answer = ask_ai(prompt)
-                        match = re.search(r"\\[\\s\\S]*\\]", answer)
+                        match = re.search(r"\[[\s\S]*\]", answer)
                         if not match:
                             raise ValueError("ИИ не вернул JSON-массив контактов.")
                         data = json.loads(match.group(0))
@@ -203,7 +203,7 @@ def open_contact_form(parent=None, start_new=False):
                                 name = email.split("@", 1)[0]
                             if not name and not email:
                                 continue
-                            if email and not re.fullmatch(r"[\\w.+-]+@[\\w.-]+\\.[a-zа-я]{2,}", email, re.IGNORECASE):
+                            if email and not re.fullmatch(r"[\w.+-]+@[\w.-]+\.[a-zа-я]{2,}", email, re.IGNORECASE):
                                 continue
                             cleaned.append({"name": name, "email": email, "phone": phone, "notes": notes})
                         if not cleaned:
@@ -270,7 +270,7 @@ def open_contact_form(parent=None, start_new=False):
                 status.set(f"Умный импорт: добавлено {added}, пропущено повторов {skipped}")
                 messagebox.showinfo(
                     "Импорт завершён",
-                    f"Добавлено контактов: {added}\\nПропущено повторов: {skipped}",
+                    f"Добавлено контактов: {added}\nПропущено повторов: {skipped}",
                     parent=dialog,
                 )
                 dialog.destroy()
