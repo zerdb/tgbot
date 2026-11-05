@@ -165,7 +165,16 @@ class KBDLLHOOKSTRUCT(ctypes.Structure):
 
 HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
 user32 = ctypes.WinDLL("user32", use_last_error=True)
-kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+user32.SetWindowsHookExW.argtypes = (
+    ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD
+)
+user32.SetWindowsHookExW.restype = wintypes.HHOOK
+user32.CallNextHookEx.argtypes = (
+    wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+)
+user32.CallNextHookEx.restype = ctypes.c_ssize_t
+user32.UnhookWindowsHookEx.argtypes = (wintypes.HHOOK,)
+user32.UnhookWindowsHookEx.restype = wintypes.BOOL
 
 def _native_keyboard_event(n_code, w_param, l_param):
     if n_code >= 0:
@@ -194,7 +203,8 @@ def _native_keyboard_event(n_code, w_param, l_param):
 def install_right_only_keyboard_hook():
     global _keyboard_hook, _keyboard_hook_proc
     _keyboard_hook_proc = HOOKPROC(_native_keyboard_event)
-    _keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _keyboard_hook_proc, kernel32.GetModuleHandleW(None), 0)
+    # For WH_KEYBOARD_LL, use a null module handle for this in-process callback.
+    _keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _keyboard_hook_proc, None, 0)
     if not _keyboard_hook:
         raise ctypes.WinError(ctypes.get_last_error())
     progress("Подключены только физические Right Ctrl / Right Shift.")
