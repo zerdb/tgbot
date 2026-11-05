@@ -6,6 +6,7 @@ from tkinter import ttk, messagebox
 import tkinter as tk
 
 from email_manager import load_address_book, save_address_book
+from dialog_utils import activate_modal
 
 def open_contact_form(parent=None):
     """Open a desktop form to add a contact to the local address book."""
@@ -56,12 +57,7 @@ def open_contact_form(parent=None):
         ttk.Button(buttons, text="Сохранить", command=save).pack(side="right")
         root.bind("<Return>", lambda _event: save())
         name_entry.focus_set()
-        root.update_idletasks()
-        root.lift()
-        root.focus_force()
-        root.transient(parent)
-        root.lift()
-        root.focus_force()
+        activate_modal(root, parent)
 
     if parent is None:
         print("Для открытия контактов требуется главное окно приложения.")

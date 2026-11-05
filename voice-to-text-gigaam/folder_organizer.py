@@ -7,6 +7,8 @@ from collections import defaultdict
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from dialog_utils import activate_modal
+
 CATEGORIES = {
     "Документы": {".doc", ".docx", ".odt", ".rtf", ".txt", ".pdf"},
     "Таблицы": {".xls", ".xlsx", ".ods", ".csv"},
@@ -48,6 +50,8 @@ class FolderOrganizer:
         self.folder: Path | None = None
         self.plan: list[tuple[Path, str]] = []
         self._build()
+        if parent is not None:
+            activate_modal(self.window, parent)
 
     def _build(self):
         outer = ttk.Frame(self.window, padding=14)

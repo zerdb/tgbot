@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from email_manager import load_address_book, send_email
+from dialog_utils import activate_modal
 
 
 def copied_file_paths() -> list[str]:
@@ -207,9 +208,7 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
         cancel_button.pack(side="right", padx=(0, 8))
         update_subject_from_files()
         root.bind("<Escape>", lambda _event: root.destroy())
-        root.transient(parent)
-        root.lift()
-        root.focus_force()
+        activate_modal(root, parent)
 
     if parent is None:
         print("Для открытия почты требуется главное окно приложения.")

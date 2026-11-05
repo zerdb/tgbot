@@ -110,6 +110,7 @@ def _poll_search_queues():
 def show_file_results(parent, paths: list[Path], query: str):
     import tkinter as tk
     from tkinter import ttk, messagebox
+    from dialog_utils import activate_modal
 
     window = tk.Toplevel(parent)
     window.title(f"Результаты поиска: {query}")
@@ -137,5 +138,4 @@ def show_file_results(parent, paths: list[Path], query: str):
 
     listing.bind("<Double-Button-1>", open_selected)
     ttk.Button(window, text="Открыть выбранный файл", command=open_selected).pack(pady=(0, 12))
-    window.lift()
-    window.focus_force()
+    activate_modal(window, parent)

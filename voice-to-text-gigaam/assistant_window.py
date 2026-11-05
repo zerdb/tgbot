@@ -2,6 +2,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
+from dialog_utils import activate_modal
+
 
 class AssistantWindow:
     def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА"):
@@ -159,5 +161,4 @@ def show_ai_answer(parent, question, answer=None, error=None):
     answer_box.insert("1.0", answer if answer else (error or "Пустой ответ"))
     answer_box.configure(state="disabled")
     ttk.Button(frame, text="Закрыть", command=window.destroy).pack(anchor="e")
-    window.transient(parent)
-    window.lift()
+    activate_modal(window, parent)
