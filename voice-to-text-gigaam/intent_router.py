@@ -75,6 +75,8 @@ def understand_command(user_text: str) -> dict:
         return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": True}}
     if "проверь белую машину на камере" in normalized or "белая нива на камере" in normalized:
         return {"action": "inspect_camera_image", "confidence": 1.0, "arguments": {}}
+    if "начальник" in normalized or "белая нива" in normalized or "нива на месте" in normalized:
+        return {"action": "inspect_camera_image", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(настройки помощника|настройки gigaam|настройки гигаам)\b", normalized):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
