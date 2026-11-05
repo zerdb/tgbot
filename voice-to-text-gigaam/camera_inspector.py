@@ -1,47 +1,119 @@
-"""Capture one RTSP frame and ask the configured OpenRouter vision model."""
-import os, json, base64, re, urllib.request, urllib.error, subprocess
+"""Capture an RTSP frame and inspect it with Moondream or OpenRouter."""
+import os
+import json
+import base64
+import re
+import urllib.request
+import urllib.error
+import subprocess
 from urllib.parse import quote
+
+
+def _ask_moondream(image_data: str, api_key: str) -> bool:
+    payload = {
+        "model": "moondream3.1-9B-A2B",
+        "image_url": "data:image/jpeg;base64," + image_data,
+        "question": (
+            "Is a white Lada Niva (Lada 4x4) car clearly visible in this surveillance image? "
+            "Answer with exactly YES or NO. Answer NO if the car is absent, unclear, too small, "
+            "or you are uncertain. Do not infer from context."
+        ),
+    }
+    req = urllib.request.Request(
+        "https://api.moondream.ai/v1/query",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"X-Moondream-Auth": api_key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")[:500]
+        raise RuntimeError(f"Moondream вернул HTTP {exc.code}: {detail}") from exc
+    answer = str(data.get("answer", "")).strip().upper()
+    if not answer:
+        raise RuntimeError("Moondream вернул пустой ответ.")
+    # Fail closed: only an explicit affirmative answer counts as detection.
+    first_word = re.sub(r"[^A-Z]", " ", answer).split()
+    return bool(first_word and first_word[0] == "YES")
+
+
+def _ask_openrouter(image_data: str) -> bool:
+    key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("Не задан ключ Moondream и отсутствует OPENROUTER_API_KEY.")
+    from agent_core import load_settings
+    cfg = load_settings()
+    base = os.getenv("OPENROUTER_BASE_URL", cfg.get("openrouter_base_url", "https://openrouter.ai/api/v1")).rstrip("/")
+    model = os.getenv("OPENROUTER_MODEL", cfg.get("openrouter_model", "openrouter/free")).strip()
+    prompt = (
+        "Is a white Lada Niva car visible in this surveillance image? Do not guess. "
+        "Return only JSON: {present: boolean, confidence: number, reason: string}. "
+        "If uncertain, present must be false."
+    )
+    payload = {"model": model, "temperature": 0, "messages": [{"role": "user", "content": [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + image_data}},
+    ]}]}
+    req = urllib.request.Request(
+        base + "/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError("OpenRouter вернул HTTP " + str(exc.code) + ": " + exc.read().decode(errors="replace")[:500]) from exc
+    choices = data.get("choices") or []
+    answer = (choices[0].get("message") or {}).get("content", "") if choices else ""
+    if isinstance(answer, list):
+        answer = " ".join(x.get("text", "") for x in answer if isinstance(x, dict))
+    match = re.search(r"\{.*\}", str(answer), re.S)
+    if not match:
+        raise RuntimeError("OpenRouter не вернул JSON. Нужна vision-модель.")
+    result = json.loads(match.group(0))
+    return result.get("present") is True
+
 
 def inspect_camera():
     import cv2
-    from agent_core import get_camera_password, load_settings
-    url=os.getenv("GIGAAM_CAMERA_RTSP_URL","").strip()
+    from agent_core import get_camera_password, get_moondream_api_key
+    url = os.getenv("GIGAAM_CAMERA_RTSP_URL", "").strip()
     if not url:
-        secret=get_camera_password()
+        secret = get_camera_password()
         if not secret:
             raise RuntimeError("Сначала сохрани пароль камеры в настройках.")
-        url="rtsp://admin:"+quote(secret,safe="")+"@10.1.5.152:554"
-    cap=cv2.VideoCapture(url,cv2.CAP_FFMPEG)
+        url = "rtsp://admin:" + quote(secret, safe="") + "@10.1.5.152:554"
+    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     try:
-        if not cap.isOpened(): raise RuntimeError("Не удалось открыть RTSP-камеру.")
-        ok,frame=cap.read()
-        if not ok: raise RuntimeError("Не удалось получить кадр камеры.")
-        ok,jpg=cv2.imencode(".jpg",frame,[cv2.IMWRITE_JPEG_QUALITY,82])
-        if not ok: raise RuntimeError("Не удалось подготовить снимок.")
-        image=base64.b64encode(jpg.tobytes()).decode("ascii")
-    finally: cap.release()
-    key=os.getenv("OPENROUTER_API_KEY","").strip()
-    if not key: raise RuntimeError("Не задан OPENROUTER_API_KEY.")
-    cfg=load_settings()
-    base=os.getenv("OPENROUTER_BASE_URL",cfg.get("openrouter_base_url","https://openrouter.ai/api/v1")).rstrip("/")
-    model=os.getenv("OPENROUTER_MODEL",cfg.get("openrouter_model","openrouter/free")).strip()
-    prompt="Is a white Lada Niva car visible in this surveillance image? Do not guess. Return only JSON: {present: boolean, confidence: number, reason: string}. If uncertain, present must be false."
-    payload={"model":model,"temperature":0,"messages":[{"role":"user","content":[{"type":"text","text":prompt},{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,"+image}}]}]}
-    req=urllib.request.Request(base+"/chat/completions",data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},method="POST")
-    try:
-        with urllib.request.urlopen(req,timeout=60) as response: data=json.loads(response.read().decode())
-    except urllib.error.HTTPError as exc:
-        raise RuntimeError("Vision-модель вернула HTTP "+str(exc.code)+": "+exc.read().decode(errors="replace")[:500]) from exc
-    choices=data.get("choices") or []
-    answer=(choices[0].get("message") or {}).get("content","") if choices else ""
-    if isinstance(answer,list): answer=" ".join(x.get("text","") for x in answer if isinstance(x,dict))
-    match=re.search(r"\{.*\}",str(answer),re.S)
-    if not match: raise RuntimeError("Выбранная модель не вернула JSON. Нужна модель с поддержкой изображений.")
-    result=json.loads(match.group(0))
-    return result.get("present") is True
+        if not cap.isOpened():
+            raise RuntimeError("Не удалось открыть RTSP-камеру.")
+        ok, frame = cap.read()
+        if not ok:
+            raise RuntimeError("Не удалось получить кадр камеры.")
+        ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 82])
+        if not ok:
+            raise RuntimeError("Не удалось подготовить снимок.")
+        image_data = base64.b64encode(jpg.tobytes()).decode("ascii")
+    finally:
+        cap.release()
+
+    moondream_key = os.getenv("MOONDREAM_API_KEY", "").strip() or get_moondream_api_key()
+    if moondream_key:
+        print("[Камера] Использую Moondream для анализа снимка.", flush=True)
+        return _ask_moondream(image_data, moondream_key)
+
+    print("[Камера] Ключ Moondream не задан — использую OpenRouter.", flush=True)
+    return _ask_openrouter(image_data)
+
 
 def speak(text):
-    import base64, subprocess
-    encoded=base64.b64encode(text.encode("utf-16le")).decode("ascii")
-    script="$t=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('"+encoded+"'));Add-Type -AssemblyName System.Speech;$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;$s.Speak($t);$s.Dispose()"
-    subprocess.run(["powershell","-NoProfile","-NonInteractive","-Command",script],check=True,timeout=30,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
+    script = "$t=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('" + encoded + "'));Add-Type -AssemblyName System.Speech;$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;$s.Speak($t);$s.Dispose()"
+    subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+        check=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
