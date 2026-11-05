@@ -31,11 +31,12 @@ def open_mail_client(parent):
         status.set(msg)
         for b in buttons.winfo_children(): b.configure(state="disabled" if flag else "normal")
     def load():
+        search_query=query.get().strip()
         busy(True,"Подключаюсь к IMAP…")
         def work():
             try:
                 from mail_reader import fetch_messages
-                result=fetch_messages(limit=100, query=query.get().strip())
+                result=fetch_messages(limit=100, query=search_query)
                 err=None
             except Exception as e: result=[]; err=str(e)
             def done():
@@ -52,6 +53,7 @@ def open_mail_client(parent):
         if not messagebox.askyesno("Передача текста ИИ","Для анализа выбранные письма будут переданы OpenRouter. Продолжить?",parent=win):return
         busy(True,"ИИ анализирует письма…")
         snapshot=list(messages)
+        search_query=query.get().strip()
         def work():
             try:
                 from ai_chat import ask_ai
@@ -60,7 +62,7 @@ def open_mail_client(parent):
                   "priority":"Разложи письма по важности: срочно, важно, обычно, низкий приоритет. Обоснуй кратко.",
                   "extract":"Выдели по каждому письму просьбы, счета/суммы, сроки, даты и встречи. Если данных нет — так и скажи.",
                   "unanswered":"Найди письма, где от меня ожидают ответ или действие. Не выдумывай, даты писем укажи.",
-                  "search":"Найди подходящие письма по запросу пользователя: "+query.get().strip()
+                  "search":"Найди подходящие письма по запросу пользователя: "+search_query
                 }
                 answer=ask_ai(prompts[kind]+"\n\nПисьма:\n"+material,remember=False); err=None
             except Exception as e: answer="";err=str(e)
