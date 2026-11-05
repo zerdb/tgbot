@@ -5,7 +5,6 @@ ACTIONS = {
  "add_contact": "Добавить нового человека в локальную адресную книгу контактов и открыть пустую карточку.",
  "open_contacts": "Открыть общую адресную книгу контактов.",
  "open_assistant_settings": "Открыть настройки GigaAM.",
- "open_tasks": "Открыть список задач и планов.",
  "read_unread_mail": "Прочитать и кратко пересказать непрочитанные письма через IMAP и ИИ.",
  "search_documents": "Искать сведения внутри локальных документов с помощью ИИ.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
@@ -74,8 +73,6 @@ def understand_command(user_text: str) -> dict:
         return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(настройки помощника|настройки gigaam|настройки гигаам)\b", normalized):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\b(открой|покажи|открыть|показать)\b.*\b(задачи|планы|планировщик)\b", normalized):
-        return {"action": "open_tasks", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
         return {"action": "read_unread_mail", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(найди|поищи|поиск)\b.*\b(в документах|в содержимом|в файлах)\b", normalized):
