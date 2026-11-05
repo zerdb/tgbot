@@ -3,6 +3,7 @@ from __future__ import annotations
 import json, os, re, urllib.error, urllib.request
 ACTIONS = {
  "add_contact": "Добавить нового человека в локальную адресную книгу контактов.",
+ "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
  "save_note": "Сохранить буфер обмена как заметку.",
  "clipboard_to_excel": "Создать Excel из данных буфера обмена.",
@@ -21,7 +22,8 @@ ACTIONS = {
 SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
 Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
 Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string).\nЕсли пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
+Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string), question (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
+Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
 Просьба отправить/переслать файл или документ по почте => email_compose и attach_copied_files=true.
 Просто создать письмо => email_compose и attach_copied_files=false.
 Для напоминания передай исходную фразу в reminder_text.
@@ -53,5 +55,5 @@ def understand_command(user_text: str) -> dict:
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","query") and isinstance(v,(str,bool))}
+    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","query","question") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}

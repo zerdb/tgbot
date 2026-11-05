@@ -35,6 +35,7 @@ class AssistantWindow:
         smart_row = ttk.Frame(outer)
         smart_row.pack(fill="x", pady=(0, 9))
         ttk.Button(smart_row, text="Умная команда…", command=self._ask_smart_command).pack(side="left")
+        ttk.Button(smart_row, text="Спросить ИИ…", command=self._ask_ai).pack(side="left", padx=(8, 0))
         ttk.Label(smart_row, text="Например: перешли этот документ по почте").pack(side="left", padx=10)
         row = ttk.Frame(outer)
         row.pack(fill="x", pady=(0, 8))
@@ -42,6 +43,7 @@ class AssistantWindow:
             ("Windows ▾", [("Заблокировать компьютер", "заблокируй компьютер"), ("Перезагрузить компьютер", "перезагрузи компьютер"), ("Открыть загрузки", "открой загрузки"), ("Открыть настройки", "открой настройки"), ("Очистить корзину", "очисти корзину"), ("Сделать скриншот", "сделай скриншот")]),
             ("Файлы ▾", [("Найти файл", "найди файл"), ("Разобрать папку", "разбери папку"), ("Вставить таблицу в Excel", "перенеси в excel"), ("Сохранить как заметку", "сохрани как заметку")]),
             ("Интернет ▾", [("Поиск в интернете", "найди в интернете"), ("Создать напоминание", "напомни")]),
+            ("ИИ ▾", [("Задать вопрос ИИ", "спроси ИИ")]),
             ("Почта ▾", [("Новое письмо", "создай письмо"), ("Отправить файлы на почту", "отправить файлы на почту"), ("Добавить контакт", "добавь контакт")]),
         ]
         for label, commands in groups:
@@ -53,6 +55,11 @@ class AssistantWindow:
             button.pack(side="left", fill="x", expand=True, padx=(0, 5))
         ttk.Label(outer, text="Команды доступны голосом и через меню. Для поиска и напоминаний появится поле ввода.",
                   wraplength=700).pack(anchor="w")
+
+    def _ask_ai(self):
+        value = simpledialog.askstring("Спросить ИИ", "Что хочешь спросить у подключённого ИИ?", parent=self.root)
+        if value and value.strip():
+            self.on_command("спроси ИИ: " + value.strip())
 
     def _ask_smart_command(self):
         value = simpledialog.askstring("Умная команда", "Опиши задачу своими словами:", parent=self.root)
@@ -130,3 +137,27 @@ class AssistantWindow:
     def close(self):
         self.on_close()
         self.root.destroy()
+
+
+def show_ai_answer(parent, question, answer=None, error=None):
+    """Показывает ответ подключённой модели в отдельном окне Tkinter."""
+    window = tk.Toplevel(parent)
+    window.title("Ответ подключённого ИИ")
+    window.geometry("720x560")
+    window.minsize(480, 320)
+    frame = ttk.Frame(window, padding=14)
+    frame.pack(fill="both", expand=True)
+    ttk.Label(frame, text="Твой вопрос", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+    question_box = tk.Text(frame, height=4, wrap="word", font=("Segoe UI", 10))
+    question_box.pack(fill="x", pady=(5, 12))
+    question_box.insert("1.0", question)
+    question_box.configure(state="disabled")
+    ttk.Label(frame, text="Ответ ИИ" if not error else "Не удалось получить ответ",
+              font=("Segoe UI", 11, "bold")).pack(anchor="w")
+    answer_box = tk.Text(frame, wrap="word", font=("Segoe UI", 10))
+    answer_box.pack(fill="both", expand=True, pady=(5, 10))
+    answer_box.insert("1.0", answer if answer else (error or "Пустой ответ"))
+    answer_box.configure(state="disabled")
+    ttk.Button(frame, text="Закрыть", command=window.destroy).pack(anchor="e")
+    window.transient(parent)
+    window.lift()

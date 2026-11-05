@@ -22,7 +22,8 @@ from file_search import search_web, search_files, start_file_search_ui
 from email_form import open_email_form
 from contact_form import open_contact_form
 from folder_organizer import open_folder_organizer
-from assistant_window import AssistantWindow
+from assistant_window import AssistantWindow, show_ai_answer
+from ai_chat import ask_ai
 
 _STARTUP_TIME = time.perf_counter()
 
@@ -381,6 +382,15 @@ def transcribe_and_execute(audio_data: np.ndarray):
         update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
 
 
+def _ask_ai_worker(question: str):
+    try:
+        answer = ask_ai(question)
+        result = (question, answer, None)
+    except Exception as exc:
+        result = (question, None, str(exc))
+    _ui_actions.put(("ai_chat_result", result))
+
+
 def main():
     global _ui
     progress("Проверяю микрофон...")
@@ -430,6 +440,14 @@ def main():
                     print("[GUI] Открываю окно нового письма.", flush=True)
                     open_email_form(parent=_ui.root, add_files_on_open=value)
                     print("[GUI] Вызов формы письма завершён.", flush=True)
+                elif ui_action == "ai_chat":
+                    question = str(value or "").strip()
+                    if question:
+                        print("[ИИ] Отправляю вопрос подключённой модели.", flush=True)
+                        threading.Thread(target=_ask_ai_worker, args=(question,), daemon=True).start()
+                elif ui_action == "ai_chat_result":
+                    question, answer, error = value
+                    show_ai_answer(_ui.root, question, answer, error)
                 else:
                     print(f"[GUI] Неизвестное действие: {ui_action}", flush=True)
             except Exception:

@@ -105,3 +105,8 @@ After the local model loads, the main Tkinter window displays the command refere
 ## Семантические команды через OpenRouter
 
 GigaAM-v3 по-прежнему распознаёт речь локально. Модуль `intent_router.py` передаёт распознанный текст в OpenRouter, чтобы определить намерение по смыслу, а выполнение остаётся в Python и ограничено списком разрешённых действий. Настройки Windows: `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL` (по умолчанию `https://openrouter.ai/api/v1`) и `OPENROUTER_MODEL` (по умолчанию `openrouter/free`). В окне есть кнопка «Умная команда…» для ввода задачи своими словами.
+
+
+## Вопросы подключённому ИИ
+
+Скажи «спроси ИИ» и произнеси вопрос либо нажми кнопку «Спросить ИИ…» в главном окне. Запрос отправляется в OpenRouter с настройками `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL` и `OPENROUTER_MODEL`; ответ появляется в отдельном окне. Распознавание голоса остаётся локальным, но текст вопроса и ответ обрабатываются выбранной облачной моделью OpenRouter.
