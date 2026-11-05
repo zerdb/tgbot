@@ -74,63 +74,63 @@ def understand_command(user_text: str) -> dict:
     if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
         return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
     # Локальная маршрутизация поддерживаемых команд: обычные действия не зависят от квоты OpenRouter.
-    if re.search(r"\\b(разбери|разобрать|рассортируй|отсортируй|организуй)\\b.*\\b(папк|файл|документ)", normalized):
+    if re.search(r"\b(разбери|разобрать|рассортируй|отсортируй|организуй)\b.*\b(папк|файл|документ)", normalized):
         return {"action": "organize_folder", "confidence": 1.0, "arguments": {}}
 
     # Открытие раздела напоминаний и создание нового напоминания — разные намерения.
-    if re.search(r"\\b(открой|покажи|открыть|посмотреть)\\b.*\\b(напоминан)", normalized):
+    if re.search(r"\b(открой|покажи|открыть|посмотреть)\b.*\b(напоминан)", normalized):
         return {"action": "open_reminders", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(напомни|напомнить|создай напоминание|добавь напоминание)\\b", normalized):
+    if re.search(r"\b(напомни|напомнить|создай напоминание|добавь напоминание)\b", normalized):
         return {"action": "reminder", "confidence": 1.0, "arguments": {"reminder_text": user_text.strip()}}
 
     # Почта: создание/отправка письма открывает форму; само отправление только после кнопки пользователя.
-    if re.search(r"\\b(отправь|отправить|перешли|переслать)\\b.*\\b(почт|письм|email|емейл)", normalized):
-        attach = bool(re.search(r"\\b(файл|файлы|документ|документы|вложени)", normalized))
+    if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт|письм|email|емейл)", normalized):
+        attach = bool(re.search(r"\b(файл|файлы|документ|документы|вложени)", normalized))
         return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": attach}}
-    if re.search(r"\\b(создай|создать|напиши|написать|составь|составить)\\b.*\\b(письмо|письмецо|email)", normalized):
+    if re.search(r"\b(создай|создать|напиши|написать|составь|составить)\b.*\b(письмо|письмецо|email)", normalized):
         return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": False}}
-    if re.search(r"\\b(открой|открыть|покажи)\\b.*\\b(почту|почтовый клиент|входящие)", normalized):
+    if re.search(r"\b(открой|открыть|покажи)\b.*\b(почту|почтовый клиент|входящие)", normalized):
         return {"action": "open_mail_client", "confidence": 1.0, "arguments": {}}
 
     # Частые приложения из разрешённого списка.
     app_patterns = (
-        (r"\\b(блокнот|notepad)\\b", "notepad"),
-        (r"\\b(калькулятор|calculator)\\b", "calculator"),
-        (r"\\b(браузер|интернет|google|хром|chrome)\\b", "browser"),
-        (r"\\b(word|ворд|микрософт ворд)\\b", "word"),
-        (r"\\b(excel|эксель)\\b", "excel"),
-        (r"\\b(изображения|картинки|фото)\\b", "images"),
+        (r"\b(блокнот|notepad)\b", "notepad"),
+        (r"\b(калькулятор|calculator)\b", "calculator"),
+        (r"\b(браузер|интернет|google|хром|chrome)\b", "browser"),
+        (r"\b(word|ворд|микрософт ворд)\b", "word"),
+        (r"\b(excel|эксель)\b", "excel"),
+        (r"\b(изображения|картинки|фото)\b", "images"),
     )
-    if re.search(r"\\b(открой|открыть|запусти|запустить)\\b", normalized):
+    if re.search(r"\b(открой|открыть|запусти|запустить)\b", normalized):
         for pattern, app in app_patterns:
             if re.search(pattern, normalized):
                 return {"action": "open_application", "confidence": 1.0, "arguments": {"app": app}}
 
-    if re.search(r"\\b(открой|открыть|покажи)\\b.*\\b(загрузки|загруженные файлы)", normalized):
+    if re.search(r"\b(открой|открыть|покажи)\b.*\b(загрузки|загруженные файлы)", normalized):
         return {"action": "open_downloads", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(открой|открыть|покажи)\\b.*\\b(корзину|корзина)", normalized):
+    if re.search(r"\b(открой|открыть|покажи)\b.*\b(корзину|корзина)", normalized):
         return {"action": "open_recycle_bin", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(очисти|очистить|опустоши|опустошить)\\b.*\\b(корзину|корзина)", normalized):
+    if re.search(r"\b(очисти|очистить|опустоши|опустошить)\b.*\b(корзину|корзина)", normalized):
         return {"action": "empty_recycle_bin", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(заблокируй|заблокировать)\\b.*\\b(компьютер|ноутбук|пк)", normalized):
+    if re.search(r"\b(заблокируй|заблокировать)\b.*\b(компьютер|ноутбук|пк)", normalized):
         return {"action": "lock_computer", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(перезагрузи|перезагрузить|перезапусти)\\b.*\\b(компьютер|ноутбук|пк|windows)", normalized):
+    if re.search(r"\b(перезагрузи|перезагрузить|перезапусти)\b.*\b(компьютер|ноутбук|пк|windows)", normalized):
         return {"action": "reboot_computer", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(сделай|сделать|сними|снять)\\b.*\\b(скриншот|снимок экрана)", normalized):
+    if re.search(r"\b(сделай|сделать|сними|снять)\b.*\b(скриншот|снимок экрана)", normalized):
         return {"action": "screenshot", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(открой|открыть)\\b.*\\b(настройки windows|параметры windows)", normalized):
+    if re.search(r"\b(открой|открыть)\b.*\b(настройки windows|параметры windows)", normalized):
         return {"action": "open_settings", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(сохрани|сохранить)\\b.*\\b(заметк)", normalized):
+    if re.search(r"\b(сохрани|сохранить)\b.*\b(заметк)", normalized):
         return {"action": "save_note", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(создай|сделай)\\b.*\\b(excel|эксель|таблицу из буфера)", normalized):
+    if re.search(r"\b(создай|сделай)\b.*\b(excel|эксель|таблицу из буфера)", normalized):
         return {"action": "clipboard_to_excel", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(найди|поищи|найти)\\b.*\\b(файл|папку|документ)", normalized):
-        query = re.sub(r"^.*?\\b(?:найди|поищи|найти)\\b", "", normalized).strip()
-        query = re.sub(r"\\b(?:файл|папку|документ)\\b", "", query).strip()
+    if re.search(r"\b(найди|поищи|найти)\b.*\b(файл|папку|документ)", normalized):
+        query = re.sub(r"^.*?\b(?:найди|поищи|найти)\b", "", normalized).strip()
+        query = re.sub(r"\b(?:файл|папку|документ)\b", "", query).strip()
         return {"action": "search_files", "confidence": 1.0, "arguments": {"query": query or user_text.strip()}}
-    if re.search(r"\\b(поищи|найди|найти)\\b", normalized) and re.search(r"\\b(в интернете|в интернет|в сети|в google)\\b", normalized):
-        query = re.sub(r"^.*?\\b(?:поищи|найди|найти)\\b", "", normalized).strip()
-        query = re.sub(r"\\b(?:в интернете|в интернет|в сети|в google)\\b", "", query).strip()
+    if re.search(r"\b(поищи|найди|найти)\b", normalized) and re.search(r"\b(в интернете|в интернет|в сети|в google)\b", normalized):
+        query = re.sub(r"^.*?\b(?:поищи|найди|найти)\b", "", normalized).strip()
+        query = re.sub(r"\b(?:в интернете|в интернет|в сети|в google)\b", "", query).strip()
         return {"action": "search_web", "confidence": 1.0, "arguments": {"query": query or user_text.strip()}}
 
     if "проверь белую машину на камере" in normalized or "белая нива на камере" in normalized:
