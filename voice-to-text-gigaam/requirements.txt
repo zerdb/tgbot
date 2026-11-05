@@ -19,3 +19,4 @@ psutil>=5.9.0
 openpyxl>=3.1.0
 
 requests>=2.31.0
+\npypdf>=4.0.0\npython-docx>=1.1.0\n
