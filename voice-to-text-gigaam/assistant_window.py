@@ -2,14 +2,14 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from dialog_utils import activate_modal
+from dialog_utils import activate_modal, center_window
 
 
 class AssistantWindow:
     def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
-        self.root.geometry("760x570")
+        self.root.geometry("900x620")
         self.root.minsize(620, 480)
         self.on_close = on_close
         self.on_command = on_command
@@ -22,6 +22,7 @@ class AssistantWindow:
         self._recording_overlay = None
         self._busy_overlay = None
         self._build()
+        center_window(self.root)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def _build(self):
@@ -41,24 +42,19 @@ class AssistantWindow:
         ttk.Label(outer, text="Опиши задачу своими словами", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 5))
         smart_row = ttk.Frame(outer)
         smart_row.pack(fill="x", pady=(0, 9))
-        ttk.Button(smart_row, text="Умная команда…", command=self._ask_smart_command).pack(side="left")
-        ttk.Button(smart_row, text="Спросить ИИ…", command=self._ask_ai).pack(side="left", padx=(8, 0))
-        ttk.Button(smart_row, text="Мои контакты…", command=lambda: self.on_command("открой контакты")).pack(side="left", padx=(8, 0))
-        ttk.Button(smart_row, text="Почта", command=self.on_open_mail).pack(side="left", padx=(8, 0))
-        ttk.Button(smart_row, text="Файлы", command=self.on_open_files).pack(side="left", padx=(8, 0))
-        ttk.Button(smart_row, text="Напоминания", command=self.on_open_reminders).pack(side="left", padx=(8, 0))
-        ttk.Button(smart_row, text="Экран / изображение", command=self.on_open_screen).pack(side="left", padx=(8, 0))
-        ttk.Button(smart_row, text="Настройки…", command=lambda: self.on_command("открой настройки помощника")).pack(side="left", padx=(8, 0))
-        ttk.Button(smart_row, text="Поиск в документах…", command=lambda: self.on_command("поищи в документах")).pack(side="left", padx=(8, 0))
-        ttk.Label(smart_row, text="Например: перешли этот документ по почте").pack(side="left", padx=10)
+        ttk.Button(smart_row, text="👥 Контакты", command=lambda: self.on_command("открой контакты")).pack(side="left", padx=4)
+        ttk.Button(smart_row, text="✉ Почта", command=self.on_open_mail).pack(side="left", padx=4)
+        ttk.Button(smart_row, text="📁 Файлы", command=self.on_open_files).pack(side="left", padx=4)
+        ttk.Button(smart_row, text="🔔 Напоминания", command=self.on_open_reminders).pack(side="left", padx=4)
+        ttk.Button(smart_row, text="🖼 Экран", command=self.on_open_screen).pack(side="left", padx=4)
+        ttk.Button(smart_row, text="⚙ Настройки", command=lambda: self.on_command("открой настройки помощника")).pack(side="left", padx=4)
         row = ttk.Frame(outer)
         row.pack(fill="x", pady=(0, 8))
         groups = [
-            ("Windows ▾", [("Заблокировать компьютер", "заблокируй компьютер"), ("Перезагрузить компьютер", "перезагрузи компьютер"), ("Открыть загрузки", "открой загрузки"), ("Открыть корзину", "открой корзину"), ("Открыть настройки", "открой настройки"), ("Очистить корзину", "очисти корзину"), ("Сделать скриншот", "сделай скриншот")]),
-            ("Файлы ▾", [("Найти файл", "найди файл"), ("Поиск в документах", "поищи в документах"), ("Разобрать папку", "разбери папку"), ("Открыть Блокнот", "открой блокнот"), ("Открыть Калькулятор", "открой калькулятор"), ("Открыть Word", "открой ворд"), ("Открыть Excel", "открой эксель"), ("Открыть браузер", "открой браузер"), ("Открыть Изображения", "открой изображения"), ("Вставить таблицу в Excel", "перенеси в excel"), ("Сохранить как заметку", "сохрани как заметку")]),
-            ("Интернет ▾", [("Поиск в интернете", "найди в интернете"), ("Создать напоминание", "напомни")]),
-            ("ИИ ▾", [("Задать вопрос ИИ", "спроси ИИ")]),
-            ("Почта ▾", [("Мои контакты", "открой контакты"), ("Добавить в контакты", "добавь в контакты"), ("Новое письмо", "создай письмо"), ("Прочитать новые письма", "прочитай новые письма"), ("Отправить файлы на почту", "отправить файлы на почту")]),
+            ("🪟 Windows ▾", [("Заблокировать компьютер", "заблокируй компьютер"), ("Перезагрузить компьютер", "перезагрузи компьютер"), ("Открыть загрузки", "открой загрузки"), ("Открыть корзину", "открой корзину"), ("Открыть настройки", "открой настройки"), ("Очистить корзину", "очисти корзину"), ("Сделать скриншот", "сделай скриншот")]),
+            ("📁 Файлы ▾", [("Найти файл", "найди файл"), ("Разобрать папку", "разбери папку"), ("Открыть Блокнот", "открой блокнот"), ("Открыть Калькулятор", "открой калькулятор"), ("Открыть Word", "открой ворд"), ("Открыть Excel", "открой эксель"), ("Открыть браузер", "открой браузер"), ("Открыть Изображения", "открой изображения"), ("Вставить таблицу в Excel", "перенеси в excel"), ("Сохранить как заметку", "сохрани как заметку")]),
+            ("🌐 Интернет ▾", [("Поиск в интернете", "найди в интернете"), ("Создать напоминание", "напомни")]),
+            ("✉ Почта ▾", [("Мои контакты", "открой контакты"), ("Добавить в контакты", "добавь в контакты"), ("Новое письмо", "создай письмо"), ("Прочитать новые письма", "прочитай новые письма"), ("Отправить файлы на почту", "отправить файлы на почту")]),
         ]
         for label, commands in groups:
             button = ttk.Menubutton(row, text=label)
@@ -67,8 +63,7 @@ class AssistantWindow:
                 menu.add_command(label=title, command=lambda c=command: self._click_command(c))
             button["menu"] = menu
             button.pack(side="left", fill="x", expand=True, padx=(0, 5))
-        ttk.Label(outer, text="Команды доступны голосом и через меню. Для поиска и напоминаний появится поле ввода.",
-                  wraplength=700).pack(anchor="w")
+        ttk.Label(outer, text="Команды доступны голосом и через меню.").pack(anchor="w")
 
     def _ask_ai(self):
         value = simpledialog.askstring("Спросить ИИ", "Что хочешь спросить у подключённого ИИ?", parent=self.root)
