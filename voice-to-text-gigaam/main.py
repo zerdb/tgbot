@@ -370,7 +370,7 @@ def handle_command(text: str):
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
-    keep_busy = action in ("search_files", "ai_chat", "read_unread_mail", "inspect_camera_image")
+    keep_busy = action in ("search_files", "ai_chat", "read_unread_mail", "inspect_camera_image", "camera_question")
     if action == "ai_chat":
         question = str(args.get("question") or text).strip()
         if _ui is not None:
@@ -385,6 +385,8 @@ def handle_command(text: str):
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
     elif action == "inspect_camera_image":
         _ui_actions.put(("inspect_camera_image", None))
+    elif action == "camera_question":
+        _ui_actions.put(("camera_question", str(args.get("question") or text).strip()))
     elif action == "open_assistant_settings":
         _ui_actions.put((action, None))
     elif action == "open_reminders":
@@ -460,6 +462,16 @@ def _camera_inspection_worker():
     except Exception as exc:
         result = ("", str(exc))
     _ui_actions.put(("camera_inspection_result", result))
+
+def _camera_question_worker(question: str):
+    try:
+        from camera_inspector import inspect_camera_question, speak
+        answer = inspect_camera_question(question)
+        speak(answer)
+        result = (question, answer, None)
+    except Exception as exc:
+        result = (question, None, str(exc))
+    _ui_actions.put(("camera_question_result", result))
 
 
 def _mail_reader_worker():
@@ -544,6 +556,17 @@ def main():
                     print("[GUI] Открываю окно нового письма.", flush=True)
                     open_email_form(parent=_ui.root, add_files_on_open=value)
                     print("[GUI] Вызов формы письма завершён.", flush=True)
+                elif ui_action == "camera_question":
+                    _ui.set_busy_overlay("Получаю кадр и анализирую вопрос…")
+                    threading.Thread(target=_camera_question_worker, args=(str(value or ""),), daemon=True, name="camera-question").start()
+                elif ui_action == "camera_question_result":
+                    _ui.set_busy_overlay(None)
+                    question, answer, error = value
+                    if error:
+                        print("[Камера] " + error, flush=True)
+                    else:
+                        print("[Камера] " + answer, flush=True)
+                        show_ai_answer(_ui.root, question, answer, None)
                 elif ui_action == "inspect_camera_image":
                     _ui.set_busy_overlay("Получаю кадр и проверяю его через ИИ…")
                     threading.Thread(target=_camera_inspection_worker, daemon=True, name="camera-inspection").start()
