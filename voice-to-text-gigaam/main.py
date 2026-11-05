@@ -89,19 +89,19 @@ def configure_ffmpeg():
     if not target.exists() or target.stat().st_size != source.stat().st_size:
         shutil.copy2(source, target)
     os.environ["PATH"] = str(target_dir) + os.pathsep + os.environ.get("PATH", "")
-    progress(f"FFmpeg настроен: {target}")
+
 
 
 def check_microphone() -> bool:
     try:
         device = sd.query_devices(kind="input")
         if device["max_input_channels"] < CHANNELS:
-            progress("Микрофон не найден: устройство не поддерживает запись звука.")
+
             return False
     except (sd.PortAudioError, OSError) as exc:
-        progress(f"Микрофон не найден или недоступен: {exc}")
+
         return False
-    progress(f"Микрофон найден: {device['name']}")
+
     return True
 
 
@@ -113,10 +113,10 @@ def load_model():
             "Поместите модель ai-sage/GigaAM-v3 (revision e2e_rnnt) "
             "в папку GigaAM-v3 рядом с voice-to-text-gigaam."
         )
-    progress(f"Загружаю локальную модель GigaAM: {MODEL_DIR}")
+
     _model = AutoModel.from_pretrained(str(MODEL_DIR), trust_remote_code=True, local_files_only=True)
     _model.eval()
-    progress("Модель GigaAM готова к работе (автономный режим).")
+
 
 
 def audio_callback(indata, frames, time_info, status):
@@ -228,7 +228,7 @@ def install_right_only_keyboard_hook():
     _keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _keyboard_hook_proc, None, 0)
     if not _keyboard_hook:
         raise ctypes.WinError(ctypes.get_last_error())
-    progress("Подключены только физические Right Ctrl / Right Shift.")
+
 
 def remove_keyboard_hook():
     global _keyboard_hook, _keyboard_hook_proc
@@ -418,15 +418,23 @@ def main():
     splash = tk.Tk()
     splash.overrideredirect(True)
     splash.attributes("-topmost", True)
-    width, height = 300, 76
-    x = (splash.winfo_screenwidth() - width) // 2
-    y = (splash.winfo_screenheight() - height) // 2
-    splash.geometry(f"{width}x{height}+{x}+{y}")
-    splash.configure(bg="#20242b")
+    splash.attributes("-alpha", 0.96)
+    splash.configure(bg="#202124")
+    frame = tk.Frame(splash, bg="#202124", padx=16, pady=10)
+    frame.pack()
     tk.Label(
-        splash, text="⏳  Загружается голосовой помощник…",
-        bg="#20242b", fg="white", font=("Segoe UI", 11), padx=18, pady=22
-    ).pack(fill="both", expand=True)
+        frame, text="⏳", font=("Segoe UI Emoji", 22),
+        fg="#fbbc04", bg="#202124"
+    ).pack(side="left", padx=(0, 9))
+    tk.Label(
+        frame, text="Загружается помощник…",
+        font=("Segoe UI", 10, "bold"), fg="white", bg="#202124"
+    ).pack(side="left")
+    splash.update_idletasks()
+    width, height = splash.winfo_reqwidth(), splash.winfo_reqheight()
+    x = splash.winfo_screenwidth() - width - 24
+    y = (splash.winfo_screenheight() - height) // 2
+    splash.geometry(f"+{x}+{y}")
     splash.update_idletasks()
     splash.update()
 
@@ -449,14 +457,10 @@ def main():
         on_command=handle_command,
         microphone_status="ПРОВЕРКА",
     )
-    progress("Проверяю микрофон…")
     microphone_found = check_microphone()
     _ui.set_status(microphone="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
-    progress("Настраиваю аудиосистему и FFmpeg…")
     configure_ffmpeg()
-    progress("Загружаю локальную модель GigaAM…")
     load_model()
-    progress("Голосовое управление готово.")
     _ui.set_busy_overlay(None)
     install_right_only_keyboard_hook()
     start_file_search_ui(_ui.root, busy_callback=_ui.set_busy_overlay)
