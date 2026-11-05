@@ -447,9 +447,11 @@ def main():
                     question = str(value or "").strip()
                     if question:
                         print("[ИИ] Отправляю вопрос подключённой модели.", flush=True)
+                        _ui.set_busy_overlay("Жду ответ ИИ…")
                         threading.Thread(target=_ask_ai_worker, args=(question,), daemon=True).start()
                 elif ui_action == "ai_chat_result":
                     question, answer, error = value
+                    _ui.set_busy_overlay(None)
                     show_ai_answer(_ui.root, question, answer, error)
                 else:
                     print(f"[GUI] Неизвестное действие: {ui_action}", flush=True)

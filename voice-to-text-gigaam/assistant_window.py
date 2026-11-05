@@ -16,6 +16,7 @@ class AssistantWindow:
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
+        self._busy_overlay = None
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -117,6 +118,40 @@ class AssistantWindow:
                 self._recording_overlay.destroy()
                 self._recording_overlay = None
                 self._overlay_label = None
+        try:
+            self.root.after(0, apply)
+        except tk.TclError:
+            pass
+
+    def set_busy_overlay(self, message=None):
+        """Показывает компактный индикатор ожидания справа по центру экрана."""
+        def apply():
+            if message:
+                if self._busy_overlay is None or not self._busy_overlay.winfo_exists():
+                    overlay = tk.Toplevel(self.root)
+                    overlay.overrideredirect(True)
+                    overlay.attributes("-topmost", True)
+                    overlay.attributes("-alpha", 0.96)
+                    overlay.configure(bg="#202124")
+                    frame = tk.Frame(overlay, bg="#202124", padx=16, pady=10)
+                    frame.pack()
+                    tk.Label(frame, text="⏳", font=("Segoe UI Emoji", 22), fg="#fbbc04", bg="#202124").pack(side="left", padx=(0, 9))
+                    self._busy_label = tk.Label(frame, text="", font=("Segoe UI", 10, "bold"), fg="white", bg="#202124")
+                    self._busy_label.pack(side="left")
+                    self._busy_overlay = overlay
+                self._busy_label.configure(text=str(message))
+                self._busy_overlay.update_idletasks()
+                w = self._busy_overlay.winfo_reqwidth()
+                h = self._busy_overlay.winfo_reqheight()
+                x = self.root.winfo_screenwidth() - w - 24
+                y = (self.root.winfo_screenheight() - h) // 2
+                self._busy_overlay.geometry("+" + str(x) + "+" + str(y))
+                self._busy_overlay.deiconify()
+                self._busy_overlay.lift()
+            elif self._busy_overlay is not None:
+                self._busy_overlay.destroy()
+                self._busy_overlay = None
+                self._busy_label = None
         try:
             self.root.after(0, apply)
         except tk.TclError:
