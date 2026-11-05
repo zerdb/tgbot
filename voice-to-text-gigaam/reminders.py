@@ -192,3 +192,22 @@ def add_reminder(text: str):
             return
     print(f"Напоминание установлено на {due:%d.%m.%Y %H:%M}: {message}")
 
+
+
+def list_reminders():
+    """Return a stable snapshot of future reminders, sorted by due time."""
+    with _reminder_lock:
+        _load_reminders()
+        return sorted(list(_reminders),key=lambda item:item[0])
+
+
+def delete_reminder(index: int):
+    """Delete one reminder by its current sorted-list index."""
+    with _reminder_lock:
+        _load_reminders()
+        ordered=sorted(_reminders,key=lambda item:item[0])
+        if index<0 or index>=len(ordered): return False
+        target=ordered[index]
+        _reminders.remove(target)
+        _save_reminders()
+        return True
