@@ -140,7 +140,7 @@ def understand_command(user_text: str) -> dict:
         return {"action": "search_web", "confidence": 1.0, "arguments": {"query": query or user_text.strip()}}
 
     # Вопросы о наблюдении всегда отправляем на анализ свежего кадра, а не в обычный чат ИИ.
-    if re.search(r"\\b(камера|камере|камеру|видеонаблюдени|на парковке|во дворе|у ворот)\\b", normalized) and re.search(r"\\b(что|кто|сколько|есть|видно|видишь|опиши|день|ночь|машин|людей|человек)\\b", normalized):
+    if re.search(r"\b(камера|камере|камеру|видеонаблюдени|на парковке|во дворе|у ворот)\b", normalized) and re.search(r"\b(что|кто|сколько|есть|видно|видишь|опиши|день|ночь|машин|людей|человек)\b", normalized):
         return {"action": "camera_question", "confidence": 1.0, "arguments": {"question": user_text.strip()}}
     if "проверь белую машину на камере" in normalized or "белая нива на камере" in normalized:
         return {"action": "inspect_camera_image", "confidence": 1.0, "arguments": {}}
