@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
-from reminders import start_reminder_service, add_reminder
+from reminders import start_reminder_service, add_reminder, deliver_due_reminders
 from file_search import search_web, search_files, start_file_search_ui
 from email_form import open_email_form
 from folder_organizer import open_folder_organizer
@@ -433,7 +433,6 @@ def main():
     configure_ffmpeg()
     progress("Начинаю загрузку GigaAM...")
     load_model()
-    start_reminder_service()
     progress("Голосовой ввод и голосовые команды готовы.")
     install_right_only_keyboard_hook()
     _ui = AssistantWindow(
@@ -442,6 +441,17 @@ def main():
         microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН",
     )
     start_file_search_ui(_ui.root)
+    # Таймер очереди напоминаний обслуживается главным потоком Tkinter.
+    start_reminder_service()
+
+    def process_reminders():
+        deliver_due_reminders()
+        try:
+            _ui.root.after(250, process_reminders)
+        except Exception:
+            pass
+
+    _ui.root.after(250, process_reminders)
     _ui.run()
 
 

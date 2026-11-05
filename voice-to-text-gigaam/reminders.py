@@ -4,11 +4,13 @@ from __future__ import annotations
 import re
 import threading
 import time
+import queue
 from datetime import datetime, timedelta
 from notifications import show_notification, speak_text
 
 _reminder_lock = threading.Lock()
 _reminders: list[tuple[datetime, str]] = []
+_due_reminders: queue.SimpleQueue[tuple[datetime, str]] = queue.SimpleQueue()
 _reminder_thread_started = False
 
 def normalize_command(text: str) -> str:
@@ -18,25 +20,37 @@ def normalize_command(text: str) -> str:
 
 
 def reminder_worker():
+    """Фоновый поток только проверяет время и кладёт сработавшие напоминания в очередь."""
     while True:
-        due = []
         now = datetime.now()
         with _reminder_lock:
             remaining = []
             for when, message in _reminders:
                 if when <= now:
-                    due.append((when, message))
+                    _due_reminders.put((when, message))
                 else:
                     remaining.append((when, message))
             _reminders[:] = remaining
-        for when, message in due:
-            print(f"НАПОМИНАНИЕ: {message}")
-            try:
-                show_notification("Напоминание", message)
-            except Exception as exc:
-                print(f"Не удалось показать уведомление: {exc}")
-            speak_text("Напоминание. " + message)
         time.sleep(1)
+
+
+def deliver_due_reminders():
+    """Вызывать только из главного потока GUI: системные уведомления и TTS."""
+    while True:
+        try:
+            when, message = _due_reminders.get_nowait()
+        except queue.Empty:
+            break
+        print(f"НАПОМИНАНИЕ: {message}")
+        try:
+            show_notification("Напоминание", message)
+        except Exception as exc:
+            print(f"Не удалось показать уведомление: {exc}")
+        try:
+            speak_text("Напоминание. " + message)
+        except Exception as exc:
+            print(f"Не удалось озвучить напоминание: {exc}")
+
 
 def start_reminder_service():
     global _reminder_thread_started
