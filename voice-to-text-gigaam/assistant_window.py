@@ -20,8 +20,8 @@ class AssistantWindow:
     def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
-        self.root.geometry("940x720")
-        self.root.minsize(680, 600)
+        self.root.geometry("760x600")
+        self.root.minsize(620, 500)
         self.root.configure(bg=self.BG)
         self.on_close = on_close
         self.on_command = on_command
@@ -49,14 +49,14 @@ class AssistantWindow:
         style.configure("TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 10))
         style.configure("Muted.TLabel", background=self.BG, foreground=self.MUTED, font=("Segoe UI", 9))
         style.configure("Card.TLabel", background=self.SURFACE, foreground=self.TEXT, font=("Segoe UI", 10))
-        style.configure("Title.TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 23, "bold"))
+        style.configure("Title.TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 18, "bold"))
         style.configure("Subtitle.TLabel", background=self.BG, foreground=self.MUTED, font=("Segoe UI", 10))
-        style.configure("Section.TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 12, "bold"))
+        style.configure("Section.TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 10, "bold"))
         style.configure("StatusTitle.TLabel", background=self.SURFACE, foreground=self.TEXT, font=("Segoe UI", 9, "bold"))
         style.configure("StatusValue.TLabel", background=self.SURFACE, foreground=self.TEXT, font=("Segoe UI", 9))
         style.configure("Action.TButton", background=self.SURFACE, foreground=self.TEXT,
                         bordercolor=self.BORDER, lightcolor=self.BORDER, darkcolor=self.BORDER,
-                        relief="solid", borderwidth=1, padding=(12, 15),
+                        relief="solid", borderwidth=1, padding=(8, 7),
                         font=("Segoe UI", 10, "bold"))
         style.map("Action.TButton",
                   background=[("active", "#F0EFFF"), ("pressed", "#E8E6FF")],
@@ -69,17 +69,17 @@ class AssistantWindow:
         style.map("Header.TButton", background=[("active", "#E9EAF5")])
         style.configure("TNotebook", background=self.BG, borderwidth=0, tabmargins=(0, 0, 0, 0))
         style.configure("TNotebook.Tab", background="#E9ECF4", foreground=self.MUTED,
-                        padding=(16, 9), font=("Segoe UI", 9, "bold"), borderwidth=0)
+                        padding=(11, 6), font=("Segoe UI", 9, "bold"), borderwidth=0)
         style.map("TNotebook.Tab", background=[("selected", self.SURFACE), ("active", "#E0E3F0")],
                   foreground=[("selected", self.ACCENT), ("active", self.TEXT)])
 
     def _build(self):
         self._build_styles()
-        outer = ttk.Frame(self.root, padding=(24, 18, 24, 14))
+        outer = ttk.Frame(self.root, padding=(15, 11, 15, 9))
         outer.pack(fill="both", expand=True)
 
         header = ttk.Frame(outer)
-        header.pack(fill="x", pady=(0, 18))
+        header.pack(fill="x", pady=(0, 10))
         brand = ttk.Frame(header)
         brand.pack(side="left", fill="x", expand=True)
         ttk.Label(brand, text="GigaAM", font=("Segoe UI", 11, "bold"),
@@ -98,13 +98,13 @@ class AssistantWindow:
 
         status_card = tk.Frame(outer, bg=self.SURFACE, highlightthickness=1,
                                highlightbackground=self.BORDER, bd=0)
-        status_card.pack(fill="x", pady=(0, 20))
-        status_inner = tk.Frame(status_card, bg=self.SURFACE, padx=16, pady=13)
+        status_card.pack(fill="x", pady=(0, 11))
+        status_inner = tk.Frame(status_card, bg=self.SURFACE, padx=11, pady=8)
         status_inner.pack(fill="x")
         left = tk.Frame(status_inner, bg=self.SURFACE)
         left.pack(side="left", fill="x", expand=True)
         tk.Label(left, text="СОСТОЯНИЕ СИСТЕМЫ", bg=self.SURFACE, fg=self.MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 7))
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
         details = tk.Frame(left, bg=self.SURFACE)
         details.pack(anchor="w")
         self.mic_dot = tk.Canvas(details, width=10, height=10, bg=self.SURFACE,
@@ -139,14 +139,14 @@ class AssistantWindow:
             card.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 5, 0 if col == 4 else 5))
             actions.columnconfigure(col, weight=1, uniform="action")
             icon = tk.Label(card, text=symbol, bg=self.SURFACE, fg=self.ACCENT,
-                            font=("Segoe UI Symbol", 21, "bold"))
-            icon.pack(anchor="w", padx=13, pady=(12, 3))
+                            font=("Segoe UI Symbol", 16, "bold"))
+            icon.pack(anchor="w", padx=8, pady=(7, 1))
             name = tk.Label(card, text=title, bg=self.SURFACE, fg=self.TEXT,
-                            font=("Segoe UI", 10, "bold"))
-            name.pack(anchor="w", padx=13)
+                            font=("Segoe UI", 9, "bold"))
+            name.pack(anchor="w", padx=8)
             desc = tk.Label(card, text=hint, bg=self.SURFACE, fg=self.MUTED,
-                            font=("Segoe UI", 8), wraplength=125, justify="left")
-            desc.pack(anchor="w", padx=13, pady=(3, 12))
+                            font=("Segoe UI", 7), wraplength=105, justify="left")
+            desc.pack(anchor="w", padx=8, pady=(2, 7))
             for widget in (card, icon, name, desc):
                 widget.bind("<Button-1>", lambda _e, fn=callback: fn())
                 widget.bind("<Enter>", lambda _e, c=card, ws=(icon, name, desc): self._hover_card(c, ws, True))
@@ -163,17 +163,17 @@ class AssistantWindow:
             ("Камера", [("◉  Проверить белую машину", "проверь белую машину на камере")]),
         ]
         for tab_name, commands in groups:
-            page = tk.Frame(notebook, bg=self.SURFACE, padx=14, pady=14)
+            page = tk.Frame(notebook, bg=self.SURFACE, padx=9, pady=8)
             notebook.add(page, text=tab_name)
             for index, (label, command) in enumerate(commands):
                 button = ttk.Button(page, text=label, style="Action.TButton",
                                     command=lambda c=command: self._click_command(c))
-                button.grid(row=index // 2, column=index % 2, sticky="ew", padx=5, pady=5)
+                button.grid(row=index // 2, column=index % 2, sticky="ew", padx=3, pady=3)
             page.columnconfigure(0, weight=1)
             page.columnconfigure(1, weight=1)
 
         footer = ttk.Frame(outer)
-        footer.pack(fill="x", pady=(13, 0))
+        footer.pack(fill="x", pady=(7, 0))
         ttk.Label(footer, text="Right Ctrl — голосовая команда   ·   Right Ctrl + Right Shift — диктовка",
                   style="Muted.TLabel").pack(anchor="center")
 
