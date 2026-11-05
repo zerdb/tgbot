@@ -7,6 +7,7 @@ ACTIONS = {
  "open_assistant_settings": "Открыть настройки GigaAM.",
  "open_tasks": "Открыть список задач и планов.",
  "read_unread_mail": "Прочитать и кратко пересказать непрочитанные письма через IMAP и ИИ.",
+ "search_documents": "Искать сведения внутри локальных документов с помощью ИИ.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
  "save_note": "Сохранить буфер обмена как заметку.",
@@ -77,6 +78,8 @@ def understand_command(user_text: str) -> dict:
         return {"action": "open_tasks", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
         return {"action": "read_unread_mail", "confidence": 1.0, "arguments": {}}
+    if re.search(r"\b(найди|поищи|поиск)\\b.*\\b(в документах|в содержимом|в файлах)\\b", normalized):
+        return {"action": "search_documents", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
     from agent_core import load_settings
