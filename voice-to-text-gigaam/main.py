@@ -48,6 +48,7 @@ from mail_client import open_mail_client
 from workspace_window import open_workspace
 from reminders_window import open_reminders
 from screen_inspector import open_screen_inspector
+from camera_window import open_camera_viewer
 
 _ui = None  # GUI создаётся позже, после загрузки модулей
 _STARTUP_TIME = time.perf_counter()
@@ -474,6 +475,7 @@ def main():
         on_open_files=lambda: open_workspace(_ui.root),
         on_open_reminders=lambda: open_reminders(_ui.root),
         on_open_screen=lambda: open_screen_inspector(_ui.root),
+        on_open_other=lambda: open_camera_viewer(_ui.root),
     )
     # Сначала создаём и отображаем главное окно, затем убираем заставку —
     # между ними не должно быть пустой паузы.
