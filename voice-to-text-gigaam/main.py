@@ -341,6 +341,7 @@ def handle_command(text: str):
     parent = _ui.root if _ui is not None else None
     if action == "add_contact":
         # Tkinter-операции выполняются только главным GUI-потоком.
+        print("[GUI] Ставлю открытие формы контакта в очередь главного потока.", flush=True)
         _ui_actions.put(("add_contact", None))
     elif action == "email_compose":
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
@@ -400,21 +401,46 @@ def main():
     start_reminder_service()
 
     def process_background_events():
-        process_keyboard_events()
+        # Сначала гарантируем следующий запуск опроса: ошибка любого обработчика
+        # не должна навсегда остановить очередь GUI-действий.
+        try:
+            _ui.root.after(25, process_background_events)
+        except Exception:
+            return
+
+        try:
+            process_keyboard_events()
+        except Exception:
+            print("[GUI] Ошибка обработки клавиатурных событий:", flush=True)
+            traceback.print_exc()
+
         while True:
             try:
                 ui_action, value = _ui_actions.get_nowait()
             except queue.Empty:
                 break
-            if ui_action == "add_contact":
-                open_contact_form(parent=_ui.root)
-            elif ui_action == "email_compose":
-                open_email_form(parent=_ui.root, add_files_on_open=value)
-        deliver_due_reminders()
+
+            print(f"[GUI] Получено действие из очереди: {ui_action}", flush=True)
+            try:
+                if ui_action == "add_contact":
+                    print("[GUI] Открываю окно добавления контакта.", flush=True)
+                    open_contact_form(parent=_ui.root)
+                    print("[GUI] Вызов формы контакта завершён.", flush=True)
+                elif ui_action == "email_compose":
+                    print("[GUI] Открываю окно нового письма.", flush=True)
+                    open_email_form(parent=_ui.root, add_files_on_open=value)
+                    print("[GUI] Вызов формы письма завершён.", flush=True)
+                else:
+                    print(f"[GUI] Неизвестное действие: {ui_action}", flush=True)
+            except Exception:
+                print(f"[GUI] Не удалось выполнить действие {ui_action}:", flush=True)
+                traceback.print_exc()
+
         try:
-            _ui.root.after(25, process_background_events)
+            deliver_due_reminders()
         except Exception:
-            pass
+            print("[GUI] Ошибка доставки напоминаний:", flush=True)
+            traceback.print_exc()
 
     _ui.root.after(25, process_background_events)
     _ui.run()
