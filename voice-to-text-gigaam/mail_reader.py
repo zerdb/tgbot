@@ -86,3 +86,44 @@ def summarize_unread(limit: int = 15) -> str:
         + "\n\n---\n\n".join(parts)[:30000]
     )
     return ask_ai(prompt, remember=False)
+
+
+def fetch_messages(limit: int = 100, query: str = "") -> list[dict]:
+    """Fetch recent inbox messages with BODY.PEEK; never marks messages as read."""
+    from agent_core import load_settings
+    settings=load_settings()
+    login=os.getenv("GIGAAM_MAIL_LOGIN",settings["mail_login"]).strip()
+    password=os.getenv("GIGAAM_MAIL_PASSWORD","").strip()
+    if not password: raise RuntimeError("Для чтения почты задай GIGAAM_MAIL_PASSWORD.")
+    connection=imaplib.IMAP4_SSL(settings.get("imap_host","imap.mail.ru"),int(settings.get("imap_port",993)),timeout=25)
+    try:
+        connection.login(login,password)
+        status,_=connection.select("INBOX",readonly=True)
+        if status!="OK": raise RuntimeError("Не удалось открыть входящие.")
+        # Search all messages; optional IMAP text search is safely quoted.
+        if query:
+            safe=query.replace('"','')
+            status,data=connection.search(None,'TEXT',f'"{safe}"')
+        else:
+            status,data=connection.search(None,"ALL")
+        if status!="OK": raise RuntimeError("Не удалось получить список писем.")
+        ids=(data[0].split() if data and data[0] else [])[-max(1,min(200,int(limit))):]
+        result=[]
+        for msg_id in reversed(ids):
+            status,payload=connection.fetch(msg_id,"(BODY.PEEK[])")
+            if status!="OK" or not payload or not isinstance(payload[0],tuple): continue
+            message=email.message_from_bytes(payload[0][1]); body=""
+            if message.is_multipart():
+                for part in message.walk():
+                    if part.get_content_type()=="text/plain" and "attachment" not in str(part.get("Content-Disposition","")).lower():
+                        raw=part.get_payload(decode=True)
+                        if raw: body+=raw.decode(part.get_content_charset() or "utf-8",errors="replace")+"\\n"
+            elif message.get_content_type()=="text/plain":
+                raw=message.get_payload(decode=True)
+                if raw: body=raw.decode(message.get_content_charset() or "utf-8",errors="replace")
+            name,address=parseaddr(_decode(message.get("From","")))
+            result.append({"from_name":name,"from_email":address,"subject":_decode(message.get("Subject","(без темы)")),"date":_decode(message.get("Date","")),"body":body[:12000].strip()})
+        return result
+    finally:
+        try: connection.logout()
+        except Exception: pass
