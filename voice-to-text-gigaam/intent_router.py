@@ -139,15 +139,17 @@ def understand_command(user_text: str) -> dict:
         query = re.sub(r"\b(?:в интернете|в интернет|в сети|в google)\b", "", query).strip()
         return {"action": "search_web", "confidence": 1.0, "arguments": {"query": query or user_text.strip()}}
 
-    # Вопросы о наблюдении всегда отправляем на анализ свежего кадра, а не в обычный чат ИИ.
-    camera_context = re.search(r"\b(камера|камере|камеру|видеонаблюдени|на парковке|во дворе|у ворот|в кадре|на изображении|на видео|на записи|там|здесь|тут|картинк)\b", normalized)
-    camera_question = re.search(r"\b(что|кто|сколько|есть|видно|видишь|опиши|день|ночь|машин|людей|человек|сейчас)\b", normalized)
-    if camera_context and camera_question:
-        return {"action": "camera_question", "confidence": 1.0, "arguments": {"question": user_text.strip()}}
+    # Специальная проверка белой Нивы имеет приоритет над общими вопросами о камере.
     if "проверь белую машину на камере" in normalized or "белая нива на камере" in normalized:
         return {"action": "inspect_camera_image", "confidence": 1.0, "arguments": {}}
     if "начальник" in normalized or "белая нива" in normalized or "нива на месте" in normalized:
         return {"action": "inspect_camera_image", "confidence": 1.0, "arguments": {}}
+
+    # Вопросы о наблюдении отправляем на анализ свежего кадра.
+    camera_context = re.search(r"\b(камера|камере|камеру|видеонаблюдени|на парковке|во дворе|у ворот|в кадре|на изображении|на видео|на записи|там|здесь|тут|картинк)\b", normalized)
+    camera_question = re.search(r"\b(что|кто|сколько|есть|видно|видишь|опиши|день|ночь|машин|людей|человек|сейчас)\b", normalized)
+    if camera_context and camera_question:
+        return {"action": "camera_question", "confidence": 1.0, "arguments": {"question": user_text.strip()}}
     if re.search(r"\b(настройки помощника|настройки gigaam|настройки гигаам)\b", normalized):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
