@@ -50,7 +50,7 @@ def open_task_manager(parent):
         table.pack(fill="both", expand=True)
         form = ttk.Frame(frame)
         form.pack(fill="x", pady=10)
-        task_var, due_var = tk.StringVar(), tk.StringVar()
+        task_var, due_var = tk.StringVar(master=window), tk.StringVar(master=window)
         ttk.Label(form, text="Задача").grid(row=0, column=0, sticky="w")
         ttk.Entry(form, textvariable=task_var, width=48).grid(row=1, column=0, sticky="ew", padx=(0, 8))
         ttk.Label(form, text="Срок").grid(row=0, column=1, sticky="w")
