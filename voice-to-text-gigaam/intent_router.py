@@ -8,6 +8,7 @@ ACTIONS = {
  "read_unread_mail": "Прочитать и кратко пересказать непрочитанные письма через IMAP и ИИ.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
+ "inspect_camera_image": "Получить кадр RTSP-камеры и проверить через подключённую модель ИИ наличие белого автомобиля Lada Niva.",
  "save_note": "Сохранить буфер обмена как заметку.",
  "clipboard_to_excel": "Создать Excel из данных буфера обмена.",
  "lock_computer": "Заблокировать компьютер.",
@@ -72,6 +73,8 @@ def understand_command(user_text: str) -> dict:
         return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
     if "отправить файлы на почту" in normalized or "отправь файлы на почту" in normalized:
         return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": True}}
+    if "проверь белую машину на камере" in normalized or "белая нива на камере" in normalized:
+        return {"action": "inspect_camera_image", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(настройки помощника|настройки gigaam|настройки гигаам)\b", normalized):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
