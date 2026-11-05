@@ -30,7 +30,7 @@ tk.Label(_splash_frame, text="⏳", font=("Segoe UI Emoji", 22), fg="#fbbc04", b
 tk.Label(_splash_frame, text="Загружается помощник…", font=("Segoe UI", 10, "bold"), fg="white", bg="#202124").pack(side="left")
 _splash.update_idletasks()
 _splash_width, _splash_height = _splash.winfo_reqwidth(), _splash.winfo_reqheight()
-_splash_x = (_splash.winfo_screenwidth() - _splash_width) // 2
+_splash_x = _splash.winfo_screenwidth() - _splash_width - 24
 _splash_y = (_splash.winfo_screenheight() - _splash_height) // 2
 _splash.geometry(f"+{_splash_x}+{_splash_y}")
 _splash.update_idletasks()
