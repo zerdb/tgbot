@@ -4,6 +4,10 @@ import json, os, re, urllib.error, urllib.request
 ACTIONS = {
  "add_contact": "Добавить нового человека в локальную адресную книгу контактов и открыть пустую карточку.",
  "open_contacts": "Открыть общую адресную книгу контактов.",
+ "open_assistant_settings": "Открыть настройки GigaAM.",
+ "open_tasks": "Открыть список задач и планов.",
+ "read_unread_mail": "Прочитать и кратко пересказать непрочитанные письма через IMAP и ИИ.",
+ "search_documents": "Искать сведения внутри локальных документов с помощью ИИ.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
  "save_note": "Сохранить буфер обмена как заметку.",
@@ -68,12 +72,22 @@ def understand_command(user_text: str) -> dict:
         return {"action": "add_contact", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
         return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
+    if re.search(r"\b(настройки помощника|настройки gigaam|настройки гигаам)\b", normalized):
+        return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
+    if re.search(r"\b(открой|покажи|открыть|показать)\b.*\b(задачи|планы|планировщик)\b", normalized):
+        return {"action": "open_tasks", "confidence": 1.0, "arguments": {}}
+    if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
+        return {"action": "read_unread_mail", "confidence": 1.0, "arguments": {}}
+    if re.search(r"\b(найди|поищи|поиск)\b.*\b(в документах|в содержимом|в файлах)\b", normalized):
+        return {"action": "search_documents", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
+    from agent_core import load_settings
+    settings = load_settings()
     key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not key: raise RuntimeError("Не задана переменная OPENROUTER_API_KEY.")
-    base = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-    model = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
+    base = os.getenv("OPENROUTER_BASE_URL", settings["openrouter_base_url"]).rstrip("/")
+    model = os.getenv("OPENROUTER_MODEL", settings["openrouter_model"]).strip()
     payload = {"model": model, "temperature": 0, "messages": [{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":user_text[:4000]}]}
     req = urllib.request.Request(base + "/chat/completions", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Authorization":"Bearer "+key,"Content-Type":"application/json","HTTP-Referer":"https://github.com/zerdb/tgbot","X-Title":"GigaAM Voice Assistant"}, method="POST")
     try:

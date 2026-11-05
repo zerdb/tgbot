@@ -65,7 +65,8 @@ def list_email_contacts():
 
 def send_email(recipient: str, subject: str, body: str = "", attachments: list[str] | None = None):
     """Send an email with optional local-file attachments. Raises on failure."""
-    login = os.getenv("GIGAAM_MAIL_LOGIN", "zerdb@mail.ru")
+    from agent_core import load_settings
+    login = os.getenv("GIGAAM_MAIL_LOGIN", load_settings()["mail_login"])
     password = os.getenv("GIGAAM_MAIL_PASSWORD")
     if not password:
         raise RuntimeError(

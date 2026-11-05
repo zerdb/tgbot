@@ -5,6 +5,9 @@ import re
 import threading
 import time
 import queue
+import json
+import os
+from pathlib import Path
 from datetime import datetime, timedelta
 from notifications import show_notification, speak_text
 
@@ -12,6 +15,35 @@ _reminder_lock = threading.Lock()
 _reminders: list[tuple[datetime, str]] = []
 _due_reminders: queue.SimpleQueue[tuple[datetime, str]] = queue.SimpleQueue()
 _reminder_thread_started = False
+_REMINDER_PATH = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant" / "reminders.json"
+_reminders_loaded = False
+
+
+def _save_reminders():
+    _REMINDER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = [{"when": when.isoformat(timespec="seconds"), "message": message} for when, message in _reminders]
+    temp = _REMINDER_PATH.with_suffix(".tmp")
+    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(_REMINDER_PATH)
+
+
+def _load_reminders():
+    global _reminders_loaded
+    if _reminders_loaded:
+        return
+    _reminders_loaded = True
+    try:
+        data = json.loads(_REMINDER_PATH.read_text(encoding="utf-8"))
+        for item in data if isinstance(data, list) else []:
+            try:
+                when = datetime.fromisoformat(item["when"])
+                message = str(item["message"]).strip()
+                if when > datetime.now() and message:
+                    _reminders.append((when, message))
+            except (KeyError, TypeError, ValueError):
+                continue
+    except (OSError, json.JSONDecodeError):
+        pass
 
 def normalize_command(text: str) -> str:
     normalized = text.lower().replace("ё", "е")
@@ -24,13 +56,19 @@ def reminder_worker():
     while True:
         now = datetime.now()
         with _reminder_lock:
+            _load_reminders()
             remaining = []
             for when, message in _reminders:
                 if when <= now:
                     _due_reminders.put((when, message))
                 else:
                     remaining.append((when, message))
-            _reminders[:] = remaining
+            if len(remaining) != len(_reminders):
+                _reminders[:] = remaining
+                try:
+                    _save_reminders()
+                except OSError as exc:
+                    print(f"Не удалось обновить файл напоминаний: {exc}")
         time.sleep(1)
 
 
@@ -144,6 +182,13 @@ def add_reminder(text: str):
         return
     due, message = parsed
     with _reminder_lock:
+        _load_reminders()
         _reminders.append((due, message))
+        try:
+            _save_reminders()
+        except OSError as exc:
+            print(f"Не удалось сохранить напоминание: {exc}")
+            _reminders.pop()
+            return
     print(f"Напоминание установлено на {due:%d.%m.%Y %H:%M}: {message}")
 

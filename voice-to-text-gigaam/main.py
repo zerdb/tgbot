@@ -365,7 +365,7 @@ def handle_command(text: str):
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
-    keep_busy = action in ("search_files", "ai_chat")
+    keep_busy = action in ("search_files", "ai_chat", "read_unread_mail")
     if action == "ai_chat":
         question = str(args.get("question") or text).strip()
         if _ui is not None:
@@ -378,6 +378,10 @@ def handle_command(text: str):
         _ui_actions.put(("add_contact", action == "add_contact"))
     elif action == "email_compose":
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
+    elif action in ("open_assistant_settings", "open_tasks", "search_documents"):
+        _ui_actions.put((action, None))
+    elif action == "read_unread_mail":
+        _ui_actions.put(("confirm_read_mail", None))
     elif action == "save_note": save_clipboard_as_note()
     elif action == "clipboard_to_excel": paste_clipboard_to_excel()
     elif action == "lock_computer": lock_computer()
@@ -429,6 +433,16 @@ def _ask_ai_worker(question: str):
         result = (question, answer, None)
     except Exception as exc:
         result = (question, None, str(exc))
+    _ui_actions.put(("ai_chat_result", result))
+
+
+def _mail_reader_worker():
+    try:
+        from mail_reader import summarize_unread
+        answer = summarize_unread()
+        result = ("Сводка непрочитанных писем", answer, None)
+    except Exception as exc:
+        result = ("Сводка непрочитанных писем", None, str(exc))
     _ui_actions.put(("ai_chat_result", result))
 
 
@@ -499,6 +513,27 @@ def main():
                     print("[GUI] Открываю окно нового письма.", flush=True)
                     open_email_form(parent=_ui.root, add_files_on_open=value)
                     print("[GUI] Вызов формы письма завершён.", flush=True)
+                elif ui_action == "open_assistant_settings":
+                    from settings_window import open_settings_window
+                    open_settings_window(_ui.root)
+                elif ui_action == "open_tasks":
+                    from task_manager import open_task_manager
+                    open_task_manager(_ui.root)
+                elif ui_action == "search_documents":
+                    from document_search import open_document_search
+                    open_document_search(_ui.root)
+                elif ui_action == "confirm_read_mail":
+                    from tkinter import messagebox
+                    approved = messagebox.askyesno(
+                        "Прочитать новые письма",
+                        "Для составления сводки текст непрочитанных писем будет передан подключённой модели OpenRouter. Продолжить?",
+                        parent=_ui.root,
+                    )
+                    if approved:
+                        _ui.set_busy_overlay("Проверяю входящую почту…")
+                        threading.Thread(target=_mail_reader_worker, daemon=True, name="mail-reader").start()
+                    else:
+                        _ui.set_busy_overlay(None)
                 elif ui_action == "ai_chat":
                     question = str(value or "").strip()
                     if question:

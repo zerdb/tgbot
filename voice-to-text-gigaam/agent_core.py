@@ -1,0 +1,130 @@
+"""Shared configuration and explicit user-approved AI memory for GigaAM."""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from threading import RLock
+
+APP_DATA = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant"
+CONFIG_PATH = APP_DATA / "settings.json"
+MEMORY_PATH = APP_DATA / "assistant_memory.json"
+_LOCK = RLock()
+DEFAULTS = {
+    "openrouter_base_url": "https://openrouter.ai/api/v1",
+    "openrouter_model": "openrouter/free",
+    "mail_login": "zerdb@mail.ru",
+    "imap_host": "imap.mail.ru",
+    "imap_port": 993,
+    "remember_chat_history": True,
+}
+
+
+def _read_json(path: Path, fallback):
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, type(fallback)) else fallback
+    except (OSError, json.JSONDecodeError):
+        return fallback
+
+
+def load_settings() -> dict:
+    with _LOCK:
+        return {**DEFAULTS, **_read_json(CONFIG_PATH, {})}
+
+
+def save_settings(values: dict) -> dict:
+    allowed = set(DEFAULTS)
+    clean = {}
+    for key, value in values.items():
+        if key not in allowed:
+            continue
+        if key == "imap_port":
+            try:
+                value = max(1, min(65535, int(value)))
+            except (TypeError, ValueError):
+                continue
+        elif key == "remember_chat_history":
+            value = bool(value)
+        else:
+            value = str(value).strip()
+        clean[key] = value
+    with _LOCK:
+        current = load_settings()
+        current.update(clean)
+        APP_DATA.mkdir(parents=True, exist_ok=True)
+        temp = CONFIG_PATH.with_suffix(".tmp")
+        temp.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        temp.replace(CONFIG_PATH)
+        return current
+
+
+def get_secret_env(name: str) -> str:
+    return os.getenv(name, "").strip()
+
+
+def load_memory() -> dict:
+    with _LOCK:
+        return _read_json(MEMORY_PATH, {"notes": [], "history": []})
+
+
+def remember_note(note: str) -> None:
+    note = str(note or "").strip()
+    if not note:
+        raise ValueError("Пустую заметку нельзя сохранить в память.")
+    with _LOCK:
+        data = load_memory()
+        data.setdefault("notes", []).append(note[:1000])
+        data["notes"] = data["notes"][-100:]
+        _write_memory(data)
+
+
+def forget_notes() -> None:
+    with _LOCK:
+        data = load_memory()
+        data["notes"] = []
+        _write_memory(data)
+
+
+def clear_chat_history() -> None:
+    with _LOCK:
+        data = load_memory()
+        data["history"] = []
+        _write_memory(data)
+
+
+def get_ai_context() -> list[dict]:
+    settings = load_settings()
+    if not settings.get("remember_chat_history", True):
+        return []
+    data = load_memory()
+    messages = []
+    notes = data.get("notes", [])[-20:]
+    if notes:
+        messages.append({"role": "system", "content": "Пользователь явно сохранил эти заметки в память помощника. Используй их только когда уместно:\n- " + "\n- ".join(str(x) for x in notes)})
+    history = data.get("history", [])
+    for item in history[-12:]:
+        if isinstance(item, dict) and item.get("role") in ("user", "assistant") and item.get("content"):
+            messages.append({"role": item["role"], "content": str(item["content"])[:4000]})
+    return messages
+
+
+def save_ai_exchange(question: str, answer: str) -> None:
+    if not load_settings().get("remember_chat_history", True):
+        return
+    with _LOCK:
+        data = load_memory()
+        history = data.setdefault("history", [])
+        history.extend([
+            {"role": "user", "content": str(question)[:4000]},
+            {"role": "assistant", "content": str(answer)[:4000]},
+        ])
+        data["history"] = history[-24:]
+        _write_memory(data)
+
+
+def _write_memory(data: dict) -> None:
+    APP_DATA.mkdir(parents=True, exist_ok=True)
+    temp = MEMORY_PATH.with_suffix(".tmp")
+    temp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(MEMORY_PATH)

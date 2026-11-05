@@ -184,7 +184,7 @@ def open_contact_form(parent=None, start_new=False):
                             "Не добавляй в контакты подписи, должности и организации как отдельных людей, "
                             "если это не имя человека.\n\nТЕКСТ:\n" + raw_text[:12000]
                         )
-                        answer = ask_ai(prompt)
+                        answer = ask_ai(prompt, remember=False)
                         match = re.search(r"\[[\s\S]*\]", answer)
                         if not match:
                             raise ValueError("ИИ не вернул JSON-массив контактов.")

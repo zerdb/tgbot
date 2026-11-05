@@ -6,19 +6,23 @@ import urllib.error
 import urllib.request
 
 
-def ask_ai(question: str) -> str:
+def ask_ai(question: str, remember: bool = True) -> str:
     question = str(question or "").strip()
     if not question:
         raise ValueError("Вопрос пустой.")
     key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not key:
         raise RuntimeError("Не задана переменная OPENROUTER_API_KEY.")
-    base = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-    model = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
-    payload = {"model": model, "temperature": 0.4, "messages": [
-        {"role": "system", "content": "Ты полезный русскоязычный ИИ-помощник. Отвечай прямо, понятно и по существу. Если вопрос на другом языке, отвечай на языке вопроса."},
+    from agent_core import get_ai_context, load_settings, save_ai_exchange
+    settings = load_settings()
+    base = os.getenv("OPENROUTER_BASE_URL", settings["openrouter_base_url"]).rstrip("/")
+    model = os.getenv("OPENROUTER_MODEL", settings["openrouter_model"]).strip()
+    messages = [
+        {"role": "system", "content": "Ты полезный русскоязычный ИИ-помощник. Отвечай прямо, понятно и по существу. Если вопрос на другом языке, отвечай на языке вопроса. Контекст памяти — только явно сохранённые пользователем заметки и недавняя история."},
+        *(get_ai_context() if remember else []),
         {"role": "user", "content": question[:12000]},
-    ]}
+    ]
+    payload = {"model": model, "temperature": 0.4, "messages": messages}
     request = urllib.request.Request(base + "/chat/completions", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={
         "Authorization": "Bearer " + key, "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/zerdb/tgbot", "X-Title": "GigaAM Voice Assistant",
@@ -40,4 +44,6 @@ def ask_ai(question: str) -> str:
     answer = str(content or "").strip()
     if not answer:
         raise RuntimeError("Подключённая модель вернула пустой ответ.")
+    if remember:
+        save_ai_exchange(question, answer)
     return answer
