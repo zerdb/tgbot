@@ -19,7 +19,7 @@ def ask_ai(question: str, remember: bool = True) -> str:
     model = os.getenv("OPENROUTER_MODEL", settings["openrouter_model"]).strip()
     messages = [
         {"role": "system", "content": "Ты полезный русскоязычный ИИ-помощник. Отвечай прямо, понятно и по существу. Если вопрос на другом языке, отвечай на языке вопроса. Контекст памяти — только явно сохранённые пользователем заметки и недавняя история."},
-        *get_ai_context(),
+        *(get_ai_context() if remember else []),
         {"role": "user", "content": question[:12000]},
     ]
     payload = {"model": model, "temperature": 0.4, "messages": messages}
