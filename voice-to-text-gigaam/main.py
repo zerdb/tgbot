@@ -10,6 +10,8 @@ import threading
 import time
 import traceback
 import webbrowser
+import ctypes
+from ctypes import wintypes
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -45,9 +47,15 @@ progress("Библиотеки загружены.")
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
-COMMAND_HOTKEY = "right ctrl"
-DICTATION_MODIFIER = "right shift"
 MAX_CHUNK_SECONDS = 24
+
+WH_KEYBOARD_LL = 13
+WM_KEYDOWN, WM_KEYUP = 0x0100, 0x0101
+WM_SYSKEYDOWN, WM_SYSKEYUP = 0x0104, 0x0105
+VK_RSHIFT, VK_RCONTROL = 0xA1, 0xA3
+_pressed_physical_right = set()
+_keyboard_hook = None
+_keyboard_hook_proc = None
 
 PROJECT_DIR = Path(__file__).resolve().parent
 MODEL_DIR = Path(os.getenv("GIGAAM_MODEL_DIR", str(PROJECT_DIR.parent / "GigaAM-v3"))).expanduser().resolve()
@@ -150,26 +158,54 @@ def promote_to_dictation():
     update_ui_status("ДИКТОВКА", recording="text")
 
 
-def on_right_ctrl_pressed(_event=None):
-    mode = "text" if keyboard.is_pressed(DICTATION_MODIFIER) else "command"
-    start_recording(mode)
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [("vkCode", wintypes.DWORD), ("scanCode", wintypes.DWORD),
+                ("flags", wintypes.DWORD), ("time", wintypes.DWORD),
+                ("dwExtraInfo", ctypes.c_size_t)]
 
+HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-def on_right_shift_pressed(_event=None):
-    # Supports both orders: Shift then Ctrl, or Ctrl then Shift.
-    if keyboard.is_pressed(COMMAND_HOTKEY):
-        with _lock:
-            active = _recording
-        if active:
-            promote_to_dictation()
+def _native_keyboard_event(n_code, w_param, l_param):
+    if n_code >= 0:
+        vk = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents.vkCode
+        if vk in (VK_RCONTROL, VK_RSHIFT):
+            if w_param in (WM_KEYDOWN, WM_SYSKEYDOWN) and vk not in _pressed_physical_right:
+                _pressed_physical_right.add(vk)
+                if vk == VK_RCONTROL:
+                    start_recording("text" if VK_RSHIFT in _pressed_physical_right else "command")
+                elif VK_RCONTROL in _pressed_physical_right:
+                    with _lock:
+                        active = _recording
+                    if active:
+                        promote_to_dictation()
+            elif w_param in (WM_KEYUP, WM_SYSKEYUP):
+                _pressed_physical_right.discard(vk)
+                if vk == VK_RSHIFT:
+                    with _lock:
+                        should_stop = _recording and _recording_mode == "text"
+                    if should_stop:
+                        stop_recording()
+                elif vk == VK_RCONTROL:
+                    stop_recording()
+    return user32.CallNextHookEx(_keyboard_hook, n_code, w_param, l_param)
 
+def install_right_only_keyboard_hook():
+    global _keyboard_hook, _keyboard_hook_proc
+    _keyboard_hook_proc = HOOKPROC(_native_keyboard_event)
+    _keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _keyboard_hook_proc, kernel32.GetModuleHandleW(None), 0)
+    if not _keyboard_hook:
+        raise ctypes.WinError(ctypes.get_last_error())
+    progress("Подключены только физические Right Ctrl / Right Shift.")
 
-def on_right_shift_released(_event=None):
-    with _lock:
-        should_stop = _recording and _recording_mode == "text"
-    if should_stop:
-        stop_recording()
-
+def remove_keyboard_hook():
+    global _keyboard_hook, _keyboard_hook_proc
+    if _keyboard_hook:
+        user32.UnhookWindowsHookEx(_keyboard_hook)
+        _keyboard_hook = None
+    _keyboard_hook_proc = None
+    _pressed_physical_right.clear()
 
 def stop_recording():
     global _stream, _recording
@@ -389,10 +425,7 @@ def main():
     load_model()
     start_reminder_service()
     progress("Голосовой ввод и голосовые команды готовы.")
-    keyboard.on_press_key(COMMAND_HOTKEY, on_right_ctrl_pressed)
-    keyboard.on_press_key(DICTATION_MODIFIER, on_right_shift_pressed)
-    keyboard.on_release_key(DICTATION_MODIFIER, on_right_shift_released)
-    keyboard.on_release_key(COMMAND_HOTKEY, lambda _event: stop_recording())
+    install_right_only_keyboard_hook()
     _ui = AssistantWindow(
         on_close=shutdown,
         on_command=handle_command,
@@ -407,7 +440,7 @@ def shutdown():
         active = _recording
     if active:
         stop_recording()
-    keyboard.unhook_all()
+    remove_keyboard_hook()
     print("Работа программы завершена.")
 
 if __name__ == "__main__":
