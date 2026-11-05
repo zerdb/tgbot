@@ -18,12 +18,12 @@ def _decode(value):
 
 
 def fetch_unread(limit: int = 15) -> list[dict]:
-    login = os.getenv("GIGAAM_MAIL_LOGIN", "zerdb@mail.ru").strip()
+    from agent_core import load_settings
+    settings = load_settings()
+    login = os.getenv("GIGAAM_MAIL_LOGIN", settings["mail_login"]).strip()
     password = os.getenv("GIGAAM_MAIL_PASSWORD", "").strip()
     if not password:
         raise RuntimeError("Для чтения почты задай переменную GIGAAM_MAIL_PASSWORD.")
-    from agent_core import load_settings
-    settings = load_settings()
     host = settings.get("imap_host", "imap.mail.ru")
     port = int(settings.get("imap_port", 993))
     connection = imaplib.IMAP4_SSL(host, port, timeout=25)
