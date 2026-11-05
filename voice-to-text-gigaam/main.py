@@ -44,6 +44,10 @@ from contact_form import open_contact_form
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow, show_ai_answer
 from ai_chat import ask_ai
+from mail_client import open_mail_client
+from workspace_window import open_workspace
+from reminders_window import open_reminders
+from screen_inspector import open_screen_inspector
 
 _ui = None  # GUI создаётся позже, после загрузки модулей
 _STARTUP_TIME = time.perf_counter()
@@ -466,6 +470,10 @@ def main():
         on_close=shutdown,
         on_command=handle_command,
         microphone_status="ПРОВЕРКА",
+        on_open_mail=lambda: open_mail_client(_ui.root),
+        on_open_files=lambda: open_workspace(_ui.root),
+        on_open_reminders=lambda: open_reminders(_ui.root),
+        on_open_screen=lambda: open_screen_inspector(_ui.root),
     )
     # Сначала создаём и отображаем главное окно, затем убираем заставку —
     # между ними не должно быть пустой паузы.
