@@ -37,7 +37,7 @@ _splash.update_idletasks()
 _splash.update()
 
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
-from reminders import start_reminder_service, add_reminder, deliver_due_reminders
+from reminders import start_reminder_service, stop_reminder_service, add_reminder, deliver_due_reminders
 from file_search import search_web, search_files, start_file_search_ui
 from email_form import open_email_form
 from contact_form import open_contact_form
@@ -597,6 +597,7 @@ def main():
 
 
 def shutdown():
+    stop_reminder_service()
     with _lock:
         active = _recording
     if active:
