@@ -24,13 +24,25 @@ from contact_form import open_contact_form
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow, show_ai_answer
 from ai_chat import ask_ai
+from winotify import Notification
 
 _STARTUP_TIME = time.perf_counter()
 
 
 def progress(message: str):
+    """Показывает этап запуска как уведомление Windows справа внизу."""
     elapsed = time.perf_counter() - _STARTUP_TIME
-    print(f"[{elapsed:6.1f} сек] {message}", flush=True)
+    try:
+        toast = Notification(
+            app_id="GigaAM — голосовой помощник",
+            title="Запуск голосового помощника",
+            msg=message,
+            duration="short",
+        )
+        toast.show()
+    except Exception:
+        # Если системные уведомления отключены, приложение всё равно продолжит запуск.
+        pass
 
 
 progress("Запуск Python: загружаю аудиобиблиотеки...")
@@ -41,7 +53,7 @@ import pyperclip
 import sounddevice as sd
 import soundfile as sf
 from PIL import ImageGrab
-from winotify import Notification, audio
+from winotify import audio
 progress("Аудиобиблиотеки загружены. Загружаю PyTorch...")
 import torch
 progress("PyTorch загружен. Загружаю Transformers...")
@@ -98,12 +110,12 @@ def check_microphone() -> bool:
     try:
         device = sd.query_devices(kind="input")
         if device["max_input_channels"] < CHANNELS:
-            print("Микрофон не найден: устройство не поддерживает запись звука.")
+            progress("Микрофон не найден: устройство не поддерживает запись звука.")
             return False
     except (sd.PortAudioError, OSError) as exc:
-        print(f"Микрофон не найден или недоступен: {exc}")
+        progress(f"Микрофон не найден или недоступен: {exc}")
         return False
-    print(f"Микрофон найден: {device['name']}")
+    progress(f"Микрофон найден: {device['name']}")
     return True
 
 
