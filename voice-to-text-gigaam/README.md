@@ -101,3 +101,7 @@ The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAss
 
 After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Left Ctrl + Left Shift for dictation or Right Ctrl for a voice command; release the keys to process the audio. Close the window to exit.
 \n\nTo organize a folder, say **«разбери папку»** while holding Right Ctrl. Choose a folder to preview how its top-level files will be grouped. Nothing moves until you click **«Разложить файлы»** and confirm. Existing files are never overwritten; nested folders are left untouched.\n
+
+## Семантические команды через OpenRouter
+
+GigaAM-v3 по-прежнему распознаёт речь локально. Модуль `intent_router.py` передаёт распознанный текст в OpenRouter, чтобы определить намерение по смыслу, а выполнение остаётся в Python и ограничено списком разрешённых действий. Настройки Windows: `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL` (по умолчанию `https://openrouter.ai/api/v1`) и `OPENROUTER_MODEL` (по умолчанию `openrouter/free`). В окне есть кнопка «Умная команда…» для ввода задачи своими словами.

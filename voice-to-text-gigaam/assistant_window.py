@@ -31,7 +31,11 @@ class AssistantWindow:
         ttk.Label(outer, text="Горячие клавиши: диктовка — Right Ctrl + Right Shift; команда — Right Ctrl.",
                   wraplength=700).pack(anchor="w", pady=(0, 10))
 
-        ttk.Label(outer, text="Остальные команды — выберите раздел", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 5))
+        ttk.Label(outer, text="Опиши задачу своими словами", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 5))
+        smart_row = ttk.Frame(outer)
+        smart_row.pack(fill="x", pady=(0, 9))
+        ttk.Button(smart_row, text="Умная команда…", command=self._ask_smart_command).pack(side="left")
+        ttk.Label(smart_row, text="Например: перешли этот документ по почте").pack(side="left", padx=10)
         row = ttk.Frame(outer)
         row.pack(fill="x", pady=(0, 8))
         groups = [
@@ -49,6 +53,11 @@ class AssistantWindow:
             button.pack(side="left", fill="x", expand=True, padx=(0, 5))
         ttk.Label(outer, text="Команды доступны голосом и через меню. Для поиска и напоминаний появится поле ввода.",
                   wraplength=700).pack(anchor="w")
+
+    def _ask_smart_command(self):
+        value = simpledialog.askstring("Умная команда", "Опиши задачу своими словами:", parent=self.root)
+        if value and value.strip():
+            self.on_command(value.strip())
 
     def _click_command(self, command):
         if command == "найди файл":
