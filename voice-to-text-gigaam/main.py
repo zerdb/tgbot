@@ -381,9 +381,7 @@ def handle_command(text: str):
     elif action in ("open_assistant_settings", "open_tasks", "search_documents"):
         _ui_actions.put((action, None))
     elif action == "read_unread_mail":
-        if _ui is not None:
-            _ui.set_busy_overlay("Проверяю входящую почту…")
-        threading.Thread(target=_mail_reader_worker, daemon=True, name="mail-reader").start()
+        _ui_actions.put(("confirm_read_mail", None))
     elif action == "save_note": save_clipboard_as_note()
     elif action == "clipboard_to_excel": paste_clipboard_to_excel()
     elif action == "lock_computer": lock_computer()
@@ -524,6 +522,16 @@ def main():
                 elif ui_action == "search_documents":
                     from document_search import open_document_search
                     open_document_search(_ui.root)
+                elif ui_action == "confirm_read_mail":
+                    from tkinter import messagebox
+                    approved = messagebox.askyesno(
+                        "Прочитать новые письма",
+                        "Для составления сводки текст непрочитанных писем будет передан подключённой модели OpenRouter. Продолжить?",
+                        parent=_ui.root,
+                    )
+                    if approved:
+                        _ui.set_busy_overlay("Проверяю входящую почту…")
+                        threading.Thread(target=_mail_reader_worker, daemon=True, name="mail-reader").start()
                 elif ui_action == "ai_chat":
                     question = str(value or "").strip()
                     if question:
