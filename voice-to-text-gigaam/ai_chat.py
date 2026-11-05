@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 
 
-def ask_ai(question: str) -> str:
+def ask_ai(question: str, remember: bool = True) -> str:
     question = str(question or "").strip()
     if not question:
         raise ValueError("Вопрос пустой.")
@@ -44,5 +44,6 @@ def ask_ai(question: str) -> str:
     answer = str(content or "").strip()
     if not answer:
         raise RuntimeError("Подключённая модель вернула пустой ответ.")
-    save_ai_exchange(question, answer)
+    if remember:
+        save_ai_exchange(question, answer)
     return answer
