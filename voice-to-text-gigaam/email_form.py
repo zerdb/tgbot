@@ -71,7 +71,7 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
         outer.pack(fill="both", expand=True)
         ttk.Label(outer, text="Новое письмо", font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(0, 12))
 
-        book_items = list(load_address_book().items())
+        book_items = [(name, item.get("email", "")) for name, item in load_address_book().items() if item.get("email")]
         contact_names = [name for name, _address in book_items]
         ttk.Label(outer, text="Контакт из адресной книги").pack(anchor="w")
         contact_var = tk.StringVar(master=root)

@@ -371,8 +371,8 @@ def handle_command(text: str):
         if _ui is not None:
             _ui.set_busy_overlay("Жду ответ ИИ…")
         _ui_actions.put(("ai_chat", question))
-    elif action == "add_contact":
-        print("[GUI] Ставлю открытие формы контакта в очередь главного потока.", flush=True)
+    elif action in ("add_contact", "open_contacts"):
+        print("[GUI] Открываю общую адресную книгу.", flush=True)
         _ui_actions.put(("add_contact", None))
     elif action == "email_compose":
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
@@ -490,9 +490,9 @@ def main():
             print(f"[GUI] Получено действие из очереди: {ui_action}", flush=True)
             try:
                 if ui_action == "add_contact":
-                    print("[GUI] Открываю окно добавления контакта.", flush=True)
+                    print("[GUI] Открываю адресную книгу.", flush=True)
                     open_contact_form(parent=_ui.root)
-                    print("[GUI] Вызов формы контакта завершён.", flush=True)
+                    print("[GUI] Вызов адресной книги завершён.", flush=True)
                 elif ui_action == "email_compose":
                     print("[GUI] Открываю окно нового письма.", flush=True)
                     open_email_form(parent=_ui.root, add_files_on_open=value)
