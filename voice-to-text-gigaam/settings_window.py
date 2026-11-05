@@ -5,7 +5,7 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from agent_core import load_settings, save_settings, remember_note, forget_notes
+from agent_core import load_settings, save_settings, remember_note, forget_notes, clear_chat_history
 from dialog_utils import activate_modal
 
 
@@ -75,6 +75,11 @@ def open_settings_window(parent):
         memory_buttons.pack(fill="x", pady=(5, 0))
         ttk.Button(memory_buttons, text="Запомнить заметку…", command=add_memory).pack(side="left")
         ttk.Button(memory_buttons, text="Очистить заметки", command=clear_memory).pack(side="left", padx=8)
+        def clear_history():
+            if messagebox.askyesno("Очистить историю", "Удалить сохранённую историю диалога ИИ?", parent=window):
+                clear_chat_history()
+                messagebox.showinfo("История", "История диалога очищена.", parent=window)
+        ttk.Button(memory_buttons, text="Очистить историю", command=clear_history).pack(side="left", padx=8)
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", side="bottom")
         ttk.Button(buttons, text="Сохранить", command=save).pack(side="left")
