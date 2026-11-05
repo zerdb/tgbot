@@ -180,7 +180,7 @@ def inspect_camera_question(question: str) -> str:
 
 def speak(text):
     encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
-    script = "$t=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('" + encoded + "'));Add-Type -AssemblyName System.Speech;$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;$s.Rate=-1;$s.Speak($t);$s.Dispose()"
+    script = "$t=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('" + encoded + "'));Add-Type -AssemblyName System.Speech;$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;$s.Rate=1;$s.Speak($t);$s.Dispose()"
     subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
         check=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
