@@ -16,6 +16,26 @@ from ctypes import wintypes
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import tkinter as tk
+
+# Показываем заставку до импорта модулей приложения.
+_splash = tk.Tk()
+_splash.overrideredirect(True)
+_splash.attributes("-topmost", True)
+_splash.attributes("-alpha", 0.96)
+_splash.configure(bg="#202124")
+_splash_frame = tk.Frame(_splash, bg="#202124", padx=16, pady=10)
+_splash_frame.pack()
+tk.Label(_splash_frame, text="⏳", font=("Segoe UI Emoji", 22), fg="#fbbc04", bg="#202124").pack(side="left", padx=(0, 9))
+tk.Label(_splash_frame, text="Загружается помощник…", font=("Segoe UI", 10, "bold"), fg="white", bg="#202124").pack(side="left")
+_splash.update_idletasks()
+_splash_width, _splash_height = _splash.winfo_reqwidth(), _splash.winfo_reqheight()
+_splash_x = _splash.winfo_screenwidth() - _splash_width - 24
+_splash_y = (_splash.winfo_screenheight() - _splash_height) // 2
+_splash.geometry(f"+{_splash_x}+{_splash_y}")
+_splash.update_idletasks()
+_splash.update()
+
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
 from reminders import start_reminder_service, add_reminder, deliver_due_reminders
 from file_search import search_web, search_files, start_file_search_ui
@@ -413,31 +433,7 @@ def _ask_ai_worker(question: str):
 def main():
     global _ui, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
 
-    # Мгновенно показываем отдельную заставку до тяжёлых импортов.
-    import tkinter as tk
-    splash = tk.Tk()
-    splash.overrideredirect(True)
-    splash.attributes("-topmost", True)
-    splash.attributes("-alpha", 0.96)
-    splash.configure(bg="#202124")
-    frame = tk.Frame(splash, bg="#202124", padx=16, pady=10)
-    frame.pack()
-    tk.Label(
-        frame, text="⏳", font=("Segoe UI Emoji", 22),
-        fg="#fbbc04", bg="#202124"
-    ).pack(side="left", padx=(0, 9))
-    tk.Label(
-        frame, text="Загружается помощник…",
-        font=("Segoe UI", 10, "bold"), fg="white", bg="#202124"
-    ).pack(side="left")
-    splash.update_idletasks()
-    width, height = splash.winfo_reqwidth(), splash.winfo_reqheight()
-    x = splash.winfo_screenwidth() - width - 24
-    y = (splash.winfo_screenheight() - height) // 2
-    splash.geometry(f"+{x}+{y}")
-    splash.update_idletasks()
-    splash.update()
-
+    # Заставка уже показана до импорта модулей приложения.
     # Долгая загрузка проходит за заставкой; главное окно пока не открываем.
     import imageio_ffmpeg
     import keyboard
@@ -450,7 +446,7 @@ def main():
     import torch
     from transformers import AutoModel
 
-    splash.destroy()
+    _splash.destroy()
 
     _ui = AssistantWindow(
         on_close=shutdown,
