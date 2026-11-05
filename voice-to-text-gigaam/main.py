@@ -44,20 +44,7 @@ def progress(message: str):
         pass
 
 
-progress("Запуск Python: загружаю аудиобиблиотеки...")
-import imageio_ffmpeg
-import keyboard
-import numpy as np
-import pyperclip
-import sounddevice as sd
-import soundfile as sf
-from PIL import ImageGrab
-from winotify import audio
-progress("Аудиобиблиотеки загружены. Загружаю PyTorch...")
-import torch
-progress("PyTorch загружен. Загружаю Transformers...")
-from transformers import AutoModel
-progress("Библиотеки загружены.")
+
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
@@ -424,7 +411,7 @@ def _ask_ai_worker(question: str):
 
 
 def main():
-    global _ui
+    global _ui, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
     # Сначала поднимаем наше основное окно и фирменную плашку,
     # только потом начинаем долгую проверку устройств и загрузку модели.
     _ui = AssistantWindow(
@@ -432,7 +419,23 @@ def main():
         on_command=handle_command,
         microphone_status="ПРОВЕРКА",
     )
-    progress("Запускаюсь: проверяю микрофон…")
+    progress("Запуск Python: загружаю аудиобиблиотеки…")
+    import imageio_ffmpeg
+    import keyboard
+    import numpy as np
+    import pyperclip
+    import sounddevice as sd
+    import soundfile as sf
+    from PIL import ImageGrab
+    from winotify import audio
+
+    progress("Аудиобиблиотеки готовы. Загружаю PyTorch…")
+    import torch
+
+    progress("PyTorch готов. Загружаю Transformers…")
+    from transformers import AutoModel
+
+    progress("Библиотеки загружены. Проверяю микрофон…")
     microphone_found = check_microphone()
     _ui.set_status(microphone="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
     progress("Настраиваю аудиосистему и FFmpeg…")
