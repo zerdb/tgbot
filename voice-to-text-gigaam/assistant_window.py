@@ -6,13 +6,17 @@ from dialog_utils import activate_modal
 
 
 class AssistantWindow:
-    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА"):
+    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
         self.root.geometry("760x570")
         self.root.minsize(620, 480)
         self.on_close = on_close
         self.on_command = on_command
+        self.on_open_mail = on_open_mail or (lambda: None)
+        self.on_open_files = on_open_files or (lambda: None)
+        self.on_open_reminders = on_open_reminders or (lambda: None)
+        self.on_open_screen = on_open_screen or (lambda: None)
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
@@ -40,6 +44,10 @@ class AssistantWindow:
         ttk.Button(smart_row, text="Умная команда…", command=self._ask_smart_command).pack(side="left")
         ttk.Button(smart_row, text="Спросить ИИ…", command=self._ask_ai).pack(side="left", padx=(8, 0))
         ttk.Button(smart_row, text="Мои контакты…", command=lambda: self.on_command("открой контакты")).pack(side="left", padx=(8, 0))
+        ttk.Button(smart_row, text="Почта", command=self.on_open_mail).pack(side="left", padx=(8, 0))
+        ttk.Button(smart_row, text="Файлы", command=self.on_open_files).pack(side="left", padx=(8, 0))
+        ttk.Button(smart_row, text="Напоминания", command=self.on_open_reminders).pack(side="left", padx=(8, 0))
+        ttk.Button(smart_row, text="Экран / изображение", command=self.on_open_screen).pack(side="left", padx=(8, 0))
         ttk.Button(smart_row, text="Настройки…", command=lambda: self.on_command("открой настройки помощника")).pack(side="left", padx=(8, 0))
         ttk.Button(smart_row, text="Поиск в документах…", command=lambda: self.on_command("поищи в документах")).pack(side="left", padx=(8, 0))
         ttk.Label(smart_row, text="Например: перешли этот документ по почте").pack(side="left", padx=10)
