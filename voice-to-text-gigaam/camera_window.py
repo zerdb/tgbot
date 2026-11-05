@@ -55,7 +55,7 @@ def open_camera_viewer(parent):
     # Вопросы к ИИ по свежему кадру камеры.
     question_row = ttk.Frame(frame)
     question_row.pack(fill="x", pady=(9, 0))
-    question_var = tk.StringVar()
+    question_var = tk.StringVar(master=win)
     question_entry = ttk.Entry(question_row, textvariable=question_var)
     question_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
     question_entry.insert(0, "Например: сколько человек в кадре?")
