@@ -370,7 +370,7 @@ def handle_command(text: str):
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
-    keep_busy = action in ("search_files", "ai_chat", "read_unread_mail")
+    keep_busy = action in ("search_files", "ai_chat", "read_unread_mail", "inspect_camera_image")
     if action == "ai_chat":
         question = str(args.get("question") or text).strip()
         if _ui is not None:
@@ -383,6 +383,8 @@ def handle_command(text: str):
         _ui_actions.put(("add_contact", action == "add_contact"))
     elif action == "email_compose":
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
+    elif action == "inspect_camera_image":
+        _ui_actions.put(("inspect_camera_image", None))
     elif action == "open_assistant_settings":
         _ui_actions.put((action, None))
     elif action == "read_unread_mail":
@@ -439,6 +441,20 @@ def _ask_ai_worker(question: str):
     except Exception as exc:
         result = (question, None, str(exc))
     _ui_actions.put(("ai_chat_result", result))
+
+
+def _camera_inspection_worker():
+    try:
+        from camera_inspector import inspect_camera, speak
+        present = inspect_camera()
+        if present:
+            speak("Бага на месте")
+            result = ("Бага на месте", None)
+        else:
+            result = ("Белая Нива не обнаружена", None)
+    except Exception as exc:
+        result = ("", str(exc))
+    _ui_actions.put(("camera_inspection_result", result))
 
 
 def _mail_reader_worker():
@@ -523,6 +539,13 @@ def main():
                     print("[GUI] Открываю окно нового письма.", flush=True)
                     open_email_form(parent=_ui.root, add_files_on_open=value)
                     print("[GUI] Вызов формы письма завершён.", flush=True)
+                elif ui_action == "inspect_camera_image":
+                    _ui.set_busy_overlay("Получаю кадр и проверяю его через ИИ…")
+                    threading.Thread(target=_camera_inspection_worker, daemon=True, name="camera-inspection").start()
+                elif ui_action == "camera_inspection_result":
+                    _ui.set_busy_overlay(None)
+                    result_text, error = value
+                    print("[Камера] " + (error if error else result_text), flush=True)
                 elif ui_action == "open_assistant_settings":
                     from settings_window import open_settings_window
                     open_settings_window(_ui.root)
