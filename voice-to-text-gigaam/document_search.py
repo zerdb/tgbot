@@ -76,8 +76,8 @@ def open_document_search(parent):
         frame = ttk.Frame(window, padding=14)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Найти информацию внутри документов", font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        folder_var = tk.StringVar(value=str(Path.home() / "Documents"))
-        query_var = tk.StringVar()
+        folder_var = tk.StringVar(master=window, value=str(Path.home() / "Documents"))
+        query_var = tk.StringVar(master=window)
         folder_row = ttk.Frame(frame)
         folder_row.pack(fill="x", pady=(10, 6))
         ttk.Entry(folder_row, textvariable=folder_var).pack(side="left", fill="x", expand=True)
@@ -92,7 +92,7 @@ def open_document_search(parent):
         ttk.Label(frame, text="Важно: найденные фрагменты будут отправлены подключённой модели OpenRouter для анализа. Не выбирай папки с конфиденциальными документами.", wraplength=760).pack(anchor="w", pady=(3, 6))
         output = tk.Text(frame, wrap="word", height=18, font=("Segoe UI", 10))
         output.pack(fill="both", expand=True, pady=8)
-        status = tk.StringVar(value="Выбери папку и введи запрос.")
+        status = tk.StringVar(master=window, value="Выбери папку и введи запрос.")
         ttk.Label(frame, textvariable=status).pack(anchor="w")
 
         def run_search():
