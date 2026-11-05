@@ -27,16 +27,19 @@ def open_camera_viewer(parent):
 
     url = os.environ.get("GIGAAM_CAMERA_RTSP_URL", "").strip()
     if not url:
-        password = simpledialog.askstring(
-            "Подключение к камере",
-            "Введите пароль камеры (он не сохраняется в проекте):",
-            show="*",
-            parent=parent,
-        )
-        if password is None:
+        from agent_core import get_camera_password
+        camera_secret = get_camera_password()
+        if not camera_secret:
+            camera_secret = simpledialog.askstring(
+                "Подключение к камере",
+                "Введите пароль камеры (его можно сохранить в настройках):",
+                show="*",
+                parent=parent,
+            )
+        if camera_secret is None:
             return
         from urllib.parse import quote
-        url = DEFAULT_CAMERA.replace("rtsp://admin@", "rtsp://admin:" + quote(password, safe="") + "@")
+        url = DEFAULT_CAMERA.replace("rtsp://admin@", "rtsp://admin:" + quote(camera_secret, safe="") + "@")
 
     win = tk.Toplevel(parent)
     win.title("GigaAM — просмотр камеры")
