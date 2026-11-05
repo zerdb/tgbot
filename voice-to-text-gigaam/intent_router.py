@@ -66,6 +66,10 @@ def _is_natural_information_question(text: str) -> bool:
 
 
 def understand_command(user_text: str) -> dict:
+    # Настройки помощника — простое локальное действие, не отправляем в ИИ-классификатор.
+    if re.search(r"\\b(открой|открыть|покажи|показать|зайди в|перейди в)\\b.*\\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
+        return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
+
     # Простые команды адресной книги обрабатываем локально: они не должны
     # зависеть от доступности OpenRouter или точности ответа классификатора.
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
