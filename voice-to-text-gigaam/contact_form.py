@@ -212,9 +212,9 @@ def open_contact_form(parent=None, start_new=False):
                     except Exception as exc:
                         result = (None, str(exc))
                     def finish():
-                        parse_button.configure(state="normal")
                         if not dialog.winfo_exists():
                             return
+                        parse_button.configure(state="normal")
                         contacts, error = result
                         if error:
                             hint.set("Ошибка разбора: " + error)
