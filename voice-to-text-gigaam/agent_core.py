@@ -63,6 +63,34 @@ def get_secret_env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
+
+def get_camera_password() -> str:
+    """Read the shared camera password from Windows Credential Manager."""
+    try:
+        import keyring
+        return keyring.get_password("GigaAMVoiceAssistant", "camera") or ""
+    except Exception as exc:
+        print(f"Не удалось прочитать пароль камеры: {exc}")
+        return ""
+
+
+def set_camera_password(password: str) -> None:
+    """Store the camera password in the OS credential vault."""
+    password = str(password or "")
+    if not password:
+        raise ValueError("Пароль камеры не может быть пустым.")
+    import keyring
+    keyring.set_password("GigaAMVoiceAssistant", "camera", password)
+
+
+def delete_camera_password() -> None:
+    import keyring
+    try:
+        keyring.delete_password("GigaAMVoiceAssistant", "camera")
+    except keyring.errors.PasswordDeleteError:
+        pass
+
+
 def load_memory() -> dict:
     with _LOCK:
         return _read_json(MEMORY_PATH, {"notes": [], "history": []})
