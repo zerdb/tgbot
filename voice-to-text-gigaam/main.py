@@ -378,7 +378,7 @@ def handle_command(text: str):
         _ui_actions.put(("add_contact", action == "add_contact"))
     elif action == "email_compose":
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
-    elif action in ("open_assistant_settings", "open_tasks"):
+    elif action in ("open_assistant_settings", "open_tasks", "search_documents"):
         _ui_actions.put((action, None))
     elif action == "read_unread_mail":
         if _ui is not None:
@@ -521,6 +521,9 @@ def main():
                 elif ui_action == "open_tasks":
                     from task_manager import open_task_manager
                     open_task_manager(_ui.root)
+                elif ui_action == "search_documents":
+                    from document_search import open_document_search
+                    open_document_search(_ui.root)
                 elif ui_action == "ai_chat":
                     question = str(value or "").strip()
                     if question:
