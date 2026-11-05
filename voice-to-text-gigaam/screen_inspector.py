@@ -3,8 +3,10 @@ from __future__ import annotations
 import tkinter as tk, threading
 from tkinter import ttk,messagebox,filedialog
 from pathlib import Path
+from dialog_utils import center_window
 def open_screen_inspector(parent):
     win=tk.Toplevel(parent);win.title("GigaAM — понимание экрана");win.geometry("900x650");win.minsize(680,480)
+    center_window(win,parent)
     f=ttk.Frame(win,padding=14);f.pack(fill="both",expand=True)
     ttk.Label(f,text="Понимание экрана и изображений",font=("Segoe UI",17,"bold")).pack(anchor="w")
     ttk.Label(f,text="Снимок экрана или выбранного изображения → OCR → объяснение ИИ. Для OCR требуется установленный Tesseract и пакет pytesseract.").pack(anchor="w",pady=(3,8))
@@ -45,5 +47,5 @@ def open_screen_inspector(parent):
             win.after(0,done)
         threading.Thread(target=work,daemon=True).start()
     row=ttk.Frame(f);row.pack(fill="x",pady=8)
-    for label,cmd in [("Снимок всего экрана",capture),("Открыть изображение…",choose),("Распознать и объяснить",analyze)]:
+    for label,cmd in [("📸 Снимок экрана",capture),("🖼 Открыть изображение…",choose),("✨ Распознать и объяснить",analyze)]:
         ttk.Button(row,text=label,command=cmd).pack(side="left",padx=(0,6))
