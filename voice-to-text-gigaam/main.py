@@ -25,6 +25,7 @@ from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow, show_ai_answer
 from ai_chat import ask_ai
 
+_ui = None  # GUI создаётся позже, после загрузки модулей
 _STARTUP_TIME = time.perf_counter()
 
 
