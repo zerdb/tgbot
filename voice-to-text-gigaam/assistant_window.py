@@ -6,7 +6,7 @@ from dialog_utils import activate_modal, center_window
 
 
 class AssistantWindow:
-    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None):
+    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None):
         self.root = tk.Tk()
         self.root.title("GigaAM — голосовой помощник")
         self.root.geometry("900x620")
@@ -17,6 +17,7 @@ class AssistantWindow:
         self.on_open_files = on_open_files or (lambda: None)
         self.on_open_reminders = on_open_reminders or (lambda: None)
         self.on_open_screen = on_open_screen or (lambda: None)
+        self.on_open_other = on_open_other or (lambda: None)
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
@@ -47,6 +48,7 @@ class AssistantWindow:
         ttk.Button(smart_row, text="📁 Файлы", command=self.on_open_files).pack(side="left", padx=4)
         ttk.Button(smart_row, text="🔔 Напоминания", command=self.on_open_reminders).pack(side="left", padx=4)
         ttk.Button(smart_row, text="🖼 Экран", command=self.on_open_screen).pack(side="left", padx=4)
+        ttk.Button(smart_row, text="🧰 Прочие", command=self.on_open_other).pack(side="left", padx=4)
         ttk.Button(smart_row, text="⚙ Настройки", command=lambda: self.on_command("открой настройки помощника")).pack(side="left", padx=4)
         row = ttk.Frame(outer)
         row.pack(fill="x", pady=(0, 8))
