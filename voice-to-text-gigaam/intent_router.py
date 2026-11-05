@@ -30,7 +30,31 @@ SYSTEM_PROMPT = """Ты — классификатор намерений рус
 Неясная задача => unknown. Не придумывай действия и параметры.
 Доступные действия: """ + json.dumps(ACTIONS, ensure_ascii=False)
 
+def _is_natural_information_question(text: str) -> bool:
+    """Route conversational questions to AI without requiring an AI keyword."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower().replace("ё", "е")).strip()
+    if not normalized:
+        return False
+    action_request = re.search(
+        r"\b(открой|открыть|запусти|запустить|сделай|сделать|найди файл|найти файл|"
+        r"создай напоминание|напомни|заблокируй|перезагрузи|очисти корзину|"
+        r"сохрани как заметку|создай письмо|добавь контакт|разбери папку)\b",
+        normalized,
+    )
+    if action_request:
+        return False
+    cues = (
+        "что за ", "почему", "зачем", "как ", "кто ", "где ", "когда ",
+        "какой ", "какая ", "какие ", "какое ", "сколько", "в чем смысл",
+        "в чём смысл", "что означает", "что значит", "объясни", "расскажи",
+        "правда ли", "можно ли", "откуда", "для чего", "чем отличается",
+    )
+    return "?" in normalized or any(cue in normalized for cue in cues)
+
+
 def understand_command(user_text: str) -> dict:
+    if _is_natural_information_question(user_text):
+        return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
     key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not key: raise RuntimeError("Не задана переменная OPENROUTER_API_KEY.")
     base = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
