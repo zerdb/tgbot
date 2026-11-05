@@ -24,24 +24,22 @@ from contact_form import open_contact_form
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow, show_ai_answer
 from ai_chat import ask_ai
-from winotify import Notification
 
 _STARTUP_TIME = time.perf_counter()
 
 
 def progress(message: str):
-    """Показывает этап запуска как уведомление Windows справа внизу."""
-    elapsed = time.perf_counter() - _STARTUP_TIME
+    """Обновляет фирменную плавающую плашку справа по центру экрана."""
+    global _ui
+    if _ui is None:
+        return
     try:
-        toast = Notification(
-            app_id="GigaAM — голосовой помощник",
-            title="Запуск голосового помощника",
-            msg=message,
-            duration="short",
-        )
-        toast.show()
+        _ui.set_busy_overlay(message)
+        # На старте тяжёлая загрузка модели временно занимает главный поток.
+        # Обрабатываем очередь Tk немедленно, чтобы плашка реально успела появиться.
+        _ui.root.update_idletasks()
+        _ui.root.update()
     except Exception:
-        # Если системные уведомления отключены, приложение всё равно продолжит запуск.
         pass
 
 
@@ -426,19 +424,23 @@ def _ask_ai_worker(question: str):
 
 def main():
     global _ui
-    progress("Проверяю микрофон...")
-    microphone_found = check_microphone()
-    progress("Настраиваю FFmpeg...")
-    configure_ffmpeg()
-    progress("Начинаю загрузку GigaAM...")
-    load_model()
-    progress("Голосовой ввод и голосовые команды готовы.")
-    install_right_only_keyboard_hook()
+    # Сначала поднимаем наше основное окно и фирменную плашку,
+    # только потом начинаем долгую проверку устройств и загрузку модели.
     _ui = AssistantWindow(
         on_close=shutdown,
         on_command=handle_command,
-        microphone_status="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН",
+        microphone_status="ПРОВЕРКА",
     )
+    progress("Запускаюсь: проверяю микрофон…")
+    microphone_found = check_microphone()
+    _ui.set_status(microphone="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
+    progress("Настраиваю аудиосистему и FFmpeg…")
+    configure_ffmpeg()
+    progress("Загружаю локальную модель GigaAM…")
+    load_model()
+    progress("Голосовое управление готово.")
+    _ui.set_busy_overlay(None)
+    install_right_only_keyboard_hook()
     start_file_search_ui(_ui.root, busy_callback=_ui.set_busy_overlay)
     # Таймер очереди напоминаний обслуживается главным потоком Tkinter.
     start_reminder_service()
