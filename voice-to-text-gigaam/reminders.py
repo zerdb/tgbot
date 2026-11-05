@@ -15,6 +15,8 @@ _reminder_lock = threading.Lock()
 _reminders: list[tuple[datetime, str]] = []
 _due_reminders: queue.SimpleQueue[tuple[datetime, str]] = queue.SimpleQueue()
 _reminder_thread_started = False
+_reminder_stop_event = threading.Event()
+_reminder_thread: threading.Thread | None = None
 _REMINDER_PATH = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant" / "reminders.json"
 _reminders_loaded = False
 
@@ -53,7 +55,7 @@ def normalize_command(text: str) -> str:
 
 def reminder_worker():
     """Фоновый поток только проверяет время и кладёт сработавшие напоминания в очередь."""
-    while True:
+    while not _reminder_stop_event.is_set():
         now = datetime.now()
         with _reminder_lock:
             _load_reminders()
@@ -69,7 +71,7 @@ def reminder_worker():
                     _save_reminders()
                 except OSError as exc:
                     print(f"Не удалось обновить файл напоминаний: {exc}")
-        time.sleep(1)
+        _reminder_stop_event.wait(1)
 
 
 def deliver_due_reminders():
@@ -91,10 +93,27 @@ def deliver_due_reminders():
 
 
 def start_reminder_service():
-    global _reminder_thread_started
+    """Start one managed worker; it is stopped and joined during GUI shutdown."""
+    global _reminder_thread_started, _reminder_thread
     if not _reminder_thread_started:
-        threading.Thread(target=reminder_worker, daemon=True, name="reminder-service").start()
+        _reminder_stop_event.clear()
+        _reminder_thread = threading.Thread(
+            target=reminder_worker, daemon=False, name="reminder-service"
+        )
+        _reminder_thread.start()
         _reminder_thread_started = True
+
+
+def stop_reminder_service(timeout: float = 3.0):
+    """Stop the worker cleanly before Python and native extensions are finalized."""
+    global _reminder_thread_started, _reminder_thread
+    _reminder_stop_event.set()
+    thread = _reminder_thread
+    if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+        thread.join(timeout=max(0.0, timeout))
+    if thread is None or not thread.is_alive():
+        _reminder_thread = None
+        _reminder_thread_started = False
 
 def parse_reminder(text: str):
     source = normalize_command(text)
