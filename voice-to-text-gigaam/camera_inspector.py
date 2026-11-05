@@ -44,11 +44,13 @@ def _ask_moondream(image_data: str, api_key: str, question: str = None):
         # Сначала сам вопрос, затем короткие требования к ответу. Некоторые
         # версии vision-модели ошибочно копируют последнюю часть длинного промпта.
         prompt = (
-            "Посмотри на само изображение с камеры. Определи видимые объекты и действия. "
-            "Ответь на вопрос пользователя: " + question +
-            "\nОтвечай только по-русски, опирайся только на видимые детали кадра. "
-            "Не перефразируй и не повторяй вопрос. Не рассуждай о камерах как устройствах. "
-            "Если изображение не позволяет ответить, прямо скажи: «На кадре не удаётся разобрать происходящее»."
+            "Вопрос: " + question + "\n"
+            "Рассмотри приложенное изображение, а не текст вопроса. Сначала определи, "
+            "что реально видно: люди, автомобили, предметы, действия и обстановка. "
+            "Затем ответь на вопрос по этим визуальным признакам. "
+            "Не повторяй вопрос и не объясняй, как работают камеры. "
+            "Если детали мелкие или размытые, укажи это конкретно. "
+            "Пиши по-русски, 1-3 коротких предложения."
         )
     payload = {
         "model": "moondream3.1-9B-A2B",
@@ -188,17 +190,39 @@ def inspect_camera_question(question: str) -> str:
         question = "Опиши, что видно на изображении."
     image_data = _capture_camera_image()
     moondream_key = os.getenv("MOONDREAM_API_KEY", "").strip() or get_moondream_api_key()
+    answer = ""
+    moondream_error = None
     if moondream_key:
-        print("[Камера] Отправляю вопрос по свежему кадру в Moondream.", flush=True)
-        answer = _ask_moondream(image_data, moondream_key, question)
-    else:
-        print("[Камера] Moondream не настроен — пробую OpenRouter vision.", flush=True)
-        answer = _ask_openrouter(image_data, question)
-    _compact_camera_answer._question = question
+        print("[Камера] Анализирую свежий кадр через Moondream.", flush=True)
+        try:
+            answer = _ask_moondream(image_data, moondream_key, question)
+            _compact_camera_answer._question = question
+            try:
+                compact = _compact_camera_answer(answer)
+            finally:
+                _compact_camera_answer._question = ""
+            if not compact.startswith("ИИ повторил"):
+                return compact
+            moondream_error = compact
+            print("[Камера] Moondream не ответил по изображению. Пробую резервную vision-модель.", flush=True)
+        except Exception as exc:
+            moondream_error = str(exc)
+            print("[Камера] Ошибка Moondream: %s" % exc, flush=True)
     try:
-        return _compact_camera_answer(answer)
-    finally:
-        _compact_camera_answer._question = ""
+        print("[Камера] Запрашиваю резервную vision-модель OpenRouter.", flush=True)
+        answer = _ask_openrouter(image_data, question)
+        _compact_camera_answer._question = question
+        try:
+            compact = _compact_camera_answer(answer)
+        finally:
+            _compact_camera_answer._question = ""
+        if compact.startswith("ИИ повторил"):
+            raise RuntimeError(compact)
+        return compact
+    except Exception as fallback_error:
+        if moondream_error:
+            raise RuntimeError("Moondream: %s; OpenRouter: %s" % (moondream_error, fallback_error)) from fallback_error
+        raise
 
 def speak(text):
     encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
