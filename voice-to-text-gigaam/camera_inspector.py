@@ -34,11 +34,20 @@ def _capture_camera_image() -> str:
 
 
 def _ask_moondream(image_data: str, api_key: str, question: str = None):
+    # Для произвольных вопросов задаём модели строгий формат короткого ответа.
     prompt = question or (
         "Is a white Lada Niva (Lada 4x4) car clearly visible in this surveillance image? "
         "Answer with exactly YES or NO. Answer NO if the car is absent, unclear, too small, "
         "or you are uncertain. Do not infer from context."
     )
+    if question:
+        prompt = (
+            "Ответь на вопрос по изображению камеры наблюдения ТОЛЬКО на русском языке. "
+            "Дай один короткий и конкретный ответ: максимум 1-2 предложения и 25 слов. "
+            "Описывай только то, что действительно различимо на кадре; если не уверен, "
+            "прямо скажи, что не можешь определить. Не повторяй одну мысль и не добавляй "
+            "вступление, вывод или советы. Вопрос пользователя: " + question
+        )
     payload = {
         "model": "moondream3.1-9B-A2B",
         "image_url": "data:image/jpeg;base64," + image_data,
@@ -80,8 +89,12 @@ def _ask_openrouter(image_data: str, question: str = None):
         "Return only JSON: {present: boolean, confidence: number, reason: string}. "
         "If uncertain, present must be false."
     )
-    payload = {"model": model, "temperature": 0, "messages": [{"role": "user", "content": [
-        {"type": "text", "text": prompt},
+    payload = {"model": model, "temperature": 0.1, "max_tokens": 120, "messages": [{"role": "user", "content": [
+        {"type": "text", "text": (
+            "Ответь по-русски кратко, максимум в 1-2 предложениях и 25 слов. "
+            "Не повторяй фразы. Не выдумывай детали; если объект неразличим, так и скажи. "
+            + prompt
+        )},
         {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + image_data}},
     ]}]}
     req = urllib.request.Request(
@@ -122,6 +135,33 @@ def inspect_camera():
     return json.loads(match.group(0)).get("present") is True
 
 
+def _compact_camera_answer(answer: str) -> str:
+    """Remove repeated sentences and keep spoken camera answers short."""
+    answer = re.sub(r"\s+", " ", str(answer or "")).strip().strip('"“”')
+    if not answer:
+        return "Не удалось разобрать изображение."
+    parts = re.split(r"(?<=[.!?])\s+", answer)
+    unique = []
+    seen = set()
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        key = re.sub(r"[^а-яa-z0-9]+", "", part.lower().replace("ё", "е"))
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(part)
+        if len(unique) >= 2:
+            break
+    result = " ".join(unique) or answer
+    words = result.split()
+    if len(words) > 25:
+        result = " ".join(words[:25]).rstrip(" ,;:") + "."
+    if len(result) > 240:
+        result = result[:237].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+    return result
+
+
 def inspect_camera_question(question: str) -> str:
     """Ask a natural-language question about a fresh camera frame."""
     from agent_core import get_moondream_api_key
@@ -136,7 +176,7 @@ def inspect_camera_question(question: str) -> str:
     else:
         print("[Камера] Moondream не настроен — пробую OpenRouter vision.", flush=True)
         answer = _ask_openrouter(image_data, question)
-    return answer.strip()
+    return _compact_camera_answer(answer)
 
 def speak(text):
     encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
