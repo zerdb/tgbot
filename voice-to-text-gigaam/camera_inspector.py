@@ -33,14 +33,14 @@ def _capture_camera_image() -> str:
         cap.release()
 
 
-def _ask_moondream(image_data: str, api_key: str, question: str = None):
+def _ask_moondream(image_data: str, api_key: str, question: str = None, strict_answer: bool = False):
     # Для произвольных вопросов задаём модели строгий формат короткого ответа.
     prompt = question or (
         "Is a white Lada Niva (Lada 4x4) car clearly visible in this surveillance image? "
         "Answer with exactly YES or NO. Answer NO if the car is absent, unclear, too small, "
         "or you are uncertain. Do not infer from context."
     )
-    if question:
+    if question and not strict_answer:
         # Сначала сам вопрос, затем короткие требования к ответу. Некоторые
         # версии vision-модели ошибочно копируют последнюю часть длинного промпта.
         prompt = (
@@ -56,6 +56,7 @@ def _ask_moondream(image_data: str, api_key: str, question: str = None):
         "model": "moondream3.1-9B-A2B",
         "image_url": "data:image/jpeg;base64," + image_data,
         "question": prompt,
+        "reasoning": True,
     }
     req = urllib.request.Request(
         "https://api.moondream.ai/v1/query",
@@ -183,10 +184,10 @@ def _compact_camera_answer(answer: str) -> str:
 
 
 def _is_white_car_presence_question(question: str) -> bool:
-    q = re.sub(r"\\s+", " ", (question or "").lower().replace("ё", "е")).strip()
-    asks_presence = bool(re.search(r"\\b(есть|видно|видишь|присутствует|находится)\\b", q))
-    mentions_white = bool(re.search(r"\\b(бел(ая|ую|ого|ый|ое)?|светл(ая|ую|ый|ое)?)\\b", q))
-    mentions_car = bool(re.search(r"\\b(машин(а|у|ы|е)?|автомобил(ь|я|и)?|нива|лада)\\b", q))
+    q = re.sub(r"\s+", " ", (question or "").lower().replace("ё", "е")).strip()
+    asks_presence = bool(re.search(r"\b(есть|видно|видишь|присутствует|находится)\b", q))
+    mentions_white = bool(re.search(r"\b(бел(ая|ую|ого|ый|ое)?|светл(ая|ую|ый|ое)?)\b", q))
+    mentions_car = bool(re.search(r"\b(машин(а|у|ы|е)?|автомобил(ь|я|и)?|нива|лада)\b", q))
     return asks_presence and mentions_white and mentions_car
 
 
@@ -225,7 +226,7 @@ def inspect_camera_question(question: str) -> str:
         print("[Камера] Распознан вопрос да/нет о белой машине.", flush=True)
         if moondream_key:
             try:
-                return _yes_no_result(_ask_moondream(image_data, moondream_key, binary_prompt))
+                return _yes_no_result(_ask_moondream(image_data, moondream_key, binary_prompt, strict_answer=True))
             except Exception as exc:
                 print("[Камера] Moondream binary check failed: %s" % exc, flush=True)
         try:
