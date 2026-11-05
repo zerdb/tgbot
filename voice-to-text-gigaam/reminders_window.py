@@ -2,9 +2,11 @@
 from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk,messagebox
+from dialog_utils import center_window
 def open_reminders(parent):
     from reminders import list_reminders, delete_reminder, add_reminder
     win=tk.Toplevel(parent);win.title("GigaAM — напоминания");win.geometry("760x520");win.minsize(560,380)
+    center_window(win,parent)
     f=ttk.Frame(win,padding=14);f.pack(fill="both",expand=True)
     ttk.Label(f,text="Напоминания",font=("Segoe UI",17,"bold")).pack(anchor="w")
     ttk.Label(f,text="Все запланированные события. Срабатывание сопровождается уведомлением и озвучиванием.").pack(anchor="w",pady=(2,10))
@@ -20,10 +22,10 @@ def open_reminders(parent):
         before=len(list_reminders());add_reminder(raw)
         if len(list_reminders())>before:value.set("");refresh()
         else:messagebox.showwarning("Напоминание","Не удалось распознать дату. Пример: завтра в 9 позвонить.",parent=win)
-    ttk.Button(row,text="Добавить",command=add).pack(side="left",padx=5)
+    ttk.Button(row,text="＋ Добавить",command=add).pack(side="left",padx=5)
     def remove():
         sel=listing.selection()
         if not sel:return
         if messagebox.askyesno("Удалить","Удалить выбранное напоминание?",parent=win):delete_reminder(int(sel[0]));refresh()
-    ttk.Button(row,text="Удалить выбранное",command=remove).pack(side="left")
+    ttk.Button(row,text="🗑 Удалить выбранное",command=remove).pack(side="left")
     refresh()
