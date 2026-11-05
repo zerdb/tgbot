@@ -448,11 +448,11 @@ def _camera_inspection_worker():
         from camera_inspector import inspect_camera, speak
         present = inspect_camera()
         if present:
-            speak("Бага на месте")
-            result = ("Бага на месте", None)
+            speak("Начальник есть")
+            result = ("Начальник есть", None)
         else:
-            speak("Баги нет")
-            result = ("Белая Нива не обнаружена", None)
+            speak("Начальника нет")
+            result = ("Начальника нет", None)
     except Exception as exc:
         result = ("", str(exc))
     _ui_actions.put(("camera_inspection_result", result))
