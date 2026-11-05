@@ -51,7 +51,11 @@ def copied_file_paths() -> list[str]:
 
 
 def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: bool = False):
-    """Open the composer; copied Explorer files attach automatically, file picker stays manual."""
+    """Open the composer; snapshot copied Explorer files before creating any GUI windows."""
+    # Read CF_HDROP immediately when the command is received, before Tk schedules
+    # the window. Keep this snapshot even if another UI action changes the clipboard.
+    clipboard_snapshot = copied_file_paths()
+
     def show():
         if parent is None or not parent.winfo_exists():
             print("Главное окно закрыто: форму почты открыть нельзя.")
@@ -118,17 +122,17 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
             refresh_count()
 
         status_var = tk.StringVar(master=root, value="Вложений: 0")
-        # Attach files copied in Explorer automatically. Never open the file picker on launch.
-        add_paths(copied_file_paths())
+        # Attach the command-time clipboard snapshot first. Never open the file picker automatically.
+        add_paths(clipboard_snapshot)
         clipboard_attempts = {"count": 0}
 
         def retry_clipboard_import():
             clipboard_attempts["count"] += 1
             add_paths(copied_file_paths())
-            if clipboard_attempts["count"] < 12:
+            if clipboard_attempts["count"] < 20:
                 root.after(300, retry_clipboard_import)
 
-        root.after(250, retry_clipboard_import)
+        root.after(100, retry_clipboard_import)
 
         controls = ttk.Frame(outer)
         controls.pack(fill="x", pady=(8, 0))
