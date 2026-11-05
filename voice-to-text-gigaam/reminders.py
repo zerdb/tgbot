@@ -60,8 +60,16 @@ def start_reminder_service():
 
 def parse_reminder(text: str):
     source = normalize_command(text)
+
+    # Поддерживаем оба естественных порядка слов:
+    # «напомни через 10 секунд про волшебника» и
+    # «через 10 секунд напомни про волшебника».
     if not source.startswith("напомни "):
-        return None
+        if source.startswith("через ") and " напомни " in source:
+            source = "напомни " + source
+        else:
+            return None
+
     body = source[len("напомни "):].strip()
     # В разговорной речи часто говорят «напомни мне ...».
     body = re.sub(r"^мне\s+", "", body)
@@ -100,6 +108,8 @@ def parse_reminder(text: str):
                         remainder = rest[unit.end():].strip()
                 if hours or minutes or seconds:
                     due = now + timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                    # При обратном порядке слов после времени остаётся «напомни ...».
+                    remainder = re.sub(r"^напомни(?:\\s+мне)?\\s+", "", remainder)
                     rest = remainder
     # "завтра в 9 утра", "завтра утром", "завтра в 09:30".
     if due is None and rest.startswith("завтра"):
