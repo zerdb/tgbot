@@ -34,6 +34,7 @@ def _part_text(part):
     return raw.decode("utf-8",errors="replace")
 
 def _extract_body(message):
+    """Return readable plain text plus original HTML alternative for rich mail display."""
     plain=[]; html=[]
     for part in (message.walk() if message.is_multipart() else [message]):
         if part.get_content_maintype()!="text": continue
@@ -45,15 +46,19 @@ def _extract_body(message):
         elif typ=="text/html":
             value=_part_text(part).strip()
             if value: html.append(value)
-    if plain: return "\n\n".join(plain)[:30000].strip()
-    if html:
+    html_body="\\n".join(html)[:500000]
+    if plain:
+        body="\\n\\n".join(plain)[:30000].strip()
+    elif html:
         parser=_HTMLText()
         try:
-            parser.feed("\n".join(html)); value="".join(parser.parts)
-        except Exception: value=re.sub(r"<[^>]+>"," ","\n".join(html))
-        value=re.sub(r"[ \t]+"," ",re.sub(r"\n[ \t]*\n+","\n\n",value))
-        return value.strip()[:30000]
-    return ""
+            parser.feed(html_body); body="".join(parser.parts)
+        except Exception:
+            body=re.sub(r"<[^>]+>"," "," ".join(html))
+        body=re.sub(r"[ \\t]+"," ",re.sub(r"\\n[ \\t]*\\n+","\\n\\n",body)).strip()[:30000]
+    else:
+        body=""
+    return body,html_body
 
 def _connect():
     from agent_core import load_settings
@@ -79,7 +84,8 @@ def _fetch(connection, ids):
             if raw is None: continue
             message=email.message_from_bytes(raw)
             name,address=parseaddr(_decode(message.get("From","")))
-            result.append({"from_name":name,"from_email":address,"subject":_decode(message.get("Subject","(без темы)")),"date":_decode(message.get("Date","")),"body":_extract_body(message)})
+            body,html_body=_extract_body(message)
+            result.append({"from_name":name,"from_email":address,"subject":_decode(message.get("Subject","(без темы)")),"date":_decode(message.get("Date","")),"body":body,"html_body":html_body})
         except (imaplib.IMAP4.error,OSError,ValueError):
             continue
     return result
