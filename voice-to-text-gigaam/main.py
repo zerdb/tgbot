@@ -387,6 +387,10 @@ def handle_command(text: str):
         _ui_actions.put(("inspect_camera_image", None))
     elif action == "open_assistant_settings":
         _ui_actions.put((action, None))
+    elif action == "open_reminders":
+        _ui_actions.put(("open_reminders", None))
+    elif action == "open_mail_client":
+        _ui_actions.put(("open_mail_client", None))
     elif action == "read_unread_mail":
         _ui_actions.put(("confirm_read_mail", None))
     elif action == "save_note": save_clipboard_as_note()
@@ -550,6 +554,10 @@ def main():
                 elif ui_action == "open_assistant_settings":
                     from settings_window import open_settings_window
                     open_settings_window(_ui.root)
+                elif ui_action == "open_reminders":
+                    open_reminders(_ui.root)
+                elif ui_action == "open_mail_client":
+                    open_mail_client(_ui.root)
                 elif ui_action == "confirm_read_mail":
                     from tkinter import messagebox
                     approved = messagebox.askyesno(
