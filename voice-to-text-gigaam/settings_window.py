@@ -63,7 +63,7 @@ def open_settings_window(parent):
         ttk.Button(camera_box, text="Сохранить", command=save_camera_secret).pack(side="left")
         ttk.Button(camera_box, text="Очистить", command=clear_camera_secret).pack(side="left", padx=6)
 
-        moondream_box = ttk.LabelFrame(frame, text="Moondream — альтернативная ИИ-модель для камеры", padding=8)
+        moondream_box = ttk.LabelFrame(frame, text="Moondream — резервная ИИ-модель помощника и камеры", padding=8)
         moondream_box.pack(fill="x", pady=(2, 8))
         moondream_var = tk.StringVar(master=window)
         ttk.Entry(moondream_box, textvariable=moondream_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
@@ -74,14 +74,14 @@ def open_settings_window(parent):
                 set_moondream_api_key(moondream_var.get())
                 moondream_var.set("")
                 moondream_status.set("Ключ сохранён в защищённом хранилище Windows")
-                messagebox.showinfo("Moondream", "Ключ сохранён. Проверка камеры теперь будет использовать Moondream.", parent=window)
+                messagebox.showinfo("Moondream", "Ключ сохранён. Если OpenRouter будет недоступен, помощник автоматически попробует Moondream.", parent=window)
             except Exception as exc:
                 messagebox.showerror("Moondream", str(exc), parent=window)
         def clear_moondream_secret():
             try:
                 delete_moondream_api_key()
                 moondream_var.set("")
-                moondream_status.set("Ключ не задан — будет использован OpenRouter")
+                moondream_status.set("Ключ не задан — резервная модель недоступна")
             except Exception as exc:
                 messagebox.showerror("Moondream", str(exc), parent=window)
         ttk.Button(moondream_box, text="Сохранить ключ", command=save_moondream_secret).pack(side="left")
