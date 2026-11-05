@@ -28,7 +28,7 @@ class AssistantWindow:
         ttk.Label(status, textvariable=self.microphone_var, foreground="#16723b").grid(row=0, column=1, sticky="w", padx=(6, 18))
         ttk.Label(status, text="Команды:", font=("Segoe UI", 9, "bold")).grid(row=0, column=2, sticky="w")
         ttk.Label(status, textvariable=self.listening_var, foreground="#1558a6").grid(row=0, column=3, sticky="w", padx=6)
-        ttk.Label(outer, text="Горячие клавиши: диктовка — Right Alt + Right Shift; команда — Right Ctrl.",
+        ttk.Label(outer, text="Горячие клавиши: диктовка — Right Ctrl + Right Shift; команда — Right Ctrl.",
                   wraplength=700).pack(anchor="w", pady=(0, 10))
 
         ttk.Label(outer, text="Остальные команды — выберите раздел", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 5))
@@ -87,7 +87,7 @@ class AssistantWindow:
                     self._overlay_label = tk.Label(frame, text="", font=("Segoe UI", 11, "bold"), fg="white", bg="#202124")
                     self._overlay_label.pack(pady=(5, 0))
                     self._recording_overlay = overlay
-                self._overlay_label.configure(text="СЛУШАЮ КОМАНДУ" if mode == "command" else "ИДЁТ ДИКТОВКА")
+                self._overlay_label.configure(text="СЛУШАЮ" if mode == "command" else "ДИКТОВКА")
                 self._recording_overlay.update_idletasks()
                 w, h = self._recording_overlay.winfo_reqwidth(), self._recording_overlay.winfo_reqheight()
                 x = (self.root.winfo_screenwidth() - w) // 2

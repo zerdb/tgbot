@@ -45,8 +45,8 @@ progress("Библиотеки загружены.")
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
-TEXT_HOTKEY = "right alt+right shift"
 COMMAND_HOTKEY = "right ctrl"
+DICTATION_MODIFIER = "right shift"
 MAX_CHUNK_SECONDS = 24
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -137,6 +137,38 @@ def start_recording(mode: str):
         _stream = None
         print(f"Не удалось начать запись: {exc}")
         update_ui_status("ОШИБКА ЗАПИСИ", recording=False)
+
+
+def promote_to_dictation():
+    """If Right Shift joins an active Right Ctrl recording, switch to dictation."""
+    global _recording_mode
+    with _lock:
+        if not _recording or _recording_mode == "text":
+            return
+        _recording_mode = "text"
+    print("Режим переключён на диктовку: удерживайте Right Ctrl + Right Shift.")
+    update_ui_status("ДИКТОВКА", recording="text")
+
+
+def on_right_ctrl_pressed(_event=None):
+    mode = "text" if keyboard.is_pressed(DICTATION_MODIFIER) else "command"
+    start_recording(mode)
+
+
+def on_right_shift_pressed(_event=None):
+    # Supports both orders: Shift then Ctrl, or Ctrl then Shift.
+    if keyboard.is_pressed(COMMAND_HOTKEY):
+        with _lock:
+            active = _recording
+        if active:
+            promote_to_dictation()
+
+
+def on_right_shift_released(_event=None):
+    with _lock:
+        should_stop = _recording and _recording_mode == "text"
+    if should_stop:
+        stop_recording()
 
 
 def stop_recording():
@@ -312,10 +344,10 @@ def main():
     load_model()
     start_reminder_service()
     progress("Голосовой ввод и голосовые команды готовы.")
-    keyboard.add_hotkey(TEXT_HOTKEY, lambda: start_recording("text"), suppress=False)
-    keyboard.add_hotkey(TEXT_HOTKEY, lambda: stop_recording(), suppress=False, trigger_on_release=True)
-    keyboard.on_press_key(COMMAND_HOTKEY, lambda _: start_recording("command"), suppress=False)
+    keyboard.on_press_key(COMMAND_HOTKEY, on_right_ctrl_pressed, suppress=False)
     keyboard.on_release_key(COMMAND_HOTKEY, lambda _: stop_recording(), suppress=False)
+    keyboard.on_press_key(DICTATION_MODIFIER, on_right_shift_pressed, suppress=False)
+    keyboard.on_release_key(DICTATION_MODIFIER, on_right_shift_released, suppress=False)
     _ui = AssistantWindow(
         on_close=shutdown,
         on_command=handle_command,
