@@ -91,6 +91,32 @@ def delete_camera_password() -> None:
         pass
 
 
+def get_moondream_api_key() -> str:
+    """Read Moondream API key from Windows Credential Manager."""
+    try:
+        import keyring
+        return keyring.get_password("GigaAMVoiceAssistant", "moondream_api_key") or ""
+    except Exception as exc:
+        print(f"Не удалось прочитать ключ Moondream: {exc}")
+        return ""
+
+
+def set_moondream_api_key(api_key: str) -> None:
+    api_key = str(api_key or "").strip()
+    if not api_key:
+        raise ValueError("Ключ Moondream не может быть пустым.")
+    import keyring
+    keyring.set_password("GigaAMVoiceAssistant", "moondream_api_key", api_key)
+
+
+def delete_moondream_api_key() -> None:
+    import keyring
+    try:
+        keyring.delete_password("GigaAMVoiceAssistant", "moondream_api_key")
+    except keyring.errors.PasswordDeleteError:
+        pass
+
+
 def load_memory() -> dict:
     with _LOCK:
         return _read_json(MEMORY_PATH, {"notes": [], "history": []})
