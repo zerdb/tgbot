@@ -5,7 +5,7 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from agent_core import load_settings, save_settings, remember_note, forget_notes, clear_chat_history
+from agent_core import load_settings, save_settings, remember_note, forget_notes, clear_chat_history, get_camera_password, set_camera_password, delete_camera_password
 from dialog_utils import activate_modal
 
 
@@ -18,12 +18,12 @@ def open_settings_window(parent):
             return
         window = tk.Toplevel(parent)
         window.title("Настройки GigaAM")
-        window.geometry("620x520")
-        window.minsize(540, 440)
+        window.geometry("620x640")
+        window.minsize(540, 560)
         frame = ttk.Frame(window, padding=16)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Единые настройки помощника", font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="Пароли и API-ключи не сохраняются в файл настроек. Используются переменные окружения Windows.", wraplength=570).pack(anchor="w", pady=(4, 12))
+        ttk.Label(frame, text="API-ключи берутся из переменных окружения. Камерный доступ хранится в защищённом хранилище Windows.", wraplength=570).pack(anchor="w", pady=(4, 12))
         values = load_settings()
         fields = [
             ("openrouter_model", "Модель OpenRouter"),
@@ -38,6 +38,31 @@ def open_settings_window(parent):
             var = tk.StringVar(master=window, value=str(values.get(key, "")))
             ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(2, 8))
             vars_[key] = var
+
+        camera_box = ttk.LabelFrame(frame, text="Доступ к камере", padding=8)
+        camera_box.pack(fill="x", pady=(2, 8))
+        camera_var = tk.StringVar(master=window)
+        ttk.Entry(camera_box, textvariable=camera_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
+        camera_status = tk.StringVar(master=window, value="Сохранено" if get_camera_password() else "Не сохранено")
+        ttk.Label(camera_box, textvariable=camera_status).pack(anchor="w", pady=(6, 0))
+        def save_camera_secret():
+            try:
+                set_camera_password(camera_var.get())
+                camera_var.set("")
+                camera_status.set("Сохранено в защищённом хранилище Windows")
+                messagebox.showinfo("Камера", "Данные доступа сохранены.", parent=window)
+            except Exception as exc:
+                messagebox.showerror("Камера", str(exc), parent=window)
+        def clear_camera_secret():
+            try:
+                delete_camera_password()
+                camera_var.set("")
+                camera_status.set("Не сохранено")
+            except Exception as exc:
+                messagebox.showerror("Камера", str(exc), parent=window)
+        ttk.Button(camera_box, text="Сохранить", command=save_camera_secret).pack(side="left")
+        ttk.Button(camera_box, text="Очистить", command=clear_camera_secret).pack(side="left", padx=6)
+
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(2, 8))
         status = (
