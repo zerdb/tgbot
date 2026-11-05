@@ -1,7 +1,9 @@
 """Full local address book with editable contacts."""
 from __future__ import annotations
 
+import json
 import re
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -131,10 +133,162 @@ def open_contact_form(parent=None, start_new=False):
             refresh()
             status.set(f"Контакт «{name}» удалён")
 
+        def open_smart_import():
+            dialog = tk.Toplevel(root)
+            dialog.title("Умный импорт контактов")
+            dialog.geometry("700x590")
+            dialog.minsize(560, 440)
+            dialog.transient(root)
+            dialog.attributes("-topmost", True)
+            frame = ttk.Frame(dialog, padding=14)
+            frame.pack(fill="both", expand=True)
+            ttk.Label(frame, text="Вставь текст с контактами", font=("Segoe UI", 13, "bold")).pack(anchor="w")
+            ttk.Label(
+                frame,
+                text="Можно вставить список, подпись из письма или несколько строк с именами и email.",
+                wraplength=650,
+            ).pack(anchor="w", pady=(3, 8))
+            source = tk.Text(frame, height=10, wrap="word", font=("Segoe UI", 10))
+            source.pack(fill="both", expand=True)
+            ttk.Label(frame, text="Результат распознавания").pack(anchor="w", pady=(10, 4))
+            preview = ttk.Treeview(frame, columns=("name", "email", "phone", "notes"), show="headings", height=7)
+            for key, title, width in (
+                ("name", "Имя", 180), ("email", "Почта", 220),
+                ("phone", "Телефон", 120), ("notes", "Заметка", 130),
+            ):
+                preview.heading(key, text=title)
+                preview.column(key, width=width, minwidth=70)
+            preview.pack(fill="both", expand=True)
+            hint = tk.StringVar(master=dialog, value="После разбора проверь список и подтверди импорт.")
+            ttk.Label(frame, textvariable=hint, wraplength=650).pack(anchor="w", pady=(6, 4))
+            parsed_contacts = []
+
+            def parse_with_ai():
+                raw_text = source.get("1.0", "end").strip()
+                if not raw_text:
+                    messagebox.showinfo("Нет текста", "Сначала вставь текст с контактами.", parent=dialog)
+                    return
+                parse_button.configure(state="disabled")
+                import_button.configure(state="disabled")
+                hint.set("ИИ разбирает текст…")
+                preview.delete(*preview.get_children())
+
+                def worker():
+                    try:
+                        from ai_chat import ask_ai
+                        prompt = (
+                            "Извлеки из текста все контактные данные людей. Верни ТОЛЬКО корректный JSON-массив "
+                            "объектов с полями name, email, phone, notes. Не выдумывай отсутствующие значения; "
+                            "пустые поля заполняй пустой строкой. Имя отделяй от адреса почты. "
+                            "Если в тексте несколько людей, верни каждого отдельным объектом. "
+                            "Не добавляй в контакты подписи, должности и организации как отдельных людей, "
+                            "если это не имя человека.\n\nТЕКСТ:\n" + raw_text[:12000]
+                        )
+                        answer = ask_ai(prompt)
+                        match = re.search(r"\\[\\s\\S]*\\]", answer)
+                        if not match:
+                            raise ValueError("ИИ не вернул JSON-массив контактов.")
+                        data = json.loads(match.group(0))
+                        if not isinstance(data, list):
+                            raise ValueError("Ожидался список контактов.")
+                        cleaned = []
+                        for item in data:
+                            if not isinstance(item, dict):
+                                continue
+                            name = str(item.get("name") or "").strip()
+                            email = str(item.get("email") or "").strip()
+                            phone = str(item.get("phone") or "").strip()
+                            notes = str(item.get("notes") or "").strip()
+                            if not name and email:
+                                name = email.split("@", 1)[0]
+                            if not name and not email:
+                                continue
+                            if email and not re.fullmatch(r"[\\w.+-]+@[\\w.-]+\\.[a-zа-я]{2,}", email, re.IGNORECASE):
+                                continue
+                            cleaned.append({"name": name, "email": email, "phone": phone, "notes": notes})
+                        if not cleaned:
+                            raise ValueError("Не удалось найти контакты с именем или корректной почтой.")
+                        result = (cleaned, None)
+                    except Exception as exc:
+                        result = (None, str(exc))
+                    def finish():
+                        parse_button.configure(state="normal")
+                        if not dialog.winfo_exists():
+                            return
+                        contacts, error = result
+                        if error:
+                            hint.set("Ошибка разбора: " + error)
+                            return
+                        parsed_contacts[:] = contacts
+                        for contact in contacts:
+                            preview.insert("", "end", values=(
+                                contact["name"], contact["email"], contact["phone"], contact["notes"]
+                            ))
+                        hint.set(f"Найдено контактов: {len(contacts)}. Проверь данные и нажми «Добавить в адресную книгу».")
+                        import_button.configure(state="normal")
+                    try:
+                        dialog.after(0, finish)
+                    except tk.TclError:
+                        pass
+
+                threading.Thread(target=worker, daemon=True).start()
+
+            def import_contacts():
+                if not parsed_contacts:
+                    return
+                book = records()
+                added = 0
+                skipped = 0
+                for contact in parsed_contacts:
+                    email_key = contact["email"].casefold()
+                    name_key = contact["name"].casefold()
+                    duplicate = any(
+                        (email_key and item.get("email", "").casefold() == email_key)
+                        or saved_name.casefold() == name_key
+                        for saved_name, item in book.items()
+                    )
+                    if duplicate:
+                        skipped += 1
+                        continue
+                    name = contact["name"]
+                    base_name, suffix = name, 2
+                    while name in book:
+                        name = f"{base_name} ({suffix})"
+                        suffix += 1
+                    book[name] = {
+                        "phone": contact["phone"],
+                        "email": contact["email"],
+                        "notes": contact["notes"],
+                    }
+                    added += 1
+                try:
+                    save_address_book(book)
+                except OSError as exc:
+                    messagebox.showerror("Ошибка сохранения", str(exc), parent=dialog)
+                    return
+                refresh()
+                status.set(f"Умный импорт: добавлено {added}, пропущено повторов {skipped}")
+                messagebox.showinfo(
+                    "Импорт завершён",
+                    f"Добавлено контактов: {added}\\nПропущено повторов: {skipped}",
+                    parent=dialog,
+                )
+                dialog.destroy()
+
+            buttons = ttk.Frame(frame)
+            buttons.pack(fill="x", pady=(8, 0))
+            parse_button = ttk.Button(buttons, text="Разобрать с помощью ИИ", command=parse_with_ai)
+            parse_button.pack(side="left")
+            import_button = ttk.Button(buttons, text="Добавить в адресную книгу", command=import_contacts, state="disabled")
+            import_button.pack(side="left", padx=8)
+            ttk.Button(buttons, text="Закрыть", command=dialog.destroy).pack(side="right")
+            activate_modal(dialog, root)
+
         table.bind("<<TreeviewSelect>>", selected)
         controls = ttk.Frame(outer)
         controls.pack(fill="x", pady=(8, 0))
         ttk.Button(controls, text="Новый контакт", command=clear_editor).pack(side="left")
+        ttk.Button(controls, text="Умный импорт", command=open_smart_import).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Сохранить / изменить", command=save).pack(side="left", padx=8)
         ttk.Button(controls, text="Удалить", command=delete).pack(side="left")
         ttk.Button(controls, text="Закрыть", command=root.destroy).pack(side="right")
