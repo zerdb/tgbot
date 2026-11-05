@@ -373,7 +373,9 @@ def handle_command(text: str):
         _ui_actions.put(("ai_chat", question))
     elif action in ("add_contact", "open_contacts"):
         print("[GUI] Открываю общую адресную книгу.", flush=True)
-        _ui_actions.put(("add_contact", None))
+        # Для голосового «добавь в контакты» открываем ту же книгу сразу
+        # с пустой карточкой; «открой контакты» показывает список.
+        _ui_actions.put(("add_contact", action == "add_contact"))
     elif action == "email_compose":
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
     elif action == "save_note": save_clipboard_as_note()
@@ -491,7 +493,7 @@ def main():
             try:
                 if ui_action == "add_contact":
                     print("[GUI] Открываю адресную книгу.", flush=True)
-                    open_contact_form(parent=_ui.root)
+                    open_contact_form(parent=_ui.root, start_new=bool(value))
                     print("[GUI] Вызов адресной книги завершён.", flush=True)
                 elif ui_action == "email_compose":
                     print("[GUI] Открываю окно нового письма.", flush=True)
