@@ -30,7 +30,7 @@ tk.Label(_splash_frame, text="⏳", font=("Segoe UI Emoji", 22), fg="#fbbc04", b
 tk.Label(_splash_frame, text="Загружается помощник…", font=("Segoe UI", 10, "bold"), fg="white", bg="#202124").pack(side="left")
 _splash.update_idletasks()
 _splash_width, _splash_height = _splash.winfo_reqwidth(), _splash.winfo_reqheight()
-_splash_x = _splash.winfo_screenwidth() - _splash_width - 24
+_splash_x = (_splash.winfo_screenwidth() - _splash_width) // 2
 _splash_y = (_splash.winfo_screenheight() - _splash_height) // 2
 _splash.geometry(f"+{_splash_x}+{_splash_y}")
 _splash.update_idletasks()
@@ -382,7 +382,7 @@ def handle_command(text: str):
         _ui_actions.put(("add_contact", action == "add_contact"))
     elif action == "email_compose":
         _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
-    elif action in ("open_assistant_settings", "search_documents"):
+    elif action == "open_assistant_settings":
         _ui_actions.put((action, None))
     elif action == "read_unread_mail":
         _ui_actions.put(("confirm_read_mail", None))
@@ -524,9 +524,6 @@ def main():
                 elif ui_action == "open_assistant_settings":
                     from settings_window import open_settings_window
                     open_settings_window(_ui.root)
-                elif ui_action == "search_documents":
-                    from document_search import open_document_search
-                    open_document_search(_ui.root)
                 elif ui_action == "confirm_read_mail":
                     from tkinter import messagebox
                     approved = messagebox.askyesno(
