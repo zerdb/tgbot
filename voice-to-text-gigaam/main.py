@@ -323,12 +323,17 @@ def normalize_command(text: str) -> str:
 
 
 def handle_command(text: str):
-    """Единая точка входа: OpenRouter определяет намерение, Python выполняет обработчик."""
+    """Единая точка входа: сразу показывает статус, затем определяет намерение."""
     print(f"Распознана команда: {text}")
+    # Команда уже распознана: не ждём ответа классификатора, чтобы показать индикатор.
+    if _ui is not None:
+        _ui.set_busy_overlay("Обрабатываю команду…")
     try:
         from intent_router import understand_command
         intent = understand_command(text)
     except Exception as exc:
+        if _ui is not None:
+            _ui.set_busy_overlay(None)
         print(f"OpenRouter не смог обработать команду: {exc}")
         print("Команда не выполнена. Проверьте интернет и OPENROUTER_API_KEY.")
         return
@@ -336,15 +341,19 @@ def handle_command(text: str):
     args = intent.get("arguments") or {}
     confidence = float(intent.get("confidence", 0) or 0)
     if action == "unknown" or confidence < 0.55:
+        if _ui is not None:
+            _ui.set_busy_overlay(None)
         print("Не совсем понял задачу. Повтори её другими словами.")
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
+    keep_busy = action in ("search_files", "ai_chat")
     if action == "ai_chat":
         question = str(args.get("question") or text).strip()
+        if _ui is not None:
+            _ui.set_busy_overlay("Жду ответ ИИ…")
         _ui_actions.put(("ai_chat", question))
     elif action == "add_contact":
-        # Tkinter-операции выполняются только главным GUI-потоком.
         print("[GUI] Ставлю открытие формы контакта в очередь главного потока.", flush=True)
         _ui_actions.put(("add_contact", None))
     elif action == "email_compose":
@@ -362,8 +371,15 @@ def handle_command(text: str):
     elif action == "reminder": add_reminder(str(args.get("reminder_text") or text))
     elif action == "organize_folder": open_folder_organizer(parent)
     elif action == "search_web": search_web(str(args.get("query") or text))
-    elif action == "search_files": search_files(str(args.get("query") or text), parent)
-    else: print("Эта операция пока не подключена.")
+    elif action == "search_files":
+        if _ui is not None:
+            _ui.set_busy_overlay("Ищу файлы…")
+        search_files(str(args.get("query") or text), parent)
+    else:
+        print("Эта операция пока не подключена.")
+    if not keep_busy and _ui is not None:
+        _ui.set_busy_overlay(None)
+
 def transcribe_and_execute(audio_data: np.ndarray):
     if not _transcription_lock.acquire(blocking=False):
         print("Предыдущее распознавание ещё выполняется. Эта запись пропущена.")
