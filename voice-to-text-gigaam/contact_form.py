@@ -9,7 +9,7 @@ from email_manager import load_address_book, save_address_book
 from dialog_utils import activate_modal
 
 
-def open_contact_form(parent=None):
+def open_contact_form(parent=None, start_new=False):
     """Open the shared address book; add, edit and delete contact records."""
     if parent is None:
         print("Для открытия контактов требуется главное окно приложения.")
@@ -139,6 +139,14 @@ def open_contact_form(parent=None):
         ttk.Button(controls, text="Удалить", command=delete).pack(side="left")
         ttk.Button(controls, text="Закрыть", command=root.destroy).pack(side="right")
         refresh()
+        if start_new:
+            # Голосовое добавление открывает ту же адресную книгу,
+            # но сразу переводит пользователя в режим новой карточки.
+            clear_editor()
+            name_entry = editor.grid_slaves(row=1, column=0)
+            if name_entry:
+                name_entry[0].focus_set()
+            status.set("Новая карточка: заполни имя, телефон, почту и заметку")
         root.bind("<Escape>", lambda _event: root.destroy())
         activate_modal(root, parent)
 
