@@ -71,11 +71,11 @@ def understand_command(user_text: str) -> dict:
         return {"action": "add_contact", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
         return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(настройки помощника|настройки gigaam|настройки гигаам)\\b", normalized):
+    if re.search(r"\b(настройки помощника|настройки gigaam|настройки гигаам)\b", normalized):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(открой|покажи|открыть|показать)\\b.*\\b(задачи|планы|планировщик)\\b", normalized):
+    if re.search(r"\b(открой|покажи|открыть|показать)\\b.*\\b(задачи|планы|планировщик)\b", normalized):
         return {"action": "open_tasks", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\\b(прочитай|проверь|покажи)\\b.*\\b(новые|непрочитанные)\\b.*\\b(письма|почту)\\b", normalized):
+    if re.search(r"\b(прочитай|проверь|покажи)\\b.*\\b(новые|непрочитанные)\\b.*\\b(письма|почту)\b", normalized):
         return {"action": "read_unread_mail", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
