@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import re
-import threading
 from tkinter import ttk, messagebox
 import tkinter as tk
 
 from email_manager import load_address_book, save_address_book
 
-def open_contact_form():
+def open_contact_form(parent=None):
     """Open a desktop form to add a contact to the local address book."""
     def show():
-        import tkinter as tk
-        from tkinter import ttk, messagebox
+        if parent is None or not parent.winfo_exists():
+            print("Главное окно закрыто: форму контактов открыть нельзя.")
+            return
 
-        root = tk.Tk()
+        root = tk.Toplevel(parent)
         root.title("Добавить контакт")
         root.geometry("420x210")
         root.resizable(False, False)
@@ -59,7 +59,15 @@ def open_contact_form():
         root.update_idletasks()
         root.lift()
         root.focus_force()
-        root.mainloop()
+        root.transient(parent)
+        root.lift()
+        root.focus_force()
 
-    threading.Thread(target=show, daemon=True, name="contact-form").start()
+    if parent is None:
+        print("Для открытия контактов требуется главное окно приложения.")
+        return
+    try:
+        parent.after(0, show)
+    except tk.TclError:
+        print("Не удалось открыть форму контактов: главное окно уже закрыто.")
 
