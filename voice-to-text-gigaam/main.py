@@ -532,6 +532,8 @@ def main():
                     if approved:
                         _ui.set_busy_overlay("Проверяю входящую почту…")
                         threading.Thread(target=_mail_reader_worker, daemon=True, name="mail-reader").start()
+                    else:
+                        _ui.set_busy_overlay(None)
                 elif ui_action == "ai_chat":
                     question = str(value or "").strip()
                     if question:
