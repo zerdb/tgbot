@@ -148,11 +148,12 @@ def understand_command(user_text: str) -> dict:
     from agent_core import load_settings
     settings = load_settings()
     key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if not key: raise RuntimeError("Не задана переменная OPENROUTER_API_KEY.")
     base = os.getenv("OPENROUTER_BASE_URL", settings["openrouter_base_url"]).rstrip("/")
     model = os.getenv("OPENROUTER_MODEL", settings["openrouter_model"]).strip()
     payload = {"model": model, "temperature": 0, "messages": [{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":user_text[:4000]}]}
     try:
+        if not key:
+            raise RuntimeError("Не задана переменная OPENROUTER_API_KEY.")
         req = urllib.request.Request(base + "/chat/completions", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Authorization":"Bearer "+key,"Content-Type":"application/json","HTTP-Referer":"https://github.com/zerdb/tgbot","X-Title":"GigaAM Voice Assistant"}, method="POST")
         with urllib.request.urlopen(req, timeout=35) as response:
             data = json.loads(response.read().decode("utf-8"))
