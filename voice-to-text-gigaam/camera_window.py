@@ -7,7 +7,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from dialog_utils import center_window
+from dialog_utils import center_window, apply_modern_style
 
 
 DEFAULT_CAMERA = "rtsp://admin@10.1.5.152:554"
@@ -42,6 +42,7 @@ def open_camera_viewer(parent):
         url = DEFAULT_CAMERA.replace("rtsp://admin@", "rtsp://admin:" + quote(camera_secret, safe="") + "@")
 
     win = tk.Toplevel(parent)
+    apply_modern_style(win)
     win.title("GigaAM — просмотр камеры")
     win.geometry("960x600")
     win.minsize(640, 400)
