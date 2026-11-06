@@ -1,4 +1,4 @@
-"""Capture an RTSP frame and inspect it with Moondream or OpenRouter."""
+"""Capture an RTSP frame and inspect it with Moondream or Ollama Cloud."""
 import os
 import json
 import base64
@@ -81,46 +81,26 @@ def _ask_moondream(image_data: str, api_key: str, question: str = None, strict_a
     return answer
 
 
-def _ask_openrouter(image_data: str, question: str = None):
-    key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("Не задан ключ Moondream и отсутствует OPENROUTER_API_KEY.")
-    from agent_core import load_settings
-    cfg = load_settings()
-    base = os.getenv("OPENROUTER_BASE_URL", cfg.get("openrouter_base_url", "https://openrouter.ai/api/v1")).rstrip("/")
-    model = os.getenv("OPENROUTER_MODEL", cfg.get("openrouter_model", "openrouter/free")).strip()
+def _ask_ollama(image_data: str, question: str = None):
     prompt = question or (
         "Is a white Lada Niva car visible in this surveillance image? Do not guess. "
         "Return only JSON: {present: boolean, confidence: number, reason: string}. "
         "If uncertain, present must be false."
     )
-    payload = {"model": model, "temperature": 0.1, "max_tokens": 120, "messages": [{"role": "user", "content": [
-        {"type": "text", "text": (
-            "Ответь по-русски кратко, максимум в 1-2 предложениях и 25 слов. "
-            "Не повторяй фразы. Не выдумывай детали; если объект неразличим, так и скажи. "
-            + prompt
-        )},
-        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + image_data}},
-    ]}]}
-    req = urllib.request.Request(
-        base + "/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
-        method="POST",
+    from ollama_client import chat
+    return chat(
+        [{"role": "user", "content": [
+            {"type": "text", "text": (
+                "Ответь по-русски кратко, максимум в 1-2 предложениях и 25 слов. "
+                "Не повторяй фразы. Не выдумывай детали; если объект неразличим, так и скажи. "
+                + prompt
+            )},
+            {"type": "image_url", "image_url": "data:image/jpeg;base64," + image_data},
+        ]}],
+        temperature=0.1,
+        max_tokens=180,
+        timeout=60,
     )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        raise RuntimeError("OpenRouter вернул HTTP " + str(exc.code) + ": " + exc.read().decode(errors="replace")[:500]) from exc
-    choices = data.get("choices") or []
-    answer = (choices[0].get("message") or {}).get("content", "") if choices else ""
-    if isinstance(answer, list):
-        answer = " ".join(x.get("text", "") for x in answer if isinstance(x, dict))
-    answer = str(answer or "").strip()
-    if not answer:
-        raise RuntimeError("OpenRouter вернул пустой ответ.")
-    return answer
 
 
 def inspect_camera():
@@ -132,11 +112,11 @@ def inspect_camera():
         answer = _ask_moondream(image_data, moondream_key)
         first_word = re.sub(r"[^A-Z]", " ", answer.upper()).split()
         return bool(first_word and first_word[0] == "YES")
-    print("[Камера] Ключ Moondream не задан — использую OpenRouter.", flush=True)
-    answer = _ask_openrouter(image_data)
+    print("[Камера] Ключ Moondream не задан — использую Ollama Cloud.", flush=True)
+    answer = _ask_ollama(image_data)
     match = re.search(r"\{.*\}", answer, re.S)
     if not match:
-        raise RuntimeError("OpenRouter не вернул JSON. Нужна vision-модель.")
+        raise RuntimeError("Ollama Cloud не вернул JSON. Нужна vision-модель.")
     return json.loads(match.group(0)).get("present") is True
 
 
@@ -230,7 +210,7 @@ def inspect_camera_question(question: str) -> str:
             except Exception as exc:
                 print("[Камера] Moondream binary check failed: %s" % exc, flush=True)
         try:
-            return _yes_no_result(_ask_openrouter(image_data, binary_prompt))
+            return _yes_no_result(_ask_ollama(image_data, binary_prompt))
         except Exception as exc:
             raise RuntimeError("Не удалось проверить белую машину ни одной vision-моделью: %s" % exc) from exc
 
@@ -253,8 +233,8 @@ def inspect_camera_question(question: str) -> str:
             moondream_error = str(exc)
             print("[Камера] Ошибка Moondream: %s" % exc, flush=True)
     try:
-        print("[Камера] Запрашиваю резервную vision-модель OpenRouter.", flush=True)
-        answer = _ask_openrouter(image_data, question)
+        print("[Камера] Запрашиваю резервную vision-модель Ollama Cloud.", flush=True)
+        answer = _ask_ollama(image_data, question)
         _compact_camera_answer._question = question
         try:
             compact = _compact_camera_answer(answer)
@@ -265,7 +245,7 @@ def inspect_camera_question(question: str) -> str:
         return compact
     except Exception as fallback_error:
         if moondream_error:
-            raise RuntimeError("Moondream: %s; OpenRouter: %s" % (moondream_error, fallback_error)) from fallback_error
+            raise RuntimeError("Moondream: %s; Ollama Cloud: %s" % (moondream_error, fallback_error)) from fallback_error
         raise
 
 def speak(text):
