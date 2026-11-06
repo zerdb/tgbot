@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from email_manager import load_address_book, save_address_book
-from dialog_utils import activate_modal
+from dialog_utils import activate_modal, apply_modern_style
 
 
 def open_contact_form(parent=None, start_new=False):
@@ -21,6 +21,7 @@ def open_contact_form(parent=None, start_new=False):
         if not parent.winfo_exists():
             return
         root = tk.Toplevel(parent)
+        apply_modern_style(root)
         root.title("Адресная книга — контакты")
         root.geometry("820x540")
         root.minsize(680, 440)
