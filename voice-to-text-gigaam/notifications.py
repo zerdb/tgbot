@@ -1,8 +1,19 @@
-"""Windows toast notifications and consistent Russian speech synthesis."""
+"""Windows toast notifications and local Piper neural speech synthesis."""
 from __future__ import annotations
 
-import base64
+import hashlib
+import importlib
+import io
+import os
+import queue
 import subprocess
+import sys
+import tempfile
+import threading
+import wave
+from pathlib import Path
+
+import requests
 from winotify import Notification, audio
 
 
@@ -12,53 +23,140 @@ def show_notification(title: str, message: str):
     toast.show()
 
 
-def speak_text(message: str):
-    """Speak with an installed male SAPI voice and report synthesis failures."""
-    text = str(message or "").strip()
-    if not text:
-        return
-    encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
-    script = (
-        "$ErrorActionPreference='Stop';"
-        "try {"
-        "$t=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('" + encoded + "'));"
-        "Add-Type -AssemblyName System.Speech;"
-        "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
-        "$voices=@($s.GetInstalledVoices() | Where-Object {$_.Enabled});"
-        "$maleRu=@($voices | Where-Object {"
-        "$_.VoiceInfo.Gender -eq [System.Speech.Synthesis.VoiceGender]::Male -and "
-        "$_.VoiceInfo.Culture.Name -like 'ru*'});"
-        "if($maleRu.Count -gt 0){$v=$maleRu[0]}else{"
-        "$male=@($voices | Where-Object {$_.VoiceInfo.Gender -eq "
-        "[System.Speech.Synthesis.VoiceGender]::Male});"
-        "if($male.Count -gt 0){$v=$male[0]}elseif($voices.Count -gt 0){$v=$voices[0]}else{$v=$null}};"
-        "if($v){$s.SelectVoice($v.VoiceInfo.Name);"
-        "Write-Output ('VOICE_SELECTED=' + $v.VoiceInfo.Name)}else{"
-        "Write-Output 'VOICE_SELECTED=Windows default voice'};"
-        "$s.Rate=0;$s.Volume=100;$s.Speak($t);$s.Dispose();"
-        "} catch { [Console]::Error.WriteLine($_.Exception.ToString()); exit 1 }"
-    )
+# Russian medium-quality male voice. The model is downloaded once and then used offline.
+_PIPER_VOICE_ID = "ru_RU-denis-medium"
+_PIPER_MODEL_DIR = Path(__file__).resolve().parent / "models" / "piper"
+_PIPER_MODEL_NAME = f"{_PIPER_VOICE_ID}.onnx"
+_PIPER_MODEL_URL = (
+    "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+    "ru/ru_RU/denis/medium/"
+)
+_PIPER_FILES = {
+    _PIPER_MODEL_NAME: "76c2f14e521fef3ed574f97ad492728e",
+    _PIPER_MODEL_NAME + ".json": "e3df5957c07647cab05cf9910ef3ede0",
+}
+
+_speech_queue: queue.Queue[str] = queue.Queue()
+_speech_start_lock = threading.Lock()
+_speech_worker_started = False
+
+
+def _file_md5(path: Path) -> str:
+    digest = hashlib.md5()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _download_piper_voice_file(filename: str, expected_md5: str) -> Path:
+    destination = _PIPER_MODEL_DIR / filename
+    if destination.is_file() and _file_md5(destination) == expected_md5:
+        return destination
+
+    _PIPER_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    url = _PIPER_MODEL_URL + filename + "?download=true"
+    temporary_path = None
+    print(f"[Озвучивание] Загружаю голосовую модель: {filename}", flush=True)
     try:
+        with requests.get(url, stream=True, timeout=(20, 120)) as response:
+            response.raise_for_status()
+            digest = hashlib.md5()
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=_PIPER_MODEL_DIR, suffix=".part", delete=False
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        temporary.write(chunk)
+                        digest.update(chunk)
+        if digest.hexdigest() != expected_md5:
+            raise RuntimeError(f"Контрольная сумма файла {filename} не совпала.")
+        os.replace(temporary_path, destination)
+        temporary_path = None
+        print(f"[Озвучивание] Файл готов: {filename}", flush=True)
+        return destination
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
+def _ensure_piper_installed():
+    try:
+        return importlib.import_module("piper")
+    except ImportError:
+        print("[Озвучивание] Устанавливаю локальный движок Piper TTS…", flush=True)
         result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-Command", script],
+            [sys.executable, "-m", "pip", "install", "piper-tts>=1.3.0,<2.0.0"],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=45,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            timeout=600,
             check=False,
         )
         if result.returncode != 0:
-            details = (result.stderr or result.stdout or "PowerShell завершился без описания ошибки").strip()
-            print(f"[Озвучивание] Не удалось произнести текст: {details}", flush=True)
-        else:
-            selected = next(
-                (line.partition("=")[2] for line in result.stdout.splitlines() if line.startswith("VOICE_SELECTED=")),
-                "мужской голос Windows",
+            details = (result.stderr or result.stdout or "pip завершился без описания ошибки").strip()
+            raise RuntimeError(f"Не удалось установить Piper TTS: {details[-2500:]}")
+        importlib.invalidate_caches()
+        return importlib.import_module("piper")
+
+
+def _load_piper_voice():
+    piper = _ensure_piper_installed()
+    model_path = _download_piper_voice_file(
+        _PIPER_MODEL_NAME, _PIPER_FILES[_PIPER_MODEL_NAME]
+    )
+    _download_piper_voice_file(
+        _PIPER_MODEL_NAME + ".json", _PIPER_FILES[_PIPER_MODEL_NAME + ".json"]
+    )
+    print("[Озвучивание] Загружаю русский голос Denis в память…", flush=True)
+    voice = piper.PiperVoice.load(str(model_path))
+    print("[Озвучивание] Локальный голос Denis готов.", flush=True)
+    return voice
+
+
+def _speak_with_piper(voice, text: str):
+    import sounddevice as sd
+    import soundfile as sf
+
+    audio_buffer = io.BytesIO()
+    with wave.open(audio_buffer, "wb") as wav_file:
+        voice.synthesize_wav(text, wav_file)
+    audio_buffer.seek(0)
+    samples, sample_rate = sf.read(audio_buffer, dtype="float32")
+    if samples.size:
+        sd.play(samples, sample_rate, blocking=True)
+
+
+def _speech_worker():
+    voice = None
+    while True:
+        text = _speech_queue.get()
+        try:
+            if voice is None:
+                voice = _load_piper_voice()
+            _speak_with_piper(voice, text)
+        except Exception as exc:
+            print(f"[Озвучивание] Ошибка Piper TTS: {exc}", flush=True)
+        finally:
+            _speech_queue.task_done()
+
+
+def speak_text(message: str):
+    """Queue text for asynchronous local Russian neural speech synthesis."""
+    text = str(message or "").strip()
+    if not text:
+        return
+
+    global _speech_worker_started
+    with _speech_start_lock:
+        if not _speech_worker_started:
+            worker = threading.Thread(
+                target=_speech_worker,
+                name="zero-control-piper-tts",
+                daemon=True,
             )
-            print(f"[Озвучивание] Используется: {selected}", flush=True)
-    except subprocess.TimeoutExpired:
-        print("[Озвучивание] Синтез речи не завершился за 45 секунд.", flush=True)
-    except OSError as exc:
-        print(f"[Озвучивание] Не удалось запустить Windows PowerShell: {exc}", flush=True)
+            worker.start()
+            _speech_worker_started = True
+    _speech_queue.put(text)
