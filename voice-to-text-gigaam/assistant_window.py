@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from dialog_utils import activate_modal, center_window
+from dialog_utils import activate_modal, center_window, apply_modern_style
 
 
 class AssistantWindow:
@@ -369,6 +369,7 @@ class AssistantWindow:
 def show_ai_answer(parent, question, answer=None, error=None):
     """Показывает ответ подключённой модели в отдельном окне Tkinter."""
     window = tk.Toplevel(parent)
+    apply_modern_style(window)
     window.title("Ответ подключённого ИИ")
     window.geometry("720x560")
     window.minsize(480, 320)
