@@ -283,19 +283,20 @@ class AssistantWindow:
         overlay.overrideredirect(True)
         overlay.attributes("-topmost", True)
         overlay.attributes("-alpha", 0.94)
+        # Компактное круглое окно вместо прямоугольной плашки.
         overlay.configure(bg="#202124")
-        frame = tk.Frame(overlay, bg="#202124", padx=24, pady=18)
+        overlay.attributes("-transparentcolor", "#202124")
+        frame = tk.Frame(overlay, bg="#202124", padx=0, pady=0)
         frame.pack()
-        # Отдельный Canvas позволяет анимировать микрофон без пересоздания виджетов.
-        self._mic_canvas = tk.Canvas(frame, width=112, height=104, bg="#202124",
+        self._mic_canvas = tk.Canvas(frame, width=84, height=84, bg="#202124",
                                      highlightthickness=0, bd=0)
         self._mic_canvas.pack()
         self._mic_ring_outer = self._mic_canvas.create_oval(
-            10, 6, 102, 98, outline="#56302F", width=2)
+            7, 7, 77, 77, outline="#56302F", width=2)
         self._mic_ring_inner = self._mic_canvas.create_oval(
-            22, 18, 90, 86, outline="#8E3432", width=2)
+            16, 16, 68, 68, outline="#8E3432", width=2)
         self._mic_icon = self._mic_canvas.create_text(
-            56, 52, text="🎙", font=("Segoe UI Emoji", 43), fill="#FF5148")
+            42, 42, text="🎙", font=("Segoe UI Emoji", 33), fill="#FF5148")
         self._overlay_label = tk.Label(frame, text="", font=("Segoe UI", 11, "bold"),
                                        fg="white", bg="#202124")
         self._overlay_label.pack(pady=(5, 0))
@@ -313,16 +314,16 @@ class AssistantWindow:
         # Плавный цикл из 24 кадров: микрофон слегка увеличивается и уменьшается.
         distance = abs(12 - phase)
         scale = 1.0 + (12 - distance) / 120.0
-        radius_outer = 43 + (12 - distance) * 0.55
-        radius_inner = 31 + (12 - distance) * 0.45
+        radius_outer = 32 + (12 - distance) * 0.35
+        radius_inner = 23 + (12 - distance) * 0.30
         self._mic_canvas.coords(self._mic_ring_outer,
-                                56-radius_outer, 52-radius_outer,
-                                56+radius_outer, 52+radius_outer)
+                                42-radius_outer, 42-radius_outer,
+                                42+radius_outer, 42+radius_outer)
         self._mic_canvas.coords(self._mic_ring_inner,
-                                56-radius_inner, 52-radius_inner,
-                                56+radius_inner, 52+radius_inner)
+                                42-radius_inner, 42-radius_inner,
+                                42+radius_inner, 42+radius_inner)
         self._mic_canvas.itemconfigure(self._mic_icon,
-                                       font=("Segoe UI Emoji", int(40 * scale)))
+                                       font=("Segoe UI Emoji", int(30 * scale)))
         self._mic_animation_phase = (phase + 1) % 24
         self._mic_animation_job = self.root.after(65, self._animate_recording_mic)
 
