@@ -30,7 +30,7 @@ def _read_json(path: Path, fallback):
 def load_settings() -> dict:
     with _LOCK:
         stored = _read_json(CONFIG_PATH, {})
-        # Remove obsolete provider settings left by earlier OpenRouter versions.
+        # Remove obsolete API provider settings from older configurations.
         stored.pop("openrouter_base_url", None)
         stored.pop("openrouter_model", None)
         return {**DEFAULTS, **stored}
