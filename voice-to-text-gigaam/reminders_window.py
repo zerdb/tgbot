@@ -45,7 +45,7 @@ def open_reminders(parent):
     listing = tk.Text(
         list_shell, wrap="word", font=("Segoe UI", 9),
         background="#ffffff", foreground="#172033",
-        relief="flat", borderwidth=0, padx=12, pady=10,
+        relief="flat", borderwidth=0, padx=12, pady=5,
         spacing1=1, spacing2=1, spacing3=2,
         yscrollcommand=scrollbar.set, cursor="arrow",
         selectbackground="#bfdbfe", selectforeground="#172033",
@@ -55,13 +55,13 @@ def open_reminders(parent):
     scrollbar.pack(side="right", fill="y")
 
     listing.tag_configure("note", foreground="#1d4ed8", background="#eff6ff",
-                          lmargin1=10, lmargin2=10, rmargin=10, spacing1=3, spacing3=1)
+                          lmargin1=10, lmargin2=10, rmargin=10, spacing1=1, spacing3=0)
     listing.tag_configure("reminder", foreground="#b45309", background="#fff7ed",
-                          lmargin1=10, lmargin2=10, rmargin=10, spacing1=8, spacing3=2)
+                          lmargin1=10, lmargin2=10, rmargin=10, spacing1=2, spacing3=0)
     listing.tag_configure("done", foreground="#15803d", background="#f0fdf4",
                           lmargin1=10, lmargin2=10, rmargin=10, spacing1=8, spacing3=2)
     listing.tag_configure("body", foreground="#172033", font=("Segoe UI", 9),
-                          lmargin1=18, lmargin2=18, rmargin=12, spacing1=1, spacing3=2)
+                          lmargin1=18, lmargin2=18, rmargin=12, spacing1=0, spacing3=0)
     listing.tag_configure("selected", background="#dbeafe")
     listing.tag_configure("empty", foreground="#64748b", font=("Segoe UI", 9))
 
@@ -113,7 +113,7 @@ def open_reminders(parent):
             color_tag = "done" if item["completed"] else ("reminder" if item.get("due_at") else "note")
             start = listing.index("end")
             listing.insert("end", f"  {status}     •     {due}\n", (color_tag, tag))
-            listing.insert("end", f"  {item['text']}\n\n", ("body", tag))
+            listing.insert("end", f"  {item['text']}\n", ("body", tag))
             end = listing.index("end")
             item_map[item["id"]] = {"tag": tag, "start": start, "end": end}
             listing.tag_bind(tag, "<Button-1>", lambda _event, iid=item["id"]: select_item(iid))
