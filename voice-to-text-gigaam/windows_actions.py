@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 from PIL import ImageGrab
 from openpyxl import Workbook
+from notifications import speak_text
 
 SCREENSHOT_DIR = Path(__file__).resolve().parent / "Скриншоты"
 CLIPBOARD_TABLES_DIR = Path(__file__).resolve().parent / "Таблицы"
@@ -236,6 +237,10 @@ def save_clipboard_as_note():
             note_file.write("\n\n" + "=" * 48 + "\n")
         note_file.write(f"[{stamp}]\n{content.strip()}\n")
     print(f"Заметка добавлена в общий документ: {destination}")
+    try:
+        speak_text("Заметка сохранена.")
+    except Exception as exc:
+        print(f"Не удалось озвучить сохранение заметки: {exc}")
     try:
         Notification(app_id="GigaAM — голосовой помощник", title="Заметка сохранена", msg=f"Текст добавлен в «Мои заметки.txt»\\n{destination}", duration="short").show()
     except Exception as exc:
