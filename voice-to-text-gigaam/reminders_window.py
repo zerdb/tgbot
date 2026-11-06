@@ -24,7 +24,7 @@ def open_reminders(parent):
     ttk.Label(frame, text="Заметки и дела", font=("Segoe UI", 17, "bold")).pack(anchor="w")
     ttk.Label(
         frame,
-        text="Заметки и задачи отображаются отдельными карточками. Длинный текст переносится на новые строки.",
+        text="Светлые карточки с цветными метками: синие — заметки, оранжевые — напоминания, зелёные — выполненные дела.",
         wraplength=780,
     ).pack(anchor="w", pady=(3, 10))
 
@@ -43,7 +43,7 @@ def open_reminders(parent):
     # height and cannot display multi-line note text reliably.
     list_shell = ttk.Frame(frame)
     list_shell.pack(fill="both", expand=True)
-    canvas = tk.Canvas(list_shell, highlightthickness=0, borderwidth=0)
+    canvas = tk.Canvas(list_shell, highlightthickness=0, borderwidth=0, background="#edf2f7" )
     scrollbar = ttk.Scrollbar(list_shell, orient="vertical", command=canvas.yview)
     cards_frame = ttk.Frame(canvas)
     cards_window = canvas.create_window((0, 0), window=cards_frame, anchor="nw")
@@ -66,7 +66,7 @@ def open_reminders(parent):
     def select_card(item_id):
         selected_id["value"] = item_id
         for current_id, widgets in card_widgets.items():
-            color = "#e7f0fb" if current_id == item_id else "#f3f4f6"
+            color = "#dbeafe" if current_id == item_id else "#ffffff"
             for widget in widgets:
                 try:
                     widget.configure(background=color)
@@ -126,7 +126,7 @@ def open_reminders(parent):
                 background="#f3f4f6", wraplength=700,
             )
             note.pack(fill="x", anchor="w", pady=(5, 0))
-            widgets = [card, meta, note]
+            widgets = [card, content, meta, note]
             card_widgets[item["id"]] = widgets
             for widget in widgets:
                 widget.bind("<Button-1>", lambda _event, iid=item["id"]: select_card(iid))
