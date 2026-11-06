@@ -277,51 +277,31 @@ class AssistantWindow:
         self.on_command(command)
 
     def _prepare_recording_overlay(self):
-        """Создаёт компактный прямоугольный индикатор записи в прежнем стиле."""
+        """Создаёт компактный прямоугольный индикатор записи."""
         overlay = tk.Toplevel(self.root)
         overlay.withdraw()
         overlay.overrideredirect(True)
         overlay.attributes("-topmost", True)
         overlay.attributes("-alpha", 0.94)
         overlay.configure(bg="#202124")
-        frame = tk.Frame(overlay, bg="#202124", padx=24, pady=18)
+        frame = tk.Frame(overlay, bg="#202124", padx=14, pady=9)
         frame.pack()
-        tk.Label(frame, text="🎙", font=("Segoe UI Emoji", 46),
+        tk.Label(frame, text="🎙", font=("Segoe UI Emoji", 34),
                  fg="#ff3b30", bg="#202124").pack()
-        text_row = tk.Frame(frame, bg="#202124")
-        text_row.pack(pady=(5, 0))
         self._overlay_label = tk.Label(
-            text_row, text="", font=("Segoe UI", 11, "bold"),
-            fg="white", bg="#202124", width=9, anchor="e"
+            frame, text="", font=("Segoe UI", 9, "bold"),
+            fg="white", bg="#202124"
         )
-        self._overlay_label.pack(side="left")
-        self._overlay_dots = tk.Label(
-            text_row, text=".", font=("Segoe UI", 11, "bold"),
-            fg="white", bg="#202124", width=3, anchor="w"
-        )
-        self._overlay_dots.pack(side="left")
-        self._overlay_base_text = ""
-        self._dots_phase = 0
-        self._dots_animation_job = None
+        self._overlay_label.pack(pady=(2, 0))
         overlay.update_idletasks()
         self._recording_overlay = overlay
-
-    def _animate_recording_dots(self):
-        """Меняет только отдельный индикатор точек, не перерисовывая подпись."""
-        if self._recording_overlay is None or not self._recording_overlay.winfo_viewable():
-            self._dots_animation_job = None
-            return
-        self._dots_phase = self._dots_phase % 3 + 1
-        self._overlay_dots.configure(text="." * self._dots_phase)
-        self._dots_animation_job = self.root.after(420, self._animate_recording_dots)
 
     def set_recording_overlay(self, active, mode=None):
         def apply():
             if active:
-                self._overlay_base_text = "СЛУШАЮ" if mode == "command" else "ДИКТОВКА"
-                self._dots_phase = 0
-                self._overlay_label.configure(text=self._overlay_base_text)
-                self._overlay_dots.configure(text=".")
+                self._overlay_label.configure(
+                    text="СЛУШАЮ" if mode == "command" else "ДИКТОВКА"
+                )
                 w = self._recording_overlay.winfo_reqwidth()
                 h = self._recording_overlay.winfo_reqheight()
                 x = (self.root.winfo_screenwidth() - w) // 2
@@ -329,17 +309,7 @@ class AssistantWindow:
                 self._recording_overlay.geometry(f"+{x}+{y}")
                 self._recording_overlay.deiconify()
                 self._recording_overlay.lift()
-                if self._dots_animation_job is None:
-                    self._dots_animation_job = self.root.after(
-                        350, self._animate_recording_dots
-                    )
             elif self._recording_overlay is not None:
-                if self._dots_animation_job is not None:
-                    try:
-                        self.root.after_cancel(self._dots_animation_job)
-                    except tk.TclError:
-                        pass
-                    self._dots_animation_job = None
                 self._recording_overlay.withdraw()
         try:
             self.root.after(0, apply)
