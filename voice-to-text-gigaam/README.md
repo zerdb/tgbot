@@ -93,6 +93,7 @@ Dictation hotkey: `right alt+right shift`. Voice-command hotkey: `right ctrl`.
 The application is split by responsibility so features can be maintained independently:
 
 - `main.py` — startup, microphone hotkeys, speech recognition and command routing.
+- `ollama_client.py` — shared direct connection to Ollama Cloud for chat and vision requests.
 - `assistant_window.py` — Tkinter command guide and live microphone/listening status.
 - `windows_actions.py` — Windows actions: lock, reboot, settings, Downloads, Recycle Bin and screenshots.
 - `reminders.py` — unified notes, tasks and reminders storage, date parsing, scheduling and background notifications.\n- `reminders_window.py` — shared manager for notes, tasks, due dates and completed items.
