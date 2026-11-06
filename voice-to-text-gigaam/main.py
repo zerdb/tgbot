@@ -362,7 +362,7 @@ def handle_command(text: str):
         if _ui is not None:
             _ui.set_busy_overlay(None)
         print(f"Ollama Cloud не смог обработать команду: {exc}")
-        print("Команда не выполнена. Проверьте интернет и OLLAMA_API_KEY.")
+        print("Команда не выполнена. Проверьте интернет и наличие ключа Ollama Cloud в настройках.")
         return
     action = intent.get("action", "unknown")
     args = intent.get("arguments") or {}
