@@ -1,4 +1,4 @@
-"""Offline push-to-talk voice typing and Windows voice commands for GigaAM-v3."""
+"""Zero Control — офлайн голосовой помощник для Windows."""
 from __future__ import annotations
 
 import os
