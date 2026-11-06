@@ -14,7 +14,7 @@ def open_reminders(parent):
     win = tk.Toplevel(parent)
     apply_modern_style(win)
     win.title("Zero Control — заметки и дела")
-    win.geometry("860x650")
+    win.geometry("900x680")
     win.minsize(620, 440)
     center_window(win, parent)
 
@@ -24,8 +24,8 @@ def open_reminders(parent):
     ttk.Label(frame, text="Заметки и дела", font=("Segoe UI", 17, "bold")).pack(anchor="w")
     ttk.Label(
         frame,
-        text="Светлые карточки с цветными метками: синие — заметки, оранжевые — напоминания, зелёные — выполненные дела.",
-        wraplength=780,
+        text="Синие — заметки   •   Оранжевые — напоминания   •   Зелёные — выполненные",
+        wraplength=820,
     ).pack(anchor="w", pady=(3, 10))
 
     filter_var = tk.StringVar(master=win, value="Все")
@@ -39,104 +39,89 @@ def open_reminders(parent):
     )
     filter_box.pack(side="left", padx=(5, 12))
 
-    # A canvas-backed card list replaces Treeview: Treeview rows have a fixed
-    # height and cannot display multi-line note text reliably.
     list_shell = ttk.Frame(frame)
     list_shell.pack(fill="both", expand=True)
-    canvas = tk.Canvas(list_shell, highlightthickness=0, borderwidth=0, background="#edf2f7" )
-    scrollbar = ttk.Scrollbar(list_shell, orient="vertical", command=canvas.yview)
-    cards_frame = ttk.Frame(canvas)
-    cards_window = canvas.create_window((0, 0), window=cards_frame, anchor="nw")
-    canvas.configure(yscrollcommand=scrollbar.set)
-    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar = ttk.Scrollbar(list_shell, orient="vertical")
+    listing = tk.Text(
+        list_shell, wrap="word", font=("Segoe UI", 11),
+        background="#ffffff", foreground="#172033",
+        relief="flat", borderwidth=0, padx=12, pady=10,
+        spacing1=3, spacing2=2, spacing3=10,
+        yscrollcommand=scrollbar.set, cursor="arrow",
+        selectbackground="#bfdbfe", selectforeground="#172033",
+    )
+    scrollbar.configure(command=listing.yview)
+    listing.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
 
+    listing.tag_configure("note", foreground="#1d4ed8", background="#eff6ff",
+                          lmargin1=10, lmargin2=10, rmargin=10, spacing1=8, spacing3=2)
+    listing.tag_configure("reminder", foreground="#b45309", background="#fff7ed",
+                          lmargin1=10, lmargin2=10, rmargin=10, spacing1=8, spacing3=2)
+    listing.tag_configure("done", foreground="#15803d", background="#f0fdf4",
+                          lmargin1=10, lmargin2=10, rmargin=10, spacing1=8, spacing3=2)
+    listing.tag_configure("body", foreground="#172033", font=("Segoe UI", 11),
+                          lmargin1=18, lmargin2=18, rmargin=12, spacing1=2, spacing3=10)
+    listing.tag_configure("selected", background="#dbeafe")
+    listing.tag_configure("empty", foreground="#64748b", font=("Segoe UI", 11))
+
     selected_id = {"value": None}
-    card_widgets = {}
+    item_map = {}
+    current_items = []
 
-    def update_scroll_region(_event=None):
-        canvas.configure(scrollregion=canvas.bbox("all"))
-
-    def update_cards_width(event):
-        canvas.itemconfigure(cards_window, width=event.width)
-
-    cards_frame.bind("<Configure>", update_scroll_region)
-    canvas.bind("<Configure>", update_cards_width)
-
-    def select_card(item_id):
+    def select_item(item_id):
         selected_id["value"] = item_id
-        for current_id, widgets in card_widgets.items():
-            color = "#dbeafe" if current_id == item_id else "#ffffff"
-            for widget in widgets:
-                try:
-                    widget.configure(background=color)
-                except tk.TclError:
-                    pass
+        listing.tag_remove("selected", "1.0", "end")
+        tag = item_map.get(item_id, {}).get("tag")
+        if tag:
+            listing.tag_add("selected", f"1.0", "end")
+            listing.tag_remove("selected", "1.0", "end")
+            listing.tag_add("selected", f"{tag}.first", f"{tag}.last")
 
     def selected():
         item_id = selected_id["value"]
         return next((item for item in current_items if item["id"] == item_id), None)
 
-    current_items = []
-
     def refresh():
         nonlocal current_items
-        for child in cards_frame.winfo_children():
-            child.destroy()
-        card_widgets.clear()
         selected_id["value"] = None
-        current_items = []
-        for item in list_items(True):
-            if filter_var.get() == "Активные" and item["completed"]:
-                continue
-            if filter_var.get() == "Выполненные" and not item["completed"]:
-                continue
-            current_items.append(item)
+        item_map.clear()
+        current_items = [
+            item for item in list_items(True)
+            if not (filter_var.get() == "Активные" and item["completed"])
+            and not (filter_var.get() == "Выполненные" and not item["completed"])
+        ]
+        listing.configure(state="normal")
+        listing.delete("1.0", "end")
 
         if not current_items:
-            ttk.Label(
-                cards_frame, text="Здесь пока пусто. Нажми «Новая запись», чтобы добавить заметку или дело.",
-                wraplength=650, justify="left",
-            ).pack(anchor="w", padx=12, pady=18)
+            listing.insert("end", "Здесь пока пусто. Нажми «Новая запись», чтобы добавить заметку или дело.\n", "empty")
+            listing.configure(state="disabled")
             return
 
-        for item in current_items:
+        for index, item in enumerate(current_items):
             due = "Без срока"
             if item.get("due_at"):
                 try:
                     due = datetime.fromisoformat(item["due_at"]).strftime("%d.%m.%Y в %H:%M")
-                except ValueError:
+                except (TypeError, ValueError):
                     due = "Некорректная дата"
             status = "Выполнено" if item["completed"] else (
                 "Напоминание" if item.get("due_at") else "Заметка"
             )
-
-            card = tk.Frame(cards_frame, background="#f3f4f6", padx=12, pady=9,
-                            highlightthickness=1, highlightbackground="#d5d9df")
-            card.pack(fill="x", padx=3, pady=4)
-            meta = tk.Label(
-                card, text=f"{status}   •   {due}", anchor="w",
-                font=("Segoe UI", 9, "bold"), foreground="#475569",
-                background="#f3f4f6",
-            )
-            meta.pack(fill="x", anchor="w")
-            note = tk.Label(
-                card, text=item["text"], anchor="w", justify="left",
-                font=("Segoe UI", 10), foreground="#172033",
-                background="#f3f4f6", wraplength=700,
-            )
-            note.pack(fill="x", anchor="w", pady=(5, 0))
-            widgets = [card, content, meta, note]
-            card_widgets[item["id"]] = widgets
-            for widget in widgets:
-                widget.bind("<Button-1>", lambda _event, iid=item["id"]: select_card(iid))
-                widget.bind("<Double-Button-1>", lambda _event, iid=item["id"]: (
-                    select_card(iid), edit_dialog(next(x for x in current_items if x["id"] == iid))
-                ))
-            note.bind("<Configure>", lambda event, label=note: label.configure(
-                wraplength=max(220, event.width)
+            tag = f"item_{index}"
+            color_tag = "done" if item["completed"] else ("reminder" if item.get("due_at") else "note")
+            start = listing.index("end")
+            listing.insert("end", f"  {status}     •     {due}\n", (color_tag, tag))
+            listing.insert("end", f"  {item['text']}\n\n", ("body", tag))
+            end = listing.index("end")
+            item_map[item["id"]] = {"tag": tag, "start": start, "end": end}
+            listing.tag_bind(tag, "<Button-1>", lambda _event, iid=item["id"]: select_item(iid))
+            listing.tag_bind(tag, "<Double-Button-1>", lambda _event, iid=item["id"]: (
+                select_item(iid), edit_dialog(next(x for x in current_items if x["id"] == iid))
             ))
-        update_scroll_region()
+        listing.configure(state="disabled")
+        listing.yview_moveto(0)
 
     def edit_dialog(item=None):
         dialog = tk.Toplevel(win)
@@ -144,7 +129,7 @@ def open_reminders(parent):
         dialog.title("Изменить запись" if item else "Новая запись")
         dialog.transient(win)
         dialog.grab_set()
-        dialog.geometry("600x390")
+        dialog.geometry("620x410")
         dialog.minsize(440, 300)
 
         body = ttk.Frame(dialog, padding=14)
@@ -169,7 +154,7 @@ def open_reminders(parent):
         ttk.Label(
             body,
             text="Примеры: «через 20 минут», «завтра в 9». Пустое поле — обычная заметка.",
-            wraplength=540,
+            wraplength=560,
         ).pack(anchor="w")
 
         row = ttk.Frame(body)
@@ -243,11 +228,4 @@ def open_reminders(parent):
     ttk.Button(buttons, text="Обновить", command=refresh).pack(side="right")
 
     filter_box.bind("<<ComboboxSelected>>", lambda _event: refresh())
-
-    def on_mousewheel(event):
-        if getattr(event, "delta", 0):
-            canvas.yview_scroll(int(-event.delta / 120), "units")
-
-    canvas.bind("<MouseWheel>", on_mousewheel)
-    cards_frame.bind("<MouseWheel>", on_mousewheel)
     refresh()
