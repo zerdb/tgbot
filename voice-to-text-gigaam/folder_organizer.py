@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from dialog_utils import activate_modal
+from dialog_utils import activate_modal, apply_modern_style
 
 CATEGORIES = {
     "Документы": {".doc", ".docx", ".odt", ".rtf", ".txt", ".pdf"},
@@ -43,7 +43,8 @@ def unique_destination(directory: Path, filename: str) -> Path:
 
 class FolderOrganizer:
     def __init__(self, parent=None):
-        self.window = tk.Toplevel(parent) if parent else tk.Tk()
+        self.window = tk.Toplevel(parent)
+        apply_modern_style(self.window) if parent else tk.Tk()
         self.window.title("Разбор папки")
         self.window.geometry("760x540")
         self.window.minsize(620, 420)
