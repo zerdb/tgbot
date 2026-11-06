@@ -94,7 +94,7 @@ def understand_command(user_text: str) -> dict:
     if note_match:
         return {"action": "add_note", "confidence": 1.0, "arguments": {"note_text": note_match.group(1).strip()}}
     # Открытие раздела напоминаний и создание нового напоминания — разные намерения.
-    if re.search(r"\b(открой|покажи|открыть|посмотреть)\b.*\b(напоминан)", normalized):
+    if re.search(r"\b(открой|покажи|открыть|посмотреть)\b.*\b(напоминан|заметк|дела|задач)", normalized):
         return {"action": "open_reminders", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(напомни|напомнить|создай напоминание|добавь напоминание)\b", normalized):
         return {"action": "reminder", "confidence": 1.0, "arguments": {"reminder_text": user_text.strip()}}
