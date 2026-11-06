@@ -3,12 +3,8 @@ from __future__ import annotations
 
 import base64
 import io
-import json
-import os
 import threading
 import tkinter as tk
-import urllib.error
-import urllib.request
 from tkinter import ttk, messagebox, filedialog
 
 from dialog_utils import center_window, apply_modern_style
@@ -25,16 +21,7 @@ def _prepare_image(image):
 
 
 def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
-    """Send the current screenshot to the configured OpenRouter vision model."""
-    from agent_core import load_settings
-    key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("Не задан OPENROUTER_API_KEY — доступен только локальный OCR.")
-    cfg = load_settings()
-    base = os.getenv("OPENROUTER_BASE_URL", cfg.get(
-        "openrouter_base_url", "https://openrouter.ai/api/v1"
-    )).rstrip("/")
-    model = os.getenv("OPENROUTER_MODEL", cfg.get("openrouter_model", "openrouter/free")).strip()
+    """Send the current screenshot to the configured Ollama Cloud vision model."""
     prompt = (
         "Ты анализируешь актуальный снимок экрана Windows. Отвечай по-русски. "
         "Опирайся прежде всего на пиксели изображения; OCR ниже используй как подсказку. "
@@ -42,44 +29,20 @@ def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
         "Если часть текста мелкая или неразборчива, прямо укажи это. "
         "Не выполняй никаких действий и не предлагай нажимать кнопки как будто ты можешь "
         "управлять компьютером. Дай полезный текстовый ответ с кратким описанием окна, "
-        "важного содержимого и ошибок, если они видны.\n\n"
+        "важного содержимого и ошибок, если они видны.\\n\\n"
         "Вопрос пользователя: " + question[:1500] +
-        "\n\nТекст, распознанный локальным OCR:\n" + (ocr_text or "[Текст OCR не найден]")[:12000]
+        "\\n\\nТекст, распознанный локальным OCR:\\n" + (ocr_text or "[Текст OCR не найден]")[:12000]
     )
-    payload = {
-        "model": model,
-        "temperature": 0.2,
-        "max_tokens": 900,
-        "messages": [{"role": "user", "content": [
+    from ollama_client import chat
+    return chat(
+        [{"role": "user", "content": [
             {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + image_data}},
+            {"type": "image_url", "image_url": "data:image/jpeg;base64," + image_data},
         ]}],
-    }
-    request = urllib.request.Request(
-        base + "/chat/completions",
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": "Bearer " + key,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/zerdb/tgbot",
-            "X-Title": "GigaAM Screen Inspector",
-        },
-        method="POST",
+        temperature=0.2,
+        max_tokens=900,
+        timeout=90,
     )
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:700]
-        raise RuntimeError("OpenRouter HTTP %s: %s" % (exc.code, detail)) from exc
-    choices = data.get("choices") or []
-    answer = (choices[0].get("message") or {}).get("content", "") if choices else ""
-    if isinstance(answer, list):
-        answer = "\n".join(str(part.get("text", "")) for part in answer if isinstance(part, dict))
-    answer = str(answer or "").strip()
-    if not answer:
-        raise RuntimeError("Vision-модель вернула пустой ответ.")
-    return answer
 
 
 def open_screen_inspector(parent):
@@ -143,7 +106,7 @@ def open_screen_inspector(parent):
         user_question = question.get().strip() or "Опиши содержимое изображения."
         if not messagebox.askyesno(
             "Передача снимка ИИ",
-            "В OpenRouter будет отправлен снимок экрана целиком и распознанный текст. "
+            "В Ollama Cloud будет отправлен снимок экрана целиком и распознанный текст. "
             "На снимке могут быть личные данные. Продолжить?",
             parent=win,
         ):
