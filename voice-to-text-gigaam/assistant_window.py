@@ -1,6 +1,5 @@
 """Modern light Tkinter interface for the GigaAM voice assistant."""
 import tkinter as tk
-from PIL import Image, ImageDraw, ImageTk
 from tkinter import ttk, messagebox, simpledialog
 
 from dialog_utils import activate_modal, center_window, apply_modern_style
