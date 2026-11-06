@@ -77,12 +77,12 @@ def understand_command(user_text: str) -> dict:
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
 
     # Простые команды адресной книги обрабатываем локально: они не должны
-    # зависеть от доступности OpenRouter или точности ответа классификатора.
+    # зависеть от доступности Ollama Cloud или точности ответа классификатора.
     if re.search(r"\b(добавь|добавить|запиши|записать|сохрани|сохранить)\b.*\b(в контакты|контакт|адресную книгу)\b|\b(добавь|добавить)\s+в\s+контакты\b", normalized):
         return {"action": "add_contact", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
         return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
-    # Локальная маршрутизация поддерживаемых команд: обычные действия не зависят от квоты OpenRouter.
+    # Локальная маршрутизация поддерживаемых команд: обычные действия не зависят от квоты Ollama Cloud.
     if re.search(r"\b(разбери|разобрать|рассортируй|отсортируй|организуй)\b.*\b(папк|файл|документ)", normalized):
         return {"action": "organize_folder", "confidence": 1.0, "arguments": {}}
 
@@ -166,7 +166,7 @@ def understand_command(user_text: str) -> dict:
     try:
         from ollama_client import chat
         content = chat(payload["messages"], temperature=0, max_tokens=500)
-        match = re.search(r"\\{.*\\}", str(content or ""), flags=re.S)
+        match = re.search(r"\{.*\}", str(content or ""), flags=re.S)
         if not match:
             raise RuntimeError("Ollama Cloud вернула некорректный JSON.")
         parsed = json.loads(match.group(0))
