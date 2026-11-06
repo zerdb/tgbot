@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 from tkinter import ttk, messagebox, filedialog
 
-from dialog_utils import center_window
+from dialog_utils import center_window, apply_modern_style
 
 
 def _prepare_image(image):
@@ -84,6 +84,7 @@ def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
 
 def open_screen_inspector(parent):
     win = tk.Toplevel(parent)
+    apply_modern_style(win)
     win.title("GigaAM — анализ экрана")
     win.geometry("920x700")
     win.minsize(680, 500)
