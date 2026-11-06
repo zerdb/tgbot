@@ -10,6 +10,8 @@ ACTIONS = {
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
  "camera_question": "Получить свежий кадр камеры и ответить на вопрос пользователя по изображению; question — вопрос.",
  "save_note": "Сохранить буфер обмена как заметку.",
+ "add_note": "Сохранить произнесённый текст как заметку без срока; note_text — текст записи.",
+ "complete_item": "Отметить заметку или дело выполненным; item_text — фрагмент текста записи.",
  "clipboard_to_excel": "Создать Excel из данных буфера обмена.",
  "lock_computer": "Заблокировать компьютер.",
  "reboot_computer": "Перезагрузить компьютер.",
@@ -30,13 +32,13 @@ ACTIONS = {
 SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
 Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
 Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), query (string), question (string), app (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
+Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
 Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
 Если пользователь просит показать, открыть или посмотреть список контактов — выбери open_contacts.
 Фразы «добавь в контакты», «добавь контакт», «сохрани в адресную книгу», «запиши контакт» означают add_contact.
 Просьба отправить/переслать файл или документ по почте => email_compose и attach_copied_files=true.
 Просто создать письмо => email_compose и attach_copied_files=false.
-Для напоминания передай исходную фразу в reminder_text.
+Для напоминания передай исходную фразу в reminder_text. Если пользователь говорит «запомни», «сохрани заметку» с произнесённым текстом или «добавь запись», выбери add_note и передай текст в note_text. Если просит отметить запись выполненной, выбери complete_item и передай название или фрагмент в item_text.
 Если просят открыть корзину/мусорное ведро — open_recycle_bin, НЕ open_downloads и НЕ empty_recycle_bin.
 Если просят очистить/опустошить корзину — empty_recycle_bin.
 Блокнот — open_application app="notepad"; калькулятор — app="calculator"; браузер — app="browser"; Word — app="word"; Excel — app="excel"; папка Изображения/Картинки/Фото — app="images".
@@ -84,6 +86,13 @@ def understand_command(user_text: str) -> dict:
     if re.search(r"\b(разбери|разобрать|рассортируй|отсортируй|организуй)\b.*\b(папк|файл|документ)", normalized):
         return {"action": "organize_folder", "confidence": 1.0, "arguments": {}}
 
+    # Голосовое управление общей системой заметок и дел.
+    done_match = re.search(r"\\b(отметь|пометь|закрой)\\b\\s+(.+?)\\s+(?:выполненным|выполненной|готовым|сделанным)$", normalized)
+    if done_match:
+        return {"action": "complete_item", "confidence": 1.0, "arguments": {"item_text": done_match.group(2).strip()}}
+    note_match = re.match(r"^(?:запомни|сохрани заметку|добавь заметку|добавь запись)\\s+(.+)$", normalized)
+    if note_match:
+        return {"action": "add_note", "confidence": 1.0, "arguments": {"note_text": note_match.group(1).strip()}}
     # Открытие раздела напоминаний и создание нового напоминания — разные намерения.
     if re.search(r"\b(открой|покажи|открыть|посмотреть)\b.*\b(напоминан)", normalized):
         return {"action": "open_reminders", "confidence": 1.0, "arguments": {}}
@@ -191,5 +200,5 @@ def understand_command(user_text: str) -> dict:
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","query","question","app") and isinstance(v,(str,bool))}
+    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","note_text","item_text","query","question","app") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}
