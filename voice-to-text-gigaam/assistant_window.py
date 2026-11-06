@@ -1,5 +1,6 @@
 """Modern light Tkinter interface for the GigaAM voice assistant."""
 import tkinter as tk
+from PIL import Image, ImageDraw, ImageTk
 from tkinter import ttk, messagebox, simpledialog
 
 from dialog_utils import activate_modal, center_window, apply_modern_style
@@ -277,36 +278,53 @@ class AssistantWindow:
         self.on_command(command)
 
     def _prepare_recording_overlay(self):
-        """Создаёт компактный индикатор заранее, чтобы первое нажатие не тормозило."""
+        """Создаёт заранее сглаженный круглый индикатор записи."""
         overlay = tk.Toplevel(self.root)
         overlay.withdraw()
         overlay.overrideredirect(True)
         overlay.attributes("-topmost", True)
-        overlay.attributes("-alpha", 0.94)
+        overlay.attributes("-alpha", 0.97)
         transparent = "#00ff00"
         overlay.configure(bg=transparent)
         overlay.attributes("-transparentcolor", transparent)
 
         frame = tk.Frame(overlay, bg=transparent, padx=0, pady=0)
         frame.pack()
+        # Рисуем круг в 4-кратном разрешении и уменьшаем с фильтром LANCZOS:
+        # это убирает ступеньки по краю, характерные для Canvas.
+        scale = 4
+        size = 112
+        image = Image.new("RGB", (size * scale, size * scale), transparent)
+        draw = ImageDraw.Draw(image)
+        draw.ellipse(
+            (2 * scale, 2 * scale, (size - 2) * scale, (size - 2) * scale),
+            fill="#202124"
+        )
+        image = image.resize((size, size), Image.Resampling.LANCZOS)
+        self._mic_circle_image = ImageTk.PhotoImage(image)
         self._mic_canvas = tk.Canvas(
-            frame, width=112, height=112, bg=transparent,
+            frame, width=size, height=size, bg=transparent,
             highlightthickness=0, bd=0
         )
         self._mic_canvas.pack()
-        # Тёмный круг вместо прежней квадратной подложки.
-        self._mic_canvas.create_oval(
-            4, 4, 108, 108, fill="#202124", outline="#202124"
-        )
-        # Микрофон оставлен прежнего размера и без анимации.
+        self._mic_canvas.create_image(0, 0, image=self._mic_circle_image, anchor="nw")
+        # Сам микрофон оставлен прежним — без изменения размера и без пульсации.
         self._mic_canvas.create_text(
             56, 56, text="🎙", font=("Segoe UI Emoji", 43), fill="#FF5148"
         )
+
+        text_row = tk.Frame(frame, bg=transparent)
+        text_row.pack(pady=(2, 0))
         self._overlay_label = tk.Label(
-            frame, text="", font=("Segoe UI", 11, "bold"),
-            fg="white", bg="#202124", padx=12, pady=5
+            text_row, text="", font=("Segoe UI", 11, "bold"),
+            fg="white", bg=transparent, width=9, anchor="e"
         )
-        self._overlay_label.pack(pady=(0, 0))
+        self._overlay_label.pack(side="left")
+        self._overlay_dots = tk.Label(
+            text_row, text=".", font=("Segoe UI", 11, "bold"),
+            fg="white", bg=transparent, width=3, anchor="w"
+        )
+        self._overlay_dots.pack(side="left")
         self._overlay_base_text = ""
         self._dots_phase = 0
         self._dots_animation_job = None
@@ -314,22 +332,21 @@ class AssistantWindow:
         self._recording_overlay = overlay
 
     def _animate_recording_dots(self):
-        """Перебирает одну, две и три точки после подписи режима."""
+        """Меняет только отдельный индикатор точек, не перерисовывая подпись."""
         if self._recording_overlay is None or not self._recording_overlay.winfo_viewable():
             self._dots_animation_job = None
             return
         self._dots_phase = self._dots_phase % 3 + 1
-        self._overlay_label.configure(
-            text=self._overlay_base_text + "." * self._dots_phase
-        )
-        self._dots_animation_job = self.root.after(350, self._animate_recording_dots)
+        self._overlay_dots.configure(text="." * self._dots_phase)
+        self._dots_animation_job = self.root.after(420, self._animate_recording_dots)
 
     def set_recording_overlay(self, active, mode=None):
         def apply():
             if active:
                 self._overlay_base_text = "СЛУШАЮ" if mode == "command" else "ДИКТОВКА"
                 self._dots_phase = 0
-                self._overlay_label.configure(text=self._overlay_base_text + ".")
+                self._overlay_label.configure(text=self._overlay_base_text)
+                self._overlay_dots.configure(text=".")
                 w = self._recording_overlay.winfo_reqwidth()
                 h = self._recording_overlay.winfo_reqheight()
                 x = (self.root.winfo_screenwidth() - w) // 2
