@@ -278,51 +278,27 @@ class AssistantWindow:
         self.on_command(command)
 
     def _prepare_recording_overlay(self):
-        """Создаёт заранее сглаженный круглый индикатор записи."""
+        """Создаёт компактный прямоугольный индикатор записи в прежнем стиле."""
         overlay = tk.Toplevel(self.root)
         overlay.withdraw()
         overlay.overrideredirect(True)
         overlay.attributes("-topmost", True)
-        overlay.attributes("-alpha", 0.97)
-        transparent = "#00ff00"
-        overlay.configure(bg=transparent)
-        overlay.attributes("-transparentcolor", transparent)
-
-        frame = tk.Frame(overlay, bg=transparent, padx=0, pady=0)
+        overlay.attributes("-alpha", 0.94)
+        overlay.configure(bg="#202124")
+        frame = tk.Frame(overlay, bg="#202124", padx=24, pady=18)
         frame.pack()
-        # Рисуем круг в 4-кратном разрешении и уменьшаем с фильтром LANCZOS:
-        # это убирает ступеньки по краю, характерные для Canvas.
-        scale = 4
-        size = 112
-        image = Image.new("RGB", (size * scale, size * scale), transparent)
-        draw = ImageDraw.Draw(image)
-        draw.ellipse(
-            (2 * scale, 2 * scale, (size - 2) * scale, (size - 2) * scale),
-            fill="#202124"
-        )
-        image = image.resize((size, size), Image.Resampling.LANCZOS)
-        self._mic_circle_image = ImageTk.PhotoImage(image, master=overlay)
-        self._mic_canvas = tk.Canvas(
-            frame, width=size, height=size, bg=transparent,
-            highlightthickness=0, bd=0
-        )
-        self._mic_canvas.pack()
-        self._mic_canvas.create_image(0, 0, image=self._mic_circle_image, anchor="nw")
-        # Сам микрофон оставлен прежним — без изменения размера и без пульсации.
-        self._mic_canvas.create_text(
-            56, 56, text="🎙", font=("Segoe UI Emoji", 43), fill="#FF5148"
-        )
-
-        text_row = tk.Frame(frame, bg=transparent)
-        text_row.pack(pady=(2, 0))
+        tk.Label(frame, text="🎙", font=("Segoe UI Emoji", 46),
+                 fg="#ff3b30", bg="#202124").pack()
+        text_row = tk.Frame(frame, bg="#202124")
+        text_row.pack(pady=(5, 0))
         self._overlay_label = tk.Label(
             text_row, text="", font=("Segoe UI", 11, "bold"),
-            fg="white", bg=transparent, width=9, anchor="e"
+            fg="white", bg="#202124", width=9, anchor="e"
         )
         self._overlay_label.pack(side="left")
         self._overlay_dots = tk.Label(
             text_row, text=".", font=("Segoe UI", 11, "bold"),
-            fg="white", bg=transparent, width=3, anchor="w"
+            fg="white", bg="#202124", width=3, anchor="w"
         )
         self._overlay_dots.pack(side="left")
         self._overlay_base_text = ""
