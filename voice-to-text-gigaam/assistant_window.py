@@ -286,13 +286,45 @@ class AssistantWindow:
         overlay.configure(bg="#202124")
         frame = tk.Frame(overlay, bg="#202124", padx=24, pady=18)
         frame.pack()
-        tk.Label(frame, text="🎙", font=("Segoe UI Emoji", 46),
-                 fg="#ff3b30", bg="#202124").pack()
+        # Отдельный Canvas позволяет анимировать микрофон без пересоздания виджетов.
+        self._mic_canvas = tk.Canvas(frame, width=112, height=104, bg="#202124",
+                                     highlightthickness=0, bd=0)
+        self._mic_canvas.pack()
+        self._mic_ring_outer = self._mic_canvas.create_oval(
+            10, 6, 102, 98, outline="#56302F", width=2)
+        self._mic_ring_inner = self._mic_canvas.create_oval(
+            22, 18, 90, 86, outline="#8E3432", width=2)
+        self._mic_icon = self._mic_canvas.create_text(
+            56, 52, text="🎙", font=("Segoe UI Emoji", 43), fill="#FF5148")
         self._overlay_label = tk.Label(frame, text="", font=("Segoe UI", 11, "bold"),
                                        fg="white", bg="#202124")
         self._overlay_label.pack(pady=(5, 0))
+        self._mic_animation_phase = 0
+        self._mic_animation_job = None
         overlay.update_idletasks()
         self._recording_overlay = overlay
+
+    def _animate_recording_mic(self):
+        """Мягкая пульсация колец и значка микрофона во время записи."""
+        if self._recording_overlay is None or not self._recording_overlay.winfo_viewable():
+            self._mic_animation_job = None
+            return
+        phase = self._mic_animation_phase
+        # Плавный цикл из 24 кадров: микрофон слегка увеличивается и уменьшается.
+        distance = abs(12 - phase)
+        scale = 1.0 + (12 - distance) / 120.0
+        radius_outer = 43 + (12 - distance) * 0.55
+        radius_inner = 31 + (12 - distance) * 0.45
+        self._mic_canvas.coords(self._mic_ring_outer,
+                                56-radius_outer, 52-radius_outer,
+                                56+radius_outer, 52+radius_outer)
+        self._mic_canvas.coords(self._mic_ring_inner,
+                                56-radius_inner, 52-radius_inner,
+                                56+radius_inner, 52+radius_inner)
+        self._mic_canvas.itemconfigure(self._mic_icon,
+                                       font=("Segoe UI Emoji", int(40 * scale)))
+        self._mic_animation_phase = (phase + 1) % 24
+        self._mic_animation_job = self.root.after(65, self._animate_recording_mic)
 
     def set_recording_overlay(self, active, mode=None):
         def apply():
@@ -305,7 +337,15 @@ class AssistantWindow:
                 self._recording_overlay.geometry(f"+{x}+{y}")
                 self._recording_overlay.deiconify()
                 self._recording_overlay.lift()
+                if self._mic_animation_job is None:
+                    self._animate_recording_mic()
             elif self._recording_overlay is not None:
+                if self._mic_animation_job is not None:
+                    try:
+                        self.root.after_cancel(self._mic_animation_job)
+                    except tk.TclError:
+                        pass
+                    self._mic_animation_job = None
                 self._recording_overlay.withdraw()
         try:
             self.root.after(0, apply)
