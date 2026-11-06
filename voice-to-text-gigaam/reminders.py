@@ -52,6 +52,14 @@ def parse_reminder(text: str):
                 if hours or minutes or seconds:
                     due = now + timedelta(hours=hours, minutes=minutes, seconds=seconds)
                     rest = re.sub(r"^напомни(?:\s+мне)?\s+", "", remainder)
+    if due is None:
+        absolute = re.match(r"^(\\d{2}\\.\\d{2}\\.\\d{4})\\s+(\\d{1,2}):(\\d{2})\\s+(.*)$", rest)
+        if absolute:
+            try:
+                due = datetime.strptime(absolute.group(1) + " " + absolute.group(2) + ":" + absolute.group(3), "%d.%m.%Y %H:%M")
+                rest = absolute.group(4).strip()
+            except ValueError:
+                return None
     if due is None and rest.startswith("завтра"):
         tomorrow = now.date() + timedelta(days=1)
         m = re.match(r"завтра\s+в\s+(\d{1,2})(?::(\d{2}))?\s*(утра|вечера|дня)?\s*(.*)", rest)
