@@ -361,8 +361,14 @@ def handle_command(text: str):
     except Exception as exc:
         if _ui is not None:
             _ui.set_busy_overlay(None)
-        print(f"Ollama Cloud не смог обработать команду: {exc}")
-        print("Команда не выполнена. Проверьте интернет и наличие ключа Ollama Cloud в настройках.")
+        error_text = str(exc)
+        print(f"Не удалось определить команду: {error_text}")
+        if "HTTP 402" in error_text:
+            print("У Ollama Cloud закончились доступные стартовые кредиты или выбранная модель требует платных кредитов. Простые команды Zero Control выполняются локально; для ИИ-классификации нужен доступный баланс или резервная модель.")
+        elif "ключ Ollama Cloud" in error_text:
+            print("Добавьте API-ключ Ollama Cloud в настройках Zero Control.")
+        else:
+            print("Проверьте подключение к интернету и доступность резервной модели Moondream.")
         return
     action = intent.get("action", "unknown")
     args = intent.get("arguments") or {}
