@@ -425,7 +425,8 @@ def handle_command(text: str):
     elif action == "open_folder":
         if _ui is not None:
             _ui.set_busy_overlay("Ищу папку…")
-        open_folder_by_name(str(args.get("folder") or text), parent)
+        if open_folder_by_name(str(args.get("folder") or text), parent) and _ui is not None:
+            _ui.set_busy_overlay(None)
     elif action == "search_files":
         if _ui is not None:
             _ui.set_busy_overlay("Ищу файлы…")
