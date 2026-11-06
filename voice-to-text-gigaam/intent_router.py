@@ -1,6 +1,6 @@
-"""OpenRouter semantic intent classification; execution stays in local Python."""
+"""Ollama Cloud semantic intent classification; execution stays in local Python."""
 from __future__ import annotations
-import json, os, re, urllib.error, urllib.request
+import json, re
 ACTIONS = {
  "add_contact": "Добавить нового человека в локальную адресную книгу контактов и открыть пустую карточку.",
  "open_contacts": "Открыть общую адресную книгу контактов.",
@@ -162,39 +162,27 @@ def understand_command(user_text: str) -> dict:
         return {"action": "search_documents", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
-    from agent_core import load_settings
-    settings = load_settings()
-    key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    base = os.getenv("OPENROUTER_BASE_URL", settings["openrouter_base_url"]).rstrip("/")
-    model = os.getenv("OPENROUTER_MODEL", settings["openrouter_model"]).strip()
-    payload = {"model": model, "temperature": 0, "messages": [{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":user_text[:4000]}]}
+    payload = {"messages": [{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":user_text[:4000]}]}
     try:
-        if not key:
-            raise RuntimeError("Не задана переменная OPENROUTER_API_KEY.")
-        req = urllib.request.Request(base + "/chat/completions", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Authorization":"Bearer "+key,"Content-Type":"application/json","HTTP-Referer":"https://github.com/zerdb/tgbot","X-Title":"GigaAM Voice Assistant"}, method="POST")
-        with urllib.request.urlopen(req, timeout=35) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        choices = data.get("choices") or []
-        content = (choices[0].get("message") or {}).get("content") if choices else ""
-        if isinstance(content, list):
-            content = "\\n".join(str(x.get("text", "")) for x in content if isinstance(x, dict))
-        match = re.search(r"\{.*\}", str(content or ""), flags=re.S)
+        from ollama_client import chat
+        content = chat(payload["messages"], temperature=0, max_tokens=500)
+        match = re.search(r"\\{.*\\}", str(content or ""), flags=re.S)
         if not match:
-            raise RuntimeError("OpenRouter вернул некорректный JSON.")
+            raise RuntimeError("Ollama Cloud вернула некорректный JSON.")
         parsed = json.loads(match.group(0))
-        print("[Команды] Классификация через OpenRouter.", flush=True)
+        print("[Команды] Классификация через Ollama Cloud.", flush=True)
     except Exception as primary_error:
-        print("[Команды] OpenRouter недоступен (%s). Пробую Moondream." % primary_error, flush=True)
+        print("[Команды] Ollama Cloud недоступна (%s). Пробую Moondream." % primary_error, flush=True)
         try:
             from moondream_client import chat as moondream_chat
             content = moondream_chat(payload["messages"], temperature=0, max_tokens=500)
-            match = re.search(r"\{.*\}", content, flags=re.S)
+            match = re.search(r"\\{.*\\}", content, flags=re.S)
             if not match:
-                raise RuntimeError("Moondream вернул некорректный JSON.")
+                raise RuntimeError("Moondream вернула некорректный JSON.")
             parsed = json.loads(match.group(0))
             print("[Команды] Классификация через резервную Moondream.", flush=True)
         except Exception as fallback_error:
-            raise RuntimeError("OpenRouter: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
+            raise RuntimeError("Ollama Cloud: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
     action = parsed.get("action", "unknown")
     if action not in ACTIONS: action = "unknown"
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
