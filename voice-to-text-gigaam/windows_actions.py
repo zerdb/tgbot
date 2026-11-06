@@ -15,6 +15,7 @@ from datetime import datetime
 from PIL import ImageGrab
 from openpyxl import Workbook
 from notifications import speak_text
+from reminders import add_note
 
 SCREENSHOT_DIR = Path(__file__).resolve().parent / "Скриншоты"
 CLIPBOARD_TABLES_DIR = Path(__file__).resolve().parent / "Таблицы"
@@ -218,33 +219,20 @@ def paste_clipboard_to_excel():
         raise
 
 
-NOTES_DIR = Path(__file__).resolve().parent / "Заметки"
-
-
 def save_clipboard_as_note():
-    """Append clipboard text to the shared timestamped notes document."""
+    """Save clipboard text as an item in the unified notes and tasks store."""
     windows_only()
     content = pyperclip.paste()
     if not isinstance(content, str) or not content.strip():
         print("Буфер обмена пуст. Сначала скопируйте текст.")
         return
-    NOTES_DIR.mkdir(parents=True, exist_ok=True)
-    destination = NOTES_DIR / "Мои заметки.txt"
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    is_new = not destination.exists() or destination.stat().st_size == 0
-    with destination.open("a", encoding="utf-8") as note_file:
-        if not is_new:
-            note_file.write("\n\n" + "=" * 48 + "\n")
-        note_file.write(f"[{stamp}]\n{content.strip()}\n")
-    print(f"Заметка добавлена в общий документ: {destination}")
-    try:
-        speak_text("Заметка сохранена.")
-    except Exception as exc:
-        print(f"Не удалось озвучить сохранение заметки: {exc}")
-    try:
-        Notification(app_id="GigaAM — голосовой помощник", title="Заметка сохранена", msg=f"Текст добавлен в «Мои заметки.txt»\\n{destination}", duration="short").show()
-    except Exception as exc:
-        print(f"Не удалось показать всплывающее уведомление: {exc}")
+    if add_note(content.strip()):
+        print("Текст из буфера добавлен в общие заметки и дела.")
+        try:
+            Notification(app_id="Zero Control", title="Запись сохранена",
+                         msg="Текст добавлен в раздел «Заметки и дела».", duration="short").show()
+        except Exception as exc:
+            print(f"Не удалось показать всплывающее уведомление: {exc}")
 
 
 def clean_clipboard_text():
