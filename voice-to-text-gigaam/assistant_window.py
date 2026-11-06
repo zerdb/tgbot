@@ -88,7 +88,6 @@ class AssistantWindow:
         brand.pack(side="left", fill="x", expand=True)
         ttk.Label(brand, text="Zero Control", font=("Segoe UI", 11, "bold"),
                   foreground=self.ACCENT).pack(anchor="w")
-        ttk.Label(brand, text="Голосовой помощник", style="Title.TLabel").pack(anchor="w", pady=(1, 0))
         controls = ttk.Frame(header)
         controls.pack(side="right", anchor="n")
         ttk.Button(controls, text="🔧", style="Header.TButton",
