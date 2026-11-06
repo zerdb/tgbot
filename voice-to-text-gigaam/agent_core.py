@@ -11,7 +11,7 @@ CONFIG_PATH = APP_DATA / "settings.json"
 MEMORY_PATH = APP_DATA / "assistant_memory.json"
 _LOCK = RLock()
 DEFAULTS = {
-    "groq_model": "llama-3.3-70b-versatile",
+    "groq_model": "openai/gpt-oss-120b",
     "mail_login": "zerdb@mail.ru",
     "imap_host": "imap.mail.ru",
     "imap_port": 993,
@@ -34,6 +34,9 @@ def load_settings() -> dict:
         stored.pop("openrouter_base_url", None)
         stored.pop("openrouter_model", None)
         stored.pop("ollama_model", None)
+        # Migrate the retired Groq model from existing local settings.
+        if stored.get("groq_model") == "llama-3.3-70b-versatile":
+            stored["groq_model"] = DEFAULTS["groq_model"]
         return {**DEFAULTS, **stored}
 
 
