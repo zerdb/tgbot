@@ -152,24 +152,65 @@ class AssistantWindow:
                 widget.bind("<Enter>", lambda _e, c=card, ws=(icon, name, desc): self._hover_card(c, ws, True))
                 widget.bind("<Leave>", lambda _e, c=card, ws=(icon, name, desc): self._hover_card(c, ws, False))
 
-        ttk.Label(outer, text="Команды по категориям", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
-        notebook = ttk.Notebook(outer)
-        notebook.pack(fill="both", expand=True)
-        groups = [
-            ("Windows", [("🔒  Заблокировать компьютер", "заблокируй компьютер"), ("↻  Перезагрузить компьютер", "перезагрузи компьютер"), ("⬇  Открыть загрузки", "открой загрузки"), ("▧  Открыть корзину", "открой корзину"), ("⚙  Открыть настройки", "открой настройки"), ("♲  Очистить корзину", "очисти корзину"), ("▣  Сделать скриншот", "сделай скриншот")]),
-            ("Файлы", [("⌕  Найти файл", "найди файл"), ("▤  Разобрать папку", "разбери папку"), ("▣  Открыть Блокнот", "открой блокнот"), ("▦  Открыть Калькулятор", "открой калькулятор"), ("▤  Открыть Word", "открой ворд"), ("▦  Открыть Excel", "открой эксель"), ("◎  Открыть браузер", "открой браузер"), ("▧  Открыть Изображения", "открой изображения"), ("▦  Вставить таблицу в Excel", "перенеси в excel"), ("✎  Сохранить как заметку", "сохрани как заметку")]),
-            ("Интернет", [("⌕  Поиск в интернете", "найди в интернете"), ("◷  Создать напоминание", "напомни")]),
-            ("Почта", [("➤  Отправить файлы на почту", "отправить файлы на почту")]),
+        ttk.Label(outer, text="Справочник голосовых команд", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
+        command_area = tk.Frame(outer, bg=self.SURFACE, highlightthickness=1,
+                                highlightbackground=self.BORDER, bd=0)
+        command_area.pack(fill="both", expand=True)
+        command_canvas = tk.Canvas(command_area, bg=self.SURFACE, highlightthickness=0, bd=0)
+        command_scroll = ttk.Scrollbar(command_area, orient="vertical", command=command_canvas.yview)
+        command_canvas.configure(yscrollcommand=command_scroll.set)
+        command_scroll.pack(side="right", fill="y")
+        command_canvas.pack(side="left", fill="both", expand=True)
+        command_list = tk.Frame(command_canvas, bg=self.SURFACE)
+        list_window = command_canvas.create_window((0, 0), window=command_list, anchor="nw")
+
+        commands = [
+            ("Заблокировать компьютер", "Заблокирует текущий сеанс Windows.", "заблокируй компьютер"),
+            ("Перезагрузить компьютер", "Перезапустит Windows после подтверждения.", "перезагрузи компьютер"),
+            ("Открыть настройки Windows", "Откроет системные параметры Windows.", "открой настройки Windows"),
+            ("Открыть папку Загрузки", "Покажет загруженные файлы.", "открой загрузки"),
+            ("Сделать скриншот", "Сохранит снимок всех экранов.", "сделай скриншот"),
+            ("Найти файл", "Найдёт файл или папку по названию.", "найди файл"),
+            ("Разобрать папку", "Откроет предварительный просмотр сортировки файлов.", "разбери папку"),
+            ("Открыть Блокнот", "Запустит стандартный текстовый редактор.", "открой блокнот"),
+            ("Открыть Калькулятор", "Запустит калькулятор Windows.", "открой калькулятор"),
+            ("Открыть Word", "Запустит Microsoft Word.", "открой Word"),
+            ("Открыть Excel", "Запустит Microsoft Excel.", "открой Excel"),
+            ("Открыть браузер", "Откроет браузер.", "открой браузер"),
+            ("Открыть изображения", "Откроет системную папку изображений.", "открой изображения"),
+            ("Перенести таблицу в Excel", "Создаст книгу из таблицы в буфере обмена.", "перенеси в Excel"),
+            ("Сохранить текст как заметку", "Добавит скопированный текст в файл заметок.", "сохрани как заметку"),
+            ("Поиск в интернете", "Найдёт информацию в интернете.", "найди в интернете"),
+            ("Создать напоминание", "Добавит напоминание с указанным временем.", "напомни через 10 минут"),
+            ("Открыть напоминания", "Покажет сохранённые напоминания.", "открой напоминания"),
+            ("Открыть почту", "Откроет почтовый клиент.", "открой почту"),
+            ("Прочитать новые письма", "Проверит и кратко перескажет непрочитанные письма.", "прочитай новые письма"),
+            ("Создать письмо", "Подготовит новое письмо.", "создай письмо"),
+            ("Спросить ИИ", "Ответит на вопрос обычным текстом или голосом.", "спроси ИИ: твой вопрос"),
+            ("Проанализировать экран", "Сделает снимок и объяснит, что на нём отображено.", "что у меня на экране"),
+            ("Спросить о камере", "Получит свежий кадр и ответит по изображению.", "что видно на камере"),
         ]
-        for tab_name, commands in groups:
-            page = tk.Frame(notebook, bg=self.SURFACE, padx=9, pady=8)
-            notebook.add(page, text=tab_name)
-            for index, (label, command) in enumerate(commands):
-                button = ttk.Button(page, text=label, style="Action.TButton",
-                                    command=lambda c=command: self._click_command(c))
-                button.grid(row=index // 2, column=index % 2, sticky="ew", padx=3, pady=3)
-            page.columnconfigure(0, weight=1)
-            page.columnconfigure(1, weight=1)
+        for index, (title, description, phrase) in enumerate(commands):
+            row = tk.Frame(command_list, bg=self.SURFACE, padx=12, pady=7)
+            row.pack(fill="x")
+            tk.Label(row, text=title, bg=self.SURFACE, fg=self.TEXT,
+                     font=("Segoe UI", 9, "bold"), anchor="w").pack(fill="x")
+            tk.Label(row, text=description, bg=self.SURFACE, fg=self.MUTED,
+                     font=("Segoe UI", 8), anchor="w", justify="left").pack(fill="x", pady=(1, 0))
+            tk.Label(row, text="Фраза: «" + phrase + "»", bg=self.SURFACE, fg=self.ACCENT,
+                     font=("Segoe UI", 8), anchor="w").pack(fill="x", pady=(2, 0))
+            if index < len(commands) - 1:
+                tk.Frame(command_list, bg=self.BORDER, height=1).pack(fill="x", padx=12)
+
+        def update_scroll_region(_event=None):
+            command_canvas.configure(scrollregion=command_canvas.bbox("all"))
+            command_canvas.itemconfigure(list_window, width=command_canvas.winfo_width())
+
+        command_list.bind("<Configure>", update_scroll_region)
+        command_canvas.bind("<Configure>", update_scroll_region)
+        command_canvas.bind("<Enter>", lambda _e: command_canvas.bind_all(
+            "<MouseWheel>", lambda e: command_canvas.yview_scroll(int(-e.delta / 120), "units")))
+        command_canvas.bind("<Leave>", lambda _e: command_canvas.unbind_all("<MouseWheel>"))
 
         footer = ttk.Frame(outer)
         footer.pack(fill="x", pady=(7, 0))
