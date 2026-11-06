@@ -273,3 +273,148 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
         return [Path(row[0]) for row in rows]
     finally:
         connection.close()
+
+
+def refresh_and_search_folders(query: str, report: Callable[[str], None] | None = None) -> list[Path]:
+    """Index active NTFS directories in SQLite and find folders by name/path."""
+    report = report or (lambda message: print(message, flush=True))
+    if not is_admin():
+        raise PermissionError(
+            "Для чтения MFT нужны права администратора. Закройте программу и запустите "
+            "PyCharm от имени администратора, затем снова запустите проект."
+        )
+    try:
+        import mftparser
+    except ImportError as exc:
+        raise RuntimeError("Не установлена библиотека mftparser. Обновите requirements.txt.") from exc
+
+    needle = "".join(
+        char for char in unicodedata.normalize("NFKC", str(query or "")).casefold()
+        if char.isalnum()
+    )
+    if not needle:
+        return []
+
+    volumes = _available_ntfs_volumes()
+    if not volumes:
+        raise OSError("Не найдены доступные диски.")
+
+    connection = _connect()
+    try:
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS folders (
+                drive TEXT NOT NULL,
+                full_path TEXT NOT NULL,
+                name TEXT NOT NULL
+            )
+        """)
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_folders_name ON folders(name COLLATE NOCASE)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_folders_drive ON folders(drive)")
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS folder_scans (
+                drive TEXT PRIMARY KEY,
+                scanned_at REAL NOT NULL
+            )
+        """)
+        fts_available = True
+        try:
+            connection.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS folders_fts USING fts5("
+                "drive UNINDEXED, full_path UNINDEXED, search_text, tokenize='trigram')"
+            )
+        except sqlite3.OperationalError:
+            fts_available = False
+
+        for drive in volumes:
+            scanned = connection.execute(
+                "SELECT 1 FROM folder_scans WHERE drive = ?", (drive,)
+            ).fetchone()
+            if scanned:
+                continue
+            report(f"Индексирую папки {drive} через MFT...")
+            started = time.perf_counter()
+            try:
+                entries = mftparser.ScanVolume(drive, only_active=True)
+                connection.execute(
+                    "CREATE TEMP TABLE IF NOT EXISTS scan_folders "
+                    "(drive TEXT, full_path TEXT, name TEXT)"
+                )
+                connection.execute("DELETE FROM scan_folders")
+                batch = []
+                count = 0
+                for entry in entries:
+                    if len(entry) < 12 or not entry[6] or not entry[11]:
+                        continue
+                    relative_path = str(entry[7] or "").strip().replace("/", "\\").lstrip("\\")
+                    name = str(entry[8] or "").strip()
+                    if not relative_path or not name or name in (".", ".."):
+                        continue
+                    full_path = os.path.normpath(drive + "\\\\" + relative_path)
+                    batch.append((drive, full_path, name))
+                    if len(batch) >= BATCH_SIZE:
+                        connection.executemany(
+                            "INSERT INTO scan_folders(drive, full_path, name) VALUES (?, ?, ?)", batch
+                        )
+                        count += len(batch)
+                        batch.clear()
+                        report(f"{drive}: подготовлено {count:,} папок...")
+                if batch:
+                    connection.executemany(
+                        "INSERT INTO scan_folders(drive, full_path, name) VALUES (?, ?, ?)", batch
+                    )
+                    count += len(batch)
+                with connection:
+                    connection.execute("DELETE FROM folders WHERE drive = ?", (drive,))
+                    connection.execute(
+                        "INSERT INTO folders(drive, full_path, name) "
+                        "SELECT drive, full_path, name FROM scan_folders"
+                    )
+                    if fts_available:
+                        connection.execute("DELETE FROM folders_fts WHERE drive = ?", (drive,))
+                        connection.execute(
+                            "INSERT INTO folders_fts(drive, full_path, search_text) "
+                            "SELECT drive, full_path, SEARCHKEY(name) || ' ' || SEARCHKEY(full_path) "
+                            "FROM scan_folders"
+                        )
+                    connection.execute(
+                        "INSERT OR REPLACE INTO folder_scans(drive, scanned_at) VALUES (?, ?)",
+                        (drive, time.time()),
+                    )
+                report(f"{drive}: индексировано {count:,} папок за {time.perf_counter() - started:.1f} сек.")
+            except Exception as exc:
+                report(f"Не удалось проиндексировать папки {drive}: {exc}")
+
+        rows = []
+        if fts_available and len(needle) >= 3:
+            try:
+                rows = connection.execute(
+                    "SELECT full_path FROM folders_fts WHERE folders_fts MATCH ? LIMIT ?",
+                    ('"' + needle.replace('"', '""') + '"', MAX_RESULTS),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = []
+        if not rows:
+            rows = connection.execute(
+                "SELECT full_path FROM folders "
+                "WHERE instr(SEARCHKEY(name), ?) > 0 "
+                "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
+                (needle, needle, MAX_RESULTS),
+            ).fetchall()
+
+        paths = []
+        seen = set()
+        for row in rows:
+            path = Path(row[0])
+            key = str(path).casefold()
+            if key not in seen and path.is_dir():
+                seen.add(key)
+                paths.append(path)
+        paths.sort(key=lambda path: (
+            0 if path.name.casefold() == str(query).casefold() else 1,
+            len(str(path)),
+            str(path).casefold(),
+        ))
+        report(f"Найдено существующих папок: {len(paths)}.")
+        return paths[:MAX_RESULTS]
+    finally:
+        connection.close()
