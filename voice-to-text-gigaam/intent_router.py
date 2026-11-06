@@ -26,13 +26,14 @@ ACTIONS = {
  "open_reminders": "Открыть общий список заметок, дел и напоминаний.",
  "open_mail_client": "Открыть почтовый клиент.",
  "search_web": "Поискать информацию в интернете; query — предмет поиска.",
- "search_files": "Найти файл или папку на компьютере; query — имя/описание.",
+ "search_files": "Найти файл на компьютере; query — имя/описание.",
+ "open_folder": "Открыть папку по названию или пути; folder — название или путь папки.",
  "unknown": "Неясная или неподдерживаемая задача."
 }
 SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
 Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
 Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
+Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), folder (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
 Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
 Если пользователь просит показать, открыть или посмотреть список контактов — выбери open_contacts.
 Фразы «добавь в контакты», «добавь контакт», «сохрани в адресную книгу», «запиши контакт» означают add_contact.
@@ -75,6 +76,19 @@ def understand_command(user_text: str) -> dict:
         return {"action": "open_settings", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|зайди в|перейди в)\b.*\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
+
+    # Открытие произвольной папки — локальное намерение, поиск пути выполняет Python/MFT.
+    folder_match = re.search(
+        r"\\b(?:открой|открыть|покажи|показать|зайди в|зайти в|перейди в|перейти в)\\b\\s+"
+        r"(?:(?:мне )?(?:папку|директорию|каталог)\\s+)?(.+)$",
+        user_text.strip(),
+        flags=re.IGNORECASE,
+    )
+    if folder_match and re.search(r"\\b(папк|директор|каталог|system\\s*32|system32|систем)\\b", normalized):
+        folder_name = folder_match.group(1).strip().strip('"«»').rstrip(" .,!?:;")
+        folder_name = re.sub(r"^(?:папку|директорию|каталог)\\s+", "", folder_name, flags=re.IGNORECASE)
+        if folder_name:
+            return {"action": "open_folder", "confidence": 1.0, "arguments": {"folder": folder_name}}
 
     # Простые команды адресной книги обрабатываем локально: они не должны
     # зависеть от доступности Groq или точности ответа классификатора.
@@ -188,5 +202,5 @@ def understand_command(user_text: str) -> dict:
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","note_text","item_text","query","question","app") and isinstance(v,(str,bool))}
+    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","note_text","item_text","query","question","app","folder") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}
