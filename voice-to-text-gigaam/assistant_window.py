@@ -23,6 +23,7 @@ class AssistantWindow:
         self.root.geometry("760x600")
         self.root.minsize(620, 500)
         self.root.configure(bg=self.BG)
+        self.root.overrideredirect(True)
         self.on_close = on_close
         self.on_command = on_command
         self.on_open_mail = on_open_mail or (lambda: None)
@@ -80,6 +81,8 @@ class AssistantWindow:
 
         header = ttk.Frame(outer)
         header.pack(fill="x", pady=(0, 10))
+        header.bind("<ButtonPress-1>", self._start_window_drag)
+        header.bind("<B1-Motion>", self._drag_window)
         brand = ttk.Frame(header)
         brand.pack(side="left", fill="x", expand=True)
         ttk.Label(brand, text="GigaAM", font=("Segoe UI", 11, "bold"),
@@ -152,7 +155,7 @@ class AssistantWindow:
                 widget.bind("<Enter>", lambda _e, c=card, ws=(icon, name, desc): self._hover_card(c, ws, True))
                 widget.bind("<Leave>", lambda _e, c=card, ws=(icon, name, desc): self._hover_card(c, ws, False))
 
-        ttk.Label(outer, text="Справочник голосовых команд", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
+        ttk.Label(outer, text="Команды", style="Section.TLabel").pack(anchor="w", pady=(0, 5))
         command_area = tk.Frame(outer, bg=self.SURFACE, highlightthickness=1,
                                 highlightbackground=self.BORDER, bd=0)
         command_area.pack(fill="both", expand=True)
@@ -191,16 +194,16 @@ class AssistantWindow:
             ("Спросить о камере", "Получит свежий кадр и ответит по изображению.", "что видно на камере"),
         ]
         for index, (title, description, phrase) in enumerate(commands):
-            row = tk.Frame(command_list, bg=self.SURFACE, padx=12, pady=7)
+            row = tk.Frame(command_list, bg=self.SURFACE, padx=10, pady=4)
             row.pack(fill="x")
             tk.Label(row, text=title, bg=self.SURFACE, fg=self.TEXT,
-                     font=("Segoe UI", 9, "bold"), anchor="w").pack(fill="x")
+                     font=("Segoe UI", 9, "bold"), anchor="w", width=27).pack(side="left")
             tk.Label(row, text=description, bg=self.SURFACE, fg=self.MUTED,
-                     font=("Segoe UI", 8), anchor="w", justify="left").pack(fill="x", pady=(1, 0))
-            tk.Label(row, text="Фраза: «" + phrase + "»", bg=self.SURFACE, fg=self.ACCENT,
-                     font=("Segoe UI", 8), anchor="w").pack(fill="x", pady=(2, 0))
+                     font=("Segoe UI", 8), anchor="w").pack(side="left", fill="x", expand=True, padx=(7, 10))
+            tk.Label(row, text="«" + phrase + "»", bg=self.SURFACE, fg=self.ACCENT,
+                     font=("Segoe UI", 8), anchor="e").pack(side="right")
             if index < len(commands) - 1:
-                tk.Frame(command_list, bg=self.BORDER, height=1).pack(fill="x", padx=12)
+                tk.Frame(command_list, bg=self.BORDER, height=1).pack(fill="x", padx=10)
 
         def update_scroll_region(_event=None):
             command_canvas.configure(scrollregion=command_canvas.bbox("all"))
@@ -216,6 +219,15 @@ class AssistantWindow:
         footer.pack(fill="x", pady=(7, 0))
         ttk.Label(footer, text="Right Ctrl — голосовая команда   ·   Right Ctrl + Right Shift — диктовка",
                   style="Muted.TLabel").pack(anchor="center")
+
+    def _start_window_drag(self, event):
+        self._drag_offset_x = event.x_root - self.root.winfo_x()
+        self._drag_offset_y = event.y_root - self.root.winfo_y()
+
+    def _drag_window(self, event):
+        x = event.x_root - getattr(self, "_drag_offset_x", 0)
+        y = event.y_root - getattr(self, "_drag_offset_y", 0)
+        self.root.geometry(f"+{x}+{y}")
 
     def _hover_card(self, card, widgets, active):
         bg = "#F2F1FF" if active else self.SURFACE
