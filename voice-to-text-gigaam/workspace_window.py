@@ -7,11 +7,12 @@ from tkinter import ttk, messagebox
 from urllib.parse import quote_plus
 
 from file_search import search_files
-from dialog_utils import center_window
+from dialog_utils import center_window, apply_modern_style
 
 
 def open_workspace(parent):
     win = tk.Toplevel(parent)
+    apply_modern_style(win)
     win.title("GigaAM — файлы")
     win.geometry("760x440")
     win.minsize(620, 360)
