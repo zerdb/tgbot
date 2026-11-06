@@ -1,4 +1,4 @@
-"""Ollama Cloud semantic intent classification; execution stays in local Python."""
+"""Groq semantic intent classification; execution stays in local Python."""
 from __future__ import annotations
 import json, re
 ACTIONS = {
@@ -77,12 +77,12 @@ def understand_command(user_text: str) -> dict:
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
 
     # Простые команды адресной книги обрабатываем локально: они не должны
-    # зависеть от доступности Ollama Cloud или точности ответа классификатора.
+    # зависеть от доступности Groq или точности ответа классификатора.
     if re.search(r"\b(добавь|добавить|запиши|записать|сохрани|сохранить)\b.*\b(в контакты|контакт|адресную книгу)\b|\b(добавь|добавить)\s+в\s+контакты\b", normalized):
         return {"action": "add_contact", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
         return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
-    # Локальная маршрутизация поддерживаемых команд: обычные действия не зависят от квоты Ollama Cloud.
+    # Локальная маршрутизация поддерживаемых команд: обычные действия не зависят от квоты Groq.
     if re.search(r"\b(разбери|разобрать|рассортируй|отсортируй|организуй)\b.*\b(папк|файл|документ)", normalized):
         return {"action": "organize_folder", "confidence": 1.0, "arguments": {}}
 
@@ -164,15 +164,15 @@ def understand_command(user_text: str) -> dict:
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
     payload = {"messages": [{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":user_text[:4000]}]}
     try:
-        from ollama_client import chat
+        from groq_client import chat
         content = chat(payload["messages"], temperature=0, max_tokens=500)
         match = re.search(r"\{.*\}", str(content or ""), flags=re.S)
         if not match:
-            raise RuntimeError("Ollama Cloud вернула некорректный JSON.")
+            raise RuntimeError("Groq вернула некорректный JSON.")
         parsed = json.loads(match.group(0))
-        print("[Команды] Классификация через Ollama Cloud.", flush=True)
+        print("[Команды] Классификация через Groq.", flush=True)
     except Exception as primary_error:
-        print("[Команды] Ollama Cloud недоступна (%s). Пробую Moondream." % primary_error, flush=True)
+        print("[Команды] Groq недоступна (%s). Пробую Moondream." % primary_error, flush=True)
         try:
             from moondream_client import chat as moondream_chat
             content = moondream_chat(payload["messages"], temperature=0, max_tokens=500)
@@ -182,7 +182,7 @@ def understand_command(user_text: str) -> dict:
             parsed = json.loads(match.group(0))
             print("[Команды] Классификация через резервную Moondream.", flush=True)
         except Exception as fallback_error:
-            raise RuntimeError("Ollama Cloud: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
+            raise RuntimeError("Groq: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
     action = parsed.get("action", "unknown")
     if action not in ACTIONS: action = "unknown"
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
