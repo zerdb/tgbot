@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 
 ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 
 
 def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90):
