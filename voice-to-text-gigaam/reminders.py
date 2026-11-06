@@ -9,6 +9,7 @@ _APP_DATA = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssi
 _ITEMS_PATH = _APP_DATA / "notes_and_tasks.json"
 _LEGACY_REMINDERS_PATH = _APP_DATA / "reminders.json"
 _LEGACY_NOTES_PATH = Path(__file__).resolve().parent / "Заметки" / "Мои заметки.txt"
+_LEGACY_MEMORY_PATH = _APP_DATA / "assistant_memory.json"
 _lock = threading.RLock()
 _items: list[dict] = []
 _loaded = False
@@ -94,6 +95,14 @@ def _migrate_legacy_locked():
             except (KeyError, TypeError, ValueError): continue
     except (OSError, json.JSONDecodeError): pass
     try:
+        legacy_memory = json.loads(_LEGACY_MEMORY_PATH.read_text(encoding="utf-8"))
+        for note in legacy_memory.get("notes", []) if isinstance(legacy_memory, dict) else []:
+            note_text = str(note or "").strip()
+            if note_text:
+                migrated.append(_new_item(note_text))
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    try:
         content = _LEGACY_NOTES_PATH.read_text(encoding="utf-8")
         for block in re.split(r"\n\s*={8,}\s*\n", content):
             block = block.strip()
@@ -157,9 +166,13 @@ def update_item(item_id: str, text: str, due_text: str = "") -> bool:
     if not text: return False
     due = None
     if due_text.strip():
-        parsed = parse_reminder("напомни " + due_text.strip() + " " + text)
-        if not parsed: return False
-        due = parsed[0]
+        try:
+            due = datetime.strptime(due_text.strip(), "%d.%m.%Y %H:%M")
+            if due <= datetime.now(): return False
+        except ValueError:
+            parsed = parse_reminder("напомни " + due_text.strip() + " " + text)
+            if not parsed: return False
+            due = parsed[0]
     with _lock:
         _load_locked()
         for item in _items:
