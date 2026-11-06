@@ -89,11 +89,9 @@ class AssistantWindow:
         ttk.Label(brand, text="Zero Control", font=("Segoe UI", 11, "bold"),
                   foreground=self.ACCENT).pack(anchor="w")
         ttk.Label(brand, text="Голосовой помощник", style="Title.TLabel").pack(anchor="w", pady=(1, 0))
-        ttk.Label(brand, text="Ваш помощник для голоса, файлов и повседневных задач",
-                  style="Subtitle.TLabel").pack(anchor="w", pady=(3, 0))
         controls = ttk.Frame(header)
         controls.pack(side="right", anchor="n")
-        ttk.Button(controls, text="⚙", style="Header.TButton",
+        ttk.Button(controls, text="🔧", style="Header.TButton",
                    command=lambda: self.on_command("открой настройки помощника")).pack(side="left", padx=2)
         ttk.Button(controls, text="—", style="Header.TButton",
                    command=self.root.iconify).pack(side="left", padx=2)
@@ -107,7 +105,7 @@ class AssistantWindow:
         status_inner.pack(fill="x")
         left = tk.Frame(status_inner, bg=self.SURFACE)
         left.pack(side="left", fill="x", expand=True)
-        tk.Label(left, text="СОСТОЯНИЕ СИСТЕМЫ", bg=self.SURFACE, fg=self.MUTED,
+        tk.Label(left, text="СОСТОЯНИЕ", bg=self.SURFACE, fg=self.MUTED,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
         details = tk.Frame(left, bg=self.SURFACE)
         details.pack(anchor="w")
@@ -127,7 +125,6 @@ class AssistantWindow:
         ttk.Label(details, textvariable=self.listening_var, style="StatusValue.TLabel").pack(side="left", padx=(5, 0))
         self._refresh_status_dots()
 
-        ttk.Label(outer, text="Быстрые действия", style="Section.TLabel").pack(anchor="w", pady=(0, 10))
         actions = ttk.Frame(outer)
         actions.pack(fill="x", pady=(0, 20))
         cards = [
