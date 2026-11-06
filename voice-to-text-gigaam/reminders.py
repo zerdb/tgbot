@@ -53,7 +53,7 @@ def parse_reminder(text: str):
                     due = now + timedelta(hours=hours, minutes=minutes, seconds=seconds)
                     rest = re.sub(r"^напомни(?:\s+мне)?\s+", "", remainder)
     if due is None:
-        absolute = re.match(r"^(\\d{2}\\.\\d{2}\\.\\d{4})\\s+(\\d{1,2}):(\\d{2})\\s+(.*)$", rest)
+        absolute = re.match(r"^(\d{2}\.\d{2}\.\d{4})\s+(\d{1,2}):(\d{2})\s+(.*)$", rest)
         if absolute:
             try:
                 due = datetime.strptime(absolute.group(1) + " " + absolute.group(2) + ":" + absolute.group(3), "%d.%m.%Y %H:%M")
