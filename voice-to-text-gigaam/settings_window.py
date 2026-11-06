@@ -1,4 +1,4 @@
-"""Central settings UI. Secrets remain in environment variables, never JSON."""
+"""Central settings UI. API secrets are stored in Windows Credential Manager, never JSON."""
 from __future__ import annotations
 
 import os
