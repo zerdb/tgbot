@@ -2,10 +2,11 @@
 from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk,messagebox
-from dialog_utils import center_window
+from dialog_utils import center_window, apply_modern_style
 def open_reminders(parent):
     from reminders import list_reminders, delete_reminder, add_reminder
     win=tk.Toplevel(parent);win.title("GigaAM — напоминания");win.geometry("760x520");win.minsize(560,380)
+    apply_modern_style(win)
     center_window(win,parent)
     f=ttk.Frame(win,padding=14);f.pack(fill="both",expand=True)
     ttk.Label(f,text="Напоминания",font=("Segoe UI",17,"bold")).pack(anchor="w")
