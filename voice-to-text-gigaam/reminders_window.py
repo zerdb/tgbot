@@ -43,7 +43,7 @@ def open_reminders(parent):
     list_shell.pack(fill="both", expand=True)
     scrollbar = ttk.Scrollbar(list_shell, orient="vertical")
     listing = tk.Text(
-        list_shell, wrap="word", font=("Segoe UI", 11),
+        list_shell, wrap="word", font=("Segoe UI", 9),
         background="#ffffff", foreground="#172033",
         relief="flat", borderwidth=0, padx=12, pady=10,
         spacing1=3, spacing2=2, spacing3=10,
@@ -60,10 +60,10 @@ def open_reminders(parent):
                           lmargin1=10, lmargin2=10, rmargin=10, spacing1=8, spacing3=2)
     listing.tag_configure("done", foreground="#15803d", background="#f0fdf4",
                           lmargin1=10, lmargin2=10, rmargin=10, spacing1=8, spacing3=2)
-    listing.tag_configure("body", foreground="#172033", font=("Segoe UI", 11),
+    listing.tag_configure("body", foreground="#172033", font=("Segoe UI", 9),
                           lmargin1=18, lmargin2=18, rmargin=12, spacing1=2, spacing3=10)
     listing.tag_configure("selected", background="#dbeafe")
-    listing.tag_configure("empty", foreground="#64748b", font=("Segoe UI", 11))
+    listing.tag_configure("empty", foreground="#64748b", font=("Segoe UI", 9))
 
     selected_id = {"value": None}
     item_map = {}
