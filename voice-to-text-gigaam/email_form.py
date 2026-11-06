@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from email_manager import load_address_book, send_email
-from dialog_utils import activate_modal
+from dialog_utils import activate_modal, apply_modern_style
 
 
 def copied_file_paths() -> list[str]:
