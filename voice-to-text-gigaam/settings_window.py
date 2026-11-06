@@ -121,8 +121,8 @@ def open_settings_window(parent):
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(2, 8))
         status = (
-            "Ollama Cloud: подключена" if (os.getenv("OLLAMA_API_KEY", "").strip() or get_ollama_api_key())
-            else "Ollama Cloud: ключ не задан"
+            "Ключ Ollama Cloud: сохранён" if (os.getenv("OLLAMA_API_KEY", "").strip() or get_ollama_api_key())
+            else "Ключ Ollama Cloud: не задан"
         ) + " · " + ("Пароль почты: настроен" if os.getenv("GIGAAM_MAIL_PASSWORD") else "Пароль почты: не настроен")
         ttk.Label(frame, text=status, wraplength=570).pack(anchor="w", pady=(4, 12))
 
