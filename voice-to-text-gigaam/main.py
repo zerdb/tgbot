@@ -361,8 +361,8 @@ def handle_command(text: str):
     except Exception as exc:
         if _ui is not None:
             _ui.set_busy_overlay(None)
-        print(f"OpenRouter не смог обработать команду: {exc}")
-        print("Команда не выполнена. Проверьте интернет и OPENROUTER_API_KEY.")
+        print(f"Ollama Cloud не смог обработать команду: {exc}")
+        print("Команда не выполнена. Проверьте интернет и OLLAMA_API_KEY.")
         return
     action = intent.get("action", "unknown")
     args = intent.get("arguments") or {}
@@ -600,7 +600,7 @@ def main():
                     from tkinter import messagebox
                     approved = messagebox.askyesno(
                         "Прочитать новые письма",
-                        "Для составления сводки текст непрочитанных писем будет передан подключённой модели OpenRouter. Продолжить?",
+                        "Для составления сводки текст непрочитанных писем будет передан подключённой модели Ollama Cloud. Продолжить?",
                         parent=_ui.root,
                     )
                     if approved:
