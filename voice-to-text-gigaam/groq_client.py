@@ -30,7 +30,8 @@ def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90):
     request = urllib.request.Request(
         ENDPOINT, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
-                 "Accept": "application/json"}, method="POST")
+                 "Accept": "application/json",
+                 "User-Agent": "ZeroControl/1.0 (Groq API client)"}, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
