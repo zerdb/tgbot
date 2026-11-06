@@ -37,7 +37,7 @@ _splash.update_idletasks()
 _splash.update()
 
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
-from reminders import start_reminder_service, stop_reminder_service, add_reminder, deliver_due_reminders
+from reminders import start_reminder_service, stop_reminder_service, add_reminder, add_note, complete_item_by_text, deliver_due_reminders
 from file_search import search_web, search_files, start_file_search_ui
 from email_form import open_email_form
 from contact_form import open_contact_form
@@ -410,6 +410,10 @@ def handle_command(text: str):
     elif action == "empty_recycle_bin": empty_recycle_bin()
     elif action == "screenshot": take_screenshot()
     elif action == "reminder": add_reminder(str(args.get("reminder_text") or text))
+    elif action == "add_note": add_note(str(args.get("note_text") or text))
+    elif action == "complete_item":
+        if not complete_item_by_text(str(args.get("item_text") or "")):
+            print("Не нашёл подходящую активную запись. Открой заметки и дела, чтобы выбрать её.")
     elif action == "organize_folder": open_folder_organizer(parent)
     elif action == "search_web": search_web(str(args.get("query") or text))
     elif action == "search_files":
