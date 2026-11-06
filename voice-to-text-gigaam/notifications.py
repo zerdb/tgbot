@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import wave
 from pathlib import Path
 
 import requests
@@ -128,7 +129,7 @@ def _speak_with_piper(voice, text: str):
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temporary:
         wav_path = Path(temporary.name)
     try:
-        with wav_path.open("wb") as wav_file:
+        with wave.open(str(wav_path), "wb") as wav_file:
             voice.synthesize_wav(text, wav_file)
         winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
     finally:
