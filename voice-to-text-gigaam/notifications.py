@@ -13,13 +13,14 @@ def show_notification(title: str, message: str):
 
 
 def speak_text(message: str):
-    """Speak only with a detected male SAPI voice; never silently fall back to a female voice."""
+    """Speak with an installed male SAPI voice and report synthesis failures."""
     text = str(message or "").strip()
     if not text:
         return
     encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
     script = (
         "$ErrorActionPreference='Stop';"
+        "try {"
         "$t=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('" + encoded + "'));"
         "Add-Type -AssemblyName System.Speech;"
         "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
@@ -31,13 +32,34 @@ def speak_text(message: str):
         "$male=@($voices | Where-Object {$_.VoiceInfo.Gender -eq "
         "[System.Speech.Synthesis.VoiceGender]::Male});"
         "if($male.Count -gt 0){$v=$male[0]}else{"
-        "throw 'Не найден установленный мужской голос Windows. Установите мужской голос в параметрах речи Windows.'}};"
+        "throw ('Мужской голос Windows не найден. Доступные голоса: ' + "
+        "(($voices | ForEach-Object {$_.VoiceInfo.Name + ' [' + $_.VoiceInfo.Gender + ', ' + $_.VoiceInfo.Culture.Name + ']'}) -join '; '))}};"
         "$s.SelectVoice($v.VoiceInfo.Name);"
-        "$s.Rate=0;$s.Volume=100;$s.Speak($t);$s.Dispose()"
+        "Write-Output ('VOICE_SELECTED=' + $v.VoiceInfo.Name);"
+        "$s.Rate=0;$s.Volume=100;$s.Speak($t);$s.Dispose();"
+        "} catch { [Console]::Error.WriteLine($_.Exception.ToString()); exit 1 }"
     )
-    subprocess.Popen(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-Command", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=45,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            check=False,
+        )
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout or "PowerShell завершился без описания ошибки").strip()
+            print(f"[Озвучивание] Не удалось произнести текст: {details}", flush=True)
+        else:
+            selected = next(
+                (line.partition("=")[2] for line in result.stdout.splitlines() if line.startswith("VOICE_SELECTED=")),
+                "мужской голос Windows",
+            )
+            print(f"[Озвучивание] Используется: {selected}", flush=True)
+    except subprocess.TimeoutExpired:
+        print("[Озвучивание] Синтез речи не завершился за 45 секунд.", flush=True)
+    except OSError as exc:
+        print(f"[Озвучивание] Не удалось запустить Windows PowerShell: {exc}", flush=True)
