@@ -62,6 +62,7 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
             print("Главное окно закрыто: форму почты открыть нельзя.")
             return
         root = tk.Toplevel(parent)
+        apply_modern_style(root)
         root.title("GigaAM — отправка почты")
         root.geometry("650x590")
         root.minsize(560, 480)
