@@ -176,7 +176,7 @@ def understand_command(user_text: str) -> dict:
         try:
             from moondream_client import chat as moondream_chat
             content = moondream_chat(payload["messages"], temperature=0, max_tokens=500)
-            match = re.search(r"\\{.*\\}", content, flags=re.S)
+            match = re.search(r"\{.*\}", content, flags=re.S)
             if not match:
                 raise RuntimeError("Moondream вернула некорректный JSON.")
             parsed = json.loads(match.group(0))
