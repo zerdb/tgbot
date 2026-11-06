@@ -132,7 +132,7 @@ def understand_command(user_text: str) -> dict:
         return {"action": "lock_computer", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(перезагрузи|перезагрузить|перезапусти)\b.*\b(компьютер|ноутбук|пк|windows)", normalized):
         return {"action": "reboot_computer", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\b(сделай|сделать|сними|снять)\b.*\b(скриншот|снимок экрана)", normalized):
+    if normalized in ("скриншот", "скриншот экрана", "снимок экрана") or re.search(r"\b(сделай|сделать|сними|снять)\b.*\b(скриншот|снимок экрана)", normalized):
         return {"action": "screenshot", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть)\b.*\b(настройки windows|параметры windows)", normalized):
         return {"action": "open_settings", "confidence": 1.0, "arguments": {}}
