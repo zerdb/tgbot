@@ -1,4 +1,4 @@
-"""Capture an RTSP frame and inspect it with Moondream or Ollama Cloud."""
+"""Capture an RTSP frame and inspect it with Moondream vision."""
 import os
 import json
 import base64
@@ -81,43 +81,17 @@ def _ask_moondream(image_data: str, api_key: str, question: str = None, strict_a
     return answer
 
 
-def _ask_ollama(image_data: str, question: str = None):
-    prompt = question or (
-        "Is a white Lada Niva car visible in this surveillance image? Do not guess. "
-        "Return only JSON: {present: boolean, confidence: number, reason: string}. "
-        "If uncertain, present must be false."
-    )
-    from ollama_client import chat
-    return chat(
-        [{"role": "user", "content": [
-            {"type": "text", "text": (
-                "Ответь по-русски кратко, максимум в 1-2 предложениях и 25 слов. "
-                "Не повторяй фразы. Не выдумывай детали; если объект неразличим, так и скажи. "
-                + prompt
-            )},
-            {"type": "image_url", "image_url": "data:image/jpeg;base64," + image_data},
-        ]}],
-        temperature=0.1,
-        max_tokens=180,
-        timeout=60,
-    )
 
 
 def inspect_camera():
     from agent_core import get_moondream_api_key
     image_data = _capture_camera_image()
-    moondream_key = os.getenv("MOONDREAM_API_KEY", "").strip() or get_moondream_api_key()
-    if moondream_key:
-        print("[Камера] Использую Moondream для анализа снимка.", flush=True)
-        answer = _ask_moondream(image_data, moondream_key)
-        first_word = re.sub(r"[^A-Z]", " ", answer.upper()).split()
-        return bool(first_word and first_word[0] == "YES")
-    print("[Камера] Ключ Moondream не задан — использую Ollama Cloud.", flush=True)
-    answer = _ask_ollama(image_data)
-    match = re.search(r"\{.*\}", answer, re.S)
-    if not match:
-        raise RuntimeError("Ollama Cloud не вернул JSON. Нужна vision-модель.")
-    return json.loads(match.group(0)).get("present") is True
+    key = os.getenv("MOONDREAM_API_KEY", "").strip() or get_moondream_api_key()
+    if not key:
+        raise RuntimeError("Для анализа камеры нужен API-ключ Moondream. Модель Groq llama-3.3-70b-versatile не поддерживает изображения.")
+    answer = _ask_moondream(image_data, key)
+    first_word = re.sub(r"[^A-Z]", " ", answer.upper()).split()
+    return bool(first_word and first_word[0] == "YES")
 
 
 def _compact_camera_answer(answer: str) -> str:
@@ -187,66 +161,29 @@ def _yes_no_result(answer: str) -> str:
 
 
 def inspect_camera_question(question: str) -> str:
-    """Ask a natural-language question about a fresh camera frame."""
+    """Ask Moondream about a fresh camera frame; Groq's selected model is text-only."""
     from agent_core import get_moondream_api_key
-    question = (question or "").strip()
-    if not question:
-        question = "Опиши, что видно на изображении."
+    question = (question or "").strip() or "Опиши, что видно на изображении."
     image_data = _capture_camera_image()
-    moondream_key = os.getenv("MOONDREAM_API_KEY", "").strip() or get_moondream_api_key()
-
-    # Для простого вопроса о наличии белой машины используем тот же
-    # проверенный бинарный сценарий, но без отдельной кнопки/команды.
+    key = os.getenv("MOONDREAM_API_KEY", "").strip() or get_moondream_api_key()
+    if not key:
+        raise RuntimeError("Для анализа камеры нужен API-ключ Moondream. Groq llama-3.3-70b-versatile не принимает изображения.")
     if _is_white_car_presence_question(question):
-        binary_prompt = (
+        prompt = (
             "Is a white car clearly visible in this surveillance image? "
             "Answer with exactly YES or NO. Answer NO if no white car is visible "
             "or if you are uncertain. Do not describe the question or guess."
         )
-        print("[Камера] Распознан вопрос да/нет о белой машине.", flush=True)
-        if moondream_key:
-            try:
-                return _yes_no_result(_ask_moondream(image_data, moondream_key, binary_prompt, strict_answer=True))
-            except Exception as exc:
-                print("[Камера] Moondream binary check failed: %s" % exc, flush=True)
-        try:
-            return _yes_no_result(_ask_ollama(image_data, binary_prompt))
-        except Exception as exc:
-            raise RuntimeError("Не удалось проверить белую машину ни одной vision-моделью: %s" % exc) from exc
-
-    answer = ""
-    moondream_error = None
-    if moondream_key:
-        print("[Камера] Анализирую свежий кадр через Moondream.", flush=True)
-        try:
-            answer = _ask_moondream(image_data, moondream_key, question)
-            _compact_camera_answer._question = question
-            try:
-                compact = _compact_camera_answer(answer)
-            finally:
-                _compact_camera_answer._question = ""
-            if not compact.startswith("ИИ повторил"):
-                return compact
-            moondream_error = compact
-            print("[Камера] Moondream не ответил по изображению. Пробую резервную vision-модель.", flush=True)
-        except Exception as exc:
-            moondream_error = str(exc)
-            print("[Камера] Ошибка Moondream: %s" % exc, flush=True)
+        return _yes_no_result(_ask_moondream(image_data, key, prompt, strict_answer=True))
+    answer = _ask_moondream(image_data, key, question)
+    _compact_camera_answer._question = question
     try:
-        print("[Камера] Запрашиваю резервную vision-модель Ollama Cloud.", flush=True)
-        answer = _ask_ollama(image_data, question)
-        _compact_camera_answer._question = question
-        try:
-            compact = _compact_camera_answer(answer)
-        finally:
-            _compact_camera_answer._question = ""
-        if compact.startswith("ИИ повторил"):
-            raise RuntimeError(compact)
-        return compact
-    except Exception as fallback_error:
-        if moondream_error:
-            raise RuntimeError("Moondream: %s; Ollama Cloud: %s" % (moondream_error, fallback_error)) from fallback_error
-        raise
+        compact = _compact_camera_answer(answer)
+    finally:
+        _compact_camera_answer._question = ""
+    if compact.startswith("ИИ повторил"):
+        raise RuntimeError(compact)
+    return compact
 
 def speak(text):
     encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
