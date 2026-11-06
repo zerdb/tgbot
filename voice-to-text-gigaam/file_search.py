@@ -65,12 +65,14 @@ def _search_worker(query: str, parent):
 
 
 _FOLDER_ALIASES = {
-    "system32": lambda: Path(os.environ.get("WINDIR", r"C:\\Windows")) / "System32",
-    "систем32": lambda: Path(os.environ.get("WINDIR", r"C:\\Windows")) / "System32",
-    "системтридцатьдва": lambda: Path(os.environ.get("WINDIR", r"C:\\Windows")) / "System32",
-    "системтридцатьвторой": lambda: Path(os.environ.get("WINDIR", r"C:\\Windows")) / "System32",
-    "windows": lambda: Path(os.environ.get("WINDIR", r"C:\\Windows")),
-    "виндовс": lambda: Path(os.environ.get("WINDIR", r"C:\\Windows")),
+    "windowsystem32": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32",
+    "виндовссистем32": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32",
+    "system32": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32",
+    "систем32": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32",
+    "системтридцатьдва": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32",
+    "системтридцатьвторой": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32",
+    "windows": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")),
+    "виндовс": lambda: Path(os.environ.get("WINDIR", r"C:\Windows")),
     "загрузки": lambda: Path.home() / "Downloads",
     "downloads": lambda: Path.home() / "Downloads",
     "документы": lambda: Path.home() / "Documents",
@@ -92,10 +94,10 @@ def open_folder_by_name(text: str, parent=None):
     query = str(text or "").strip().strip('"«»').rstrip(" .,!?:;")
     if not query:
         print("Не распознано название папки.")
-        return
+        return True
     if parent is None:
         print("Открытие папок требует запущенного главного окна приложения.")
-        return
+        return True
 
     direct_path = Path(os.path.expandvars(os.path.expanduser(query)))
     if direct_path.is_absolute() and direct_path.is_dir():
@@ -104,7 +106,7 @@ def open_folder_by_name(text: str, parent=None):
             print(f"Открываю папку: {direct_path}", flush=True)
         except OSError as exc:
             print(f"Не удалось открыть папку: {exc}", flush=True)
-        return
+        return True
 
     alias_path = _FOLDER_ALIASES.get(_folder_search_key(query))
     if alias_path:
@@ -115,13 +117,14 @@ def open_folder_by_name(text: str, parent=None):
                 print(f"Открываю папку: {candidate}", flush=True)
             except OSError as exc:
                 print(f"Не удалось открыть папку: {exc}", flush=True)
-            return
+            return True
 
     print(f"Ищу папку «{query}» по MFT и SQLite...", flush=True)
     threading.Thread(
         target=_folder_search_worker, args=(query, parent),
         daemon=True, name="folder-search",
     ).start()
+    return False
 
 
 def _folder_search_worker(query: str, parent):
