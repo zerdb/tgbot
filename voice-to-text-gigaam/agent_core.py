@@ -11,8 +11,7 @@ CONFIG_PATH = APP_DATA / "settings.json"
 MEMORY_PATH = APP_DATA / "assistant_memory.json"
 _LOCK = RLock()
 DEFAULTS = {
-    "openrouter_base_url": "https://openrouter.ai/api/v1",
-    "openrouter_model": "openrouter/free",
+    "ollama_model": "gemma4:31b",
     "mail_login": "zerdb@mail.ru",
     "imap_host": "imap.mail.ru",
     "imap_port": 993,
@@ -30,7 +29,11 @@ def _read_json(path: Path, fallback):
 
 def load_settings() -> dict:
     with _LOCK:
-        return {**DEFAULTS, **_read_json(CONFIG_PATH, {})}
+        stored = _read_json(CONFIG_PATH, {})
+        # Remove obsolete provider settings left by earlier OpenRouter versions.
+        stored.pop("openrouter_base_url", None)
+        stored.pop("openrouter_model", None)
+        return {**DEFAULTS, **stored}
 
 
 def save_settings(values: dict) -> dict:
@@ -61,6 +64,32 @@ def save_settings(values: dict) -> dict:
 
 def get_secret_env(name: str) -> str:
     return os.getenv(name, "").strip()
+
+
+def get_ollama_api_key() -> str:
+    """Read Ollama Cloud API key from Windows Credential Manager."""
+    try:
+        import keyring
+        return keyring.get_password("GigaAMVoiceAssistant", "ollama_api_key") or ""
+    except Exception as exc:
+        print(f"Не удалось прочитать ключ Ollama Cloud: {exc}")
+        return ""
+
+
+def set_ollama_api_key(api_key: str) -> None:
+    api_key = str(api_key or "").strip()
+    if not api_key:
+        raise ValueError("Ключ Ollama Cloud не может быть пустым.")
+    import keyring
+    keyring.set_password("GigaAMVoiceAssistant", "ollama_api_key", api_key)
+
+
+def delete_ollama_api_key() -> None:
+    import keyring
+    try:
+        keyring.delete_password("GigaAMVoiceAssistant", "ollama_api_key")
+    except keyring.errors.PasswordDeleteError:
+        pass
 
 
 
