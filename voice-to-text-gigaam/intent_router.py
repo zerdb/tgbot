@@ -84,7 +84,7 @@ def understand_command(user_text: str) -> dict:
         user_text.strip(),
         flags=re.IGNORECASE,
     )
-    if folder_match and re.search(r"\b(папк|директор|каталог|system\s*32|system32|систем)\b", normalized):
+    if folder_match and re.search(r"(папк|директор|каталог|system\s*32|system32|систем)", normalized):
         folder_name = folder_match.group(1).strip().strip('"«»').rstrip(" .,!?:;")
         folder_name = re.sub(r"^(?:папку|директорию|каталог)\s+", "", folder_name, flags=re.IGNORECASE)
         if folder_name:
