@@ -13,22 +13,26 @@ def show_notification(title: str, message: str):
 
 
 def speak_text(message: str):
-    """Speak with an installed Russian male SAPI voice when available."""
+    """Speak only with a detected male SAPI voice; never silently fall back to a female voice."""
     text = str(message or "").strip()
     if not text:
         return
     encoded = base64.b64encode(text.encode("utf-16le")).decode("ascii")
     script = (
+        "$ErrorActionPreference='Stop';"
         "$t=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('" + encoded + "'));"
         "Add-Type -AssemblyName System.Speech;"
         "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
         "$voices=@($s.GetInstalledVoices() | Where-Object {$_.Enabled});"
-        "$v=$voices | Where-Object {$_.VoiceInfo.Gender -eq "
-        "[System.Speech.Synthesis.VoiceGender]::Male -and $_.VoiceInfo.Culture.Name -like 'ru*'} "
-        "| Select-Object -First 1;"
-        "if(-not $v){$v=$voices | Where-Object {$_.VoiceInfo.Gender -eq "
-        "[System.Speech.Synthesis.VoiceGender]::Male} | Select-Object -First 1};"
-        "if($v){$s.SelectVoice($v.VoiceInfo.Name)};"
+        "$maleRu=@($voices | Where-Object {"
+        "$_.VoiceInfo.Gender -eq [System.Speech.Synthesis.VoiceGender]::Male -and "
+        "$_.VoiceInfo.Culture.Name -like 'ru*'});"
+        "if($maleRu.Count -gt 0){$v=$maleRu[0]}else{"
+        "$male=@($voices | Where-Object {$_.VoiceInfo.Gender -eq "
+        "[System.Speech.Synthesis.VoiceGender]::Male});"
+        "if($male.Count -gt 0){$v=$male[0]}else{"
+        "throw 'Не найден установленный мужской голос Windows. Установите мужской голос в параметрах речи Windows.'}};"
+        "$s.SelectVoice($v.VoiceInfo.Name);"
         "$s.Rate=0;$s.Volume=100;$s.Speak($t);$s.Dispose()"
     )
     subprocess.Popen(
