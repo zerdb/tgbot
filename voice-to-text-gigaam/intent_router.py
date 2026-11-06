@@ -68,7 +68,9 @@ def _is_natural_information_question(text: str) -> bool:
 def understand_command(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
 
-    # Настройки помощника — локальное действие, не зависящее от ИИ и интернет-квоты.
+    # Разделяем настройки Windows и настройки самого помощника.
+    if re.search(r"\b(настройки windows|параметры windows|системные настройки|параметры системы)\b", normalized):
+        return {"action": "open_settings", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|зайди в|перейди в)\b.*\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
 
