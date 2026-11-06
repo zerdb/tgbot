@@ -66,7 +66,7 @@ def _download_piper_voice_file(filename: str, expected_sha256: str | None = None
     try:
         with requests.get(url, stream=True, timeout=(20, 120)) as response:
             response.raise_for_status()
-            digest = hashlib.md5()
+            digest = hashlib.sha256()
             with tempfile.NamedTemporaryFile(
                 mode="wb", dir=_PIPER_MODEL_DIR, suffix=".part", delete=False
             ) as temporary:
