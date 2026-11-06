@@ -161,12 +161,16 @@ def start_recording(mode: str):
         _recording_mode = mode
         _recording = True
     try:
+        # Сначала мгновенно показываем уже подготовленную плашку, затем запускаем аудиопоток.
+        update_ui_status("ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ", recording=mode)
+        if _ui is not None:
+            _ui.root.update_idletasks()
+            _ui.root.update()
         _stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32", callback=audio_callback)
         _stream.start()
         key_name = "Right Ctrl+Right Shift" if mode == "text" else "правый Ctrl"
         purpose = "для ввода текста" if mode == "text" else "для голосовой команды"
         print(f"Идёт запись {purpose}. Отпустите {key_name}, чтобы выполнить.")
-        update_ui_status("ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ", recording=mode)
     except (sd.PortAudioError, OSError) as exc:
         with _lock:
             _recording = False
