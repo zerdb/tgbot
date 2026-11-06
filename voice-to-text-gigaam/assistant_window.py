@@ -301,7 +301,7 @@ class AssistantWindow:
             fill="#202124"
         )
         image = image.resize((size, size), Image.Resampling.LANCZOS)
-        self._mic_circle_image = ImageTk.PhotoImage(image)
+        self._mic_circle_image = ImageTk.PhotoImage(image, master=overlay)
         self._mic_canvas = tk.Canvas(
             frame, width=size, height=size, bg=transparent,
             highlightthickness=0, bd=0
