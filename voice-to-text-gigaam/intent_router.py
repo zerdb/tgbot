@@ -87,10 +87,10 @@ def understand_command(user_text: str) -> dict:
         return {"action": "organize_folder", "confidence": 1.0, "arguments": {}}
 
     # Голосовое управление общей системой заметок и дел.
-    done_match = re.search(r"\\b(отметь|пометь|закрой)\\b\\s+(.+?)\\s+(?:выполненным|выполненной|готовым|сделанным)$", normalized)
+    done_match = re.search(r"\b(отметь|пометь|закрой)\b\s+(.+?)\s+(?:выполненным|выполненной|готовым|сделанным)$", normalized)
     if done_match:
         return {"action": "complete_item", "confidence": 1.0, "arguments": {"item_text": done_match.group(2).strip()}}
-    note_match = re.match(r"^(?:запомни|сохрани заметку|добавь заметку|добавь запись)\\s+(.+)$", normalized)
+    note_match = re.match(r"^(?:запомни|сохрани заметку|добавь заметку|добавь запись)\s+(.+)$", normalized)
     if note_match:
         return {"action": "add_note", "confidence": 1.0, "arguments": {"note_text": note_match.group(1).strip()}}
     # Открытие раздела напоминаний и создание нового напоминания — разные намерения.
