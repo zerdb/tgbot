@@ -38,7 +38,7 @@ _splash.update()
 
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
 from reminders import start_reminder_service, stop_reminder_service, add_reminder, add_note, complete_item_by_text, deliver_due_reminders
-from file_search import search_web, search_files, start_file_search_ui
+from file_search import search_web, search_files, open_folder_by_name, start_file_search_ui
 from email_form import open_email_form
 from contact_form import open_contact_form
 from folder_organizer import open_folder_organizer
@@ -380,7 +380,7 @@ def handle_command(text: str):
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
-    keep_busy = action in ("search_files", "ai_chat", "read_unread_mail", "inspect_camera_image", "camera_question")
+    keep_busy = action in ("search_files", "open_folder", "ai_chat", "read_unread_mail", "inspect_camera_image", "camera_question")
     if action == "ai_chat":
         question = str(args.get("question") or text).strip()
         if _ui is not None:
@@ -422,6 +422,10 @@ def handle_command(text: str):
             print("Не нашёл подходящую активную запись. Открой заметки и дела, чтобы выбрать её.")
     elif action == "organize_folder": open_folder_organizer(parent)
     elif action == "search_web": search_web(str(args.get("query") or text))
+    elif action == "open_folder":
+        if _ui is not None:
+            _ui.set_busy_overlay("Ищу папку…")
+        open_folder_by_name(str(args.get("folder") or text), parent)
     elif action == "search_files":
         if _ui is not None:
             _ui.set_busy_overlay("Ищу файлы…")
