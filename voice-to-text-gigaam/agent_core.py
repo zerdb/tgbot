@@ -11,7 +11,7 @@ CONFIG_PATH = APP_DATA / "settings.json"
 MEMORY_PATH = APP_DATA / "assistant_memory.json"
 _LOCK = RLock()
 DEFAULTS = {
-    "ollama_model": "gemma4:31b",
+    "groq_model": "llama-3.3-70b-versatile",
     "mail_login": "zerdb@mail.ru",
     "imap_host": "imap.mail.ru",
     "imap_port": 993,
@@ -33,6 +33,7 @@ def load_settings() -> dict:
         # Remove obsolete API provider settings from older configurations.
         stored.pop("openrouter_base_url", None)
         stored.pop("openrouter_model", None)
+        stored.pop("ollama_model", None)
         return {**DEFAULTS, **stored}
 
 
@@ -66,28 +67,28 @@ def get_secret_env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
-def get_ollama_api_key() -> str:
-    """Read Ollama Cloud API key from Windows Credential Manager."""
+def get_groq_api_key() -> str:
+    """Read Groq API key from Windows Credential Manager."""
     try:
         import keyring
-        return keyring.get_password("GigaAMVoiceAssistant", "ollama_api_key") or ""
+        return keyring.get_password("GigaAMVoiceAssistant", "groq_api_key") or ""
     except Exception as exc:
-        print(f"Не удалось прочитать ключ Ollama Cloud: {exc}")
+        print(f"Не удалось прочитать ключ Groq: {exc}")
         return ""
 
 
-def set_ollama_api_key(api_key: str) -> None:
+def set_groq_api_key(api_key: str) -> None:
     api_key = str(api_key or "").strip()
     if not api_key:
-        raise ValueError("Ключ Ollama Cloud не может быть пустым.")
+        raise ValueError("Ключ Groq не может быть пустым.")
     import keyring
-    keyring.set_password("GigaAMVoiceAssistant", "ollama_api_key", api_key)
+    keyring.set_password("GigaAMVoiceAssistant", "groq_api_key", api_key)
 
 
-def delete_ollama_api_key() -> None:
+def delete_groq_api_key() -> None:
     import keyring
     try:
-        keyring.delete_password("GigaAMVoiceAssistant", "ollama_api_key")
+        keyring.delete_password("GigaAMVoiceAssistant", "groq_api_key")
     except keyring.errors.PasswordDeleteError:
         pass
 
