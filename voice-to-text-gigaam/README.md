@@ -93,7 +93,7 @@ Dictation hotkey: `right alt+right shift`. Voice-command hotkey: `right ctrl`.
 The application is split by responsibility so features can be maintained independently:
 
 - `main.py` — startup, microphone hotkeys, speech recognition and command routing.
-- `ollama_client.py` — shared direct connection to Ollama Cloud for chat and vision requests.
+- `groq_client.py` — shared direct connection to Groq for chat and vision requests.
 - `assistant_window.py` — Tkinter command guide and live microphone/listening status.
 - `windows_actions.py` — Windows actions: lock, reboot, settings, Downloads, Recycle Bin and screenshots.
 - `reminders.py` — unified notes, tasks and reminders storage, date parsing, scheduling and background notifications.\n- `reminders_window.py` — shared manager for notes, tasks, due dates and completed items.
@@ -111,13 +111,13 @@ The address book, file index and unified notes/tasks store are kept under `%LOCA
 After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Left Ctrl + Left Shift for dictation or Right Ctrl for a voice command; release the keys to process the audio. Close the window to exit.
 \n\nTo organize a folder, say **«разбери папку»** while holding Right Ctrl. Choose a folder to preview how its top-level files will be grouped. Nothing moves until you click **«Разложить файлы»** and confirm. Existing files are never overwritten; nested folders are left untouched.\n
 
-## Семантические команды и чат через Ollama Cloud
+## Семантические команды и чат через Groq
 
-GigaAM-v3 по-прежнему распознаёт речь локально. Модуль `intent_router.py` передаёт распознанный текст в Ollama Cloud, чтобы определить намерение по смыслу, а выполнение остаётся в Python и ограничено списком разрешённых действий. Основная модель по умолчанию — `gemma4:31b`; её можно изменить в настройках Zero Control. API-ключ Ollama Cloud вводится в настройках и хранится в Windows Credential Manager, а не в файлах проекта. Переменные окружения `OLLAMA_API_KEY` и `OLLAMA_MODEL` также поддерживаются. Установка приложения Ollama и скачивание весов не требуются: запросы идут напрямую на `https://ollama.com/v1/chat/completions`. В окне есть кнопка «Умная команда…» для ввода задачи своими словами.
+GigaAM-v3 по-прежнему распознаёт речь локально. Модуль `intent_router.py` передаёт распознанный текст в Groq, чтобы определить намерение по смыслу, а выполнение остаётся в Python и ограничено списком разрешённых действий. Основная модель по умолчанию — `llama-3.3-70b-versatile`; её можно изменить в настройках Zero Control. API-ключ Groq вводится в настройках и хранится в Windows Credential Manager, а не в файлах проекта. Переменные окружения `GROQ_API_KEY` и `GROQ_MODEL` также поддерживаются. Установка локального приложения и скачивание весов не требуются: запросы идут напрямую на `https://api.groq.com/openai/v1/chat/completions`. В окне есть кнопка «Умная команда…» для ввода задачи своими словами.
 
-Moondream остаётся резервной моделью для текстового помощника и отдельным вариантом анализа камеры. Для вопросов о кадре камера сначала использует Moondream, если его ключ настроен, а при отсутствии ключа или ошибке переключается на Ollama Cloud. Анализ экрана выполняется через Ollama Cloud с моделью, поддерживающей изображения.
+Moondream остаётся резервной моделью для текстового помощника и отдельным вариантом анализа камеры. Для вопросов о кадре камера сначала использует Moondream, если его ключ настроен, а при отсутствии ключа или ошибке переключается на Groq. Анализ экрана выполняется через Groq с моделью, поддерживающей изображения.
 
 
 ## Вопросы подключённому ИИ
 
-Скажи «спроси ИИ» и произнеси вопрос либо нажми кнопку «Спросить ИИ…» в главном окне. Запрос отправляется в Ollama Cloud; ответ появляется в отдельном окне. Распознавание голоса остаётся локальным, но текст вопроса и ответ обрабатываются выбранной облачной моделью Ollama.
+Скажи «спроси ИИ» и произнеси вопрос либо нажми кнопку «Спросить ИИ…» в главном окне. Запрос отправляется в Groq; ответ появляется в отдельном окне. Распознавание голоса остаётся локальным, но текст вопроса и ответ обрабатываются выбранной облачной моделью Groq.
