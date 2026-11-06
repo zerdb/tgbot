@@ -5,7 +5,12 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from agent_core import load_settings, save_settings, remember_note, forget_notes, clear_chat_history, get_camera_password, set_camera_password, delete_camera_password, get_moondream_api_key, set_moondream_api_key, delete_moondream_api_key
+from agent_core import (
+    load_settings, save_settings, remember_note, forget_notes, clear_chat_history,
+    get_camera_password, set_camera_password, delete_camera_password,
+    get_moondream_api_key, set_moondream_api_key, delete_moondream_api_key,
+    get_ollama_api_key, set_ollama_api_key, delete_ollama_api_key,
+)
 from dialog_utils import activate_modal
 
 
@@ -18,16 +23,15 @@ def open_settings_window(parent):
             return
         window = tk.Toplevel(parent)
         window.title("Настройки Zero Control")
-        window.geometry("680x760")
-        window.minsize(580, 680)
+        window.geometry("680x840")
+        window.minsize(580, 740)
         frame = ttk.Frame(window, padding=16)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Единые настройки помощника", font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="API-ключи берутся из переменных окружения. Камерный доступ хранится в защищённом хранилище Windows.", wraplength=570).pack(anchor="w", pady=(4, 12))
+        ttk.Label(frame, text="Ключ Ollama Cloud и доступ к камере хранятся в защищённом хранилище Windows.", wraplength=570).pack(anchor="w", pady=(4, 12))
         values = load_settings()
         fields = [
-            ("openrouter_model", "Модель OpenRouter"),
-            ("openrouter_base_url", "Адрес API"),
+            ("ollama_model", "Модель Ollama Cloud"),
             ("mail_login", "Почтовый логин"),
             ("imap_host", "IMAP-сервер"),
             ("imap_port", "IMAP-порт"),
@@ -38,6 +42,33 @@ def open_settings_window(parent):
             var = tk.StringVar(master=window, value=str(values.get(key, "")))
             ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(2, 8))
             vars_[key] = var
+
+        ollama_box = ttk.LabelFrame(frame, text="Ollama Cloud — основная ИИ-модель", padding=8)
+        ollama_box.pack(fill="x", pady=(2, 8))
+        ollama_var = tk.StringVar(master=window)
+        ttk.Entry(ollama_box, textvariable=ollama_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ollama_status = tk.StringVar(
+            master=window,
+            value="Ключ сохранён" if (os.getenv("OLLAMA_API_KEY", "").strip() or get_ollama_api_key()) else "Ключ не задан",
+        )
+        ttk.Label(ollama_box, textvariable=ollama_status).pack(anchor="w", pady=(6, 0))
+        def save_ollama_secret():
+            try:
+                set_ollama_api_key(ollama_var.get())
+                ollama_var.set("")
+                ollama_status.set("Ключ сохранён в защищённом хранилище Windows")
+                messagebox.showinfo("Ollama Cloud", "Ключ сохранён. Перезапусти помощника для применения.", parent=window)
+            except Exception as exc:
+                messagebox.showerror("Ollama Cloud", str(exc), parent=window)
+        def clear_ollama_secret():
+            try:
+                delete_ollama_api_key()
+                ollama_var.set("")
+                ollama_status.set("Ключ не задан — облачная модель недоступна")
+            except Exception as exc:
+                messagebox.showerror("Ollama Cloud", str(exc), parent=window)
+        ttk.Button(ollama_box, text="Сохранить ключ", command=save_ollama_secret).pack(side="left")
+        ttk.Button(ollama_box, text="Очистить", command=clear_ollama_secret).pack(side="left", padx=6)
 
         camera_box = ttk.LabelFrame(frame, text="Доступ к камере", padding=8)
         camera_box.pack(fill="x", pady=(2, 8))
@@ -74,7 +105,7 @@ def open_settings_window(parent):
                 set_moondream_api_key(moondream_var.get())
                 moondream_var.set("")
                 moondream_status.set("Ключ сохранён в защищённом хранилище Windows")
-                messagebox.showinfo("Moondream", "Ключ сохранён. Если OpenRouter будет недоступен, помощник автоматически попробует Moondream.", parent=window)
+                messagebox.showinfo("Moondream", "Ключ сохранён. Moondream останется резервной моделью помощника и камеры.", parent=window)
             except Exception as exc:
                 messagebox.showerror("Moondream", str(exc), parent=window)
         def clear_moondream_secret():
@@ -90,7 +121,8 @@ def open_settings_window(parent):
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(2, 8))
         status = (
-            "OpenRouter API key: настроен" if os.getenv("OPENROUTER_API_KEY") else "OpenRouter API key: не настроен"
+            "Ollama Cloud: подключена" if (os.getenv("OLLAMA_API_KEY", "").strip() or get_ollama_api_key())
+            else "Ollama Cloud: ключ не задан"
         ) + " · " + ("Пароль почты: настроен" if os.getenv("GIGAAM_MAIL_PASSWORD") else "Пароль почты: не настроен")
         ttk.Label(frame, text=status, wraplength=570).pack(anchor="w", pady=(4, 12))
 
