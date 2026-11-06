@@ -55,8 +55,8 @@ def open_reminders(parent):
         def save():
             value=text_box.get("1.0","end").strip(); due=due_var.get().strip()
             if not value: messagebox.showwarning("Запись","Введи текст.",parent=dialog); return
-            if due and not (due.startswith("через ") or due.startswith("завтра")):
-                messagebox.showwarning("Время","Используй «через 20 минут» или «завтра в 9».",parent=dialog); return
+            if due and not (due.startswith("через ") or due.startswith("завтра") or (len(due) == 16 and due[2] == "." and due[5] == ".")):
+                messagebox.showwarning("Время","Используй «через 20 минут», «завтра в 9» или дату ДД.ММ.ГГГГ ЧЧ:ММ.",parent=dialog); return
             if item:
                 ok=update_item(item["id"],value,due)
             elif due:
