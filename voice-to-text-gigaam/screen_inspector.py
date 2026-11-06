@@ -21,7 +21,7 @@ def _prepare_image(image):
 
 
 def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
-    """Send the current screenshot to the configured Ollama Cloud vision model."""
+    """Send the screenshot to Moondream; the Groq chat model is text-only."""
     prompt = (
         "Ты анализируешь актуальный снимок экрана Windows. Отвечай по-русски. "
         "Опирайся прежде всего на пиксели изображения; OCR ниже используй как подсказку. "
@@ -33,16 +33,12 @@ def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
         "Вопрос пользователя: " + question[:1500] +
         "\n\nТекст, распознанный локальным OCR:\n" + (ocr_text or "[Текст OCR не найден]")[:12000]
     )
-    from ollama_client import chat
-    return chat(
-        [{"role": "user", "content": [
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": "data:image/jpeg;base64," + image_data},
-        ]}],
-        temperature=0.2,
-        max_tokens=900,
-        timeout=90,
-    )
+    from agent_core import get_moondream_api_key
+    from camera_inspector import _ask_moondream
+    key = get_moondream_api_key()
+    if not key:
+        raise RuntimeError("Для анализа экрана нужен ключ Moondream: Groq llama-3.3-70b-versatile не поддерживает изображения.")
+    return _ask_moondream(image_data, key, prompt)
 
 
 def open_screen_inspector(parent):
@@ -106,7 +102,7 @@ def open_screen_inspector(parent):
         user_question = question.get().strip() or "Опиши содержимое изображения."
         if not messagebox.askyesno(
             "Передача снимка ИИ",
-            "В Ollama Cloud будет отправлен снимок экрана целиком и распознанный текст. "
+            "В Moondream будет отправлен снимок экрана целиком и распознанный текст. "
             "На снимке могут быть личные данные. Продолжить?",
             parent=win,
         ):
