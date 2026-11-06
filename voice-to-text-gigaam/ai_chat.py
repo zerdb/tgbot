@@ -23,7 +23,7 @@ def ask_ai(question: str, remember: bool = True) -> str:
             answer = moondream_chat(messages, temperature=0.4, max_tokens=1800)
             print("[ИИ] Ответ получен от резервной модели Moondream.", flush=True)
         except Exception as fallback_error:
-            raise RuntimeError("Ollama Cloud: %s\\nРезервная Moondream: %s" % (primary_error, fallback_error)) from fallback_error
+            raise RuntimeError("Ollama Cloud: %s\nРезервная Moondream: %s" % (primary_error, fallback_error)) from fallback_error
     if remember:
         save_ai_exchange(question, answer)
     return answer
