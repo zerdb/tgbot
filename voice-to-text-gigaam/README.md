@@ -56,7 +56,7 @@ PyTorch installation can differ by hardware. If you need a CUDA-enabled build, i
 
 Voice announcements use the local Piper TTS engine and the Russian **Denis (medium)** voice, not Windows SAPI voices. On the first spoken announcement, Zero Control installs the Piper Python package if needed and downloads the voice model (about 63 MB) into `models/piper`. This first setup requires an internet connection. After the model is downloaded, speech synthesis runs locally without internet access.
 
-The model is downloaded from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/ru/ru_RU/denis/medium). Its model card identifies the source dataset as CC0. Piper itself is distributed under GPL-3.0-or-later; review that license before redistributing an application bundle containing Piper.
+The model is downloaded from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/ru/ru_RU/denis/medium); the voice repository is marked MIT. Piper itself is distributed under GPL-3.0-or-later; review that license before redistributing an application bundle containing Piper.
 
 The voice model is not stored in GitHub. It is downloaded to the local project folder and verified with a checksum before use.
 
