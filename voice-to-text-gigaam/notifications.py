@@ -137,6 +137,12 @@ def _speak_with_piper(voice, text: str):
 
 def _speech_worker():
     voice = None
+    try:
+        # Предзагрузка начинается сразу при запуске приложения, без ожидания первой фразы.
+        voice = _load_piper_voice()
+    except Exception as exc:
+        print(f"[Озвучивание] Не удалось заранее загрузить Piper: {exc}", flush=True)
+
     while True:
         text = _speech_queue.get()
         try:
@@ -149,20 +155,25 @@ def _speech_worker():
             _speech_queue.task_done()
 
 
+def initialize_speech_engine():
+    """Start loading Piper in the background during application startup."""
+    global _speech_worker_started
+    with _speech_start_lock:
+        if _speech_worker_started:
+            return
+        worker = threading.Thread(
+            target=_speech_worker,
+            name="zero-control-piper-tts",
+            daemon=True,
+        )
+        worker.start()
+        _speech_worker_started = True
+
+
 def speak_text(message: str):
     """Queue text for asynchronous local Russian neural speech synthesis."""
     text = str(message or "").strip()
     if not text:
         return
-
-    global _speech_worker_started
-    with _speech_start_lock:
-        if not _speech_worker_started:
-            worker = threading.Thread(
-                target=_speech_worker,
-                name="zero-control-piper-tts",
-                daemon=True,
-            )
-            worker.start()
-            _speech_worker_started = True
+    initialize_speech_engine()
     _speech_queue.put(text)
