@@ -1,4 +1,4 @@
-"""AI chat with Ollama Cloud primary and Moondream automatic fallback."""
+"""AI chat with Groq primary and Moondream automatic fallback."""
 from __future__ import annotations
 
 
@@ -13,17 +13,17 @@ def ask_ai(question: str, remember: bool = True) -> str:
         {"role": "user", "content": question[:12000]},
     ]
     try:
-        from ollama_client import chat
+        from groq_client import chat
         answer = chat(messages, temperature=0.4, max_tokens=1800)
-        print("[ИИ] Ответ получен от основной модели Ollama Cloud.", flush=True)
+        print("[ИИ] Ответ получен от основной модели Groq.", flush=True)
     except Exception as primary_error:
-        print("[ИИ] Ollama Cloud недоступна (%s). Переключаюсь на Moondream." % primary_error, flush=True)
+        print("[ИИ] Groq недоступна (%s). Переключаюсь на Moondream." % primary_error, flush=True)
         try:
             from moondream_client import chat as moondream_chat
             answer = moondream_chat(messages, temperature=0.4, max_tokens=1800)
             print("[ИИ] Ответ получен от резервной модели Moondream.", flush=True)
         except Exception as fallback_error:
-            raise RuntimeError("Ollama Cloud: %s\nРезервная Moondream: %s" % (primary_error, fallback_error)) from fallback_error
+            raise RuntimeError("Groq: %s\nРезервная Moondream: %s" % (primary_error, fallback_error)) from fallback_error
     if remember:
         save_ai_exchange(question, answer)
     return answer
