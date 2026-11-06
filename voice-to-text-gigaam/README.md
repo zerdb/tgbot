@@ -110,11 +110,13 @@ The address book, file index and unified notes/tasks store are kept under `%LOCA
 After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Left Ctrl + Left Shift for dictation or Right Ctrl for a voice command; release the keys to process the audio. Close the window to exit.
 \n\nTo organize a folder, say **«разбери папку»** while holding Right Ctrl. Choose a folder to preview how its top-level files will be grouped. Nothing moves until you click **«Разложить файлы»** and confirm. Existing files are never overwritten; nested folders are left untouched.\n
 
-## Семантические команды через OpenRouter
+## Семантические команды и чат через Ollama Cloud
 
-GigaAM-v3 по-прежнему распознаёт речь локально. Модуль `intent_router.py` передаёт распознанный текст в OpenRouter, чтобы определить намерение по смыслу, а выполнение остаётся в Python и ограничено списком разрешённых действий. Настройки Windows: `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL` (по умолчанию `https://openrouter.ai/api/v1`) и `OPENROUTER_MODEL` (по умолчанию `openrouter/free`). В окне есть кнопка «Умная команда…» для ввода задачи своими словами.
+GigaAM-v3 по-прежнему распознаёт речь локально. Модуль `intent_router.py` передаёт распознанный текст в Ollama Cloud, чтобы определить намерение по смыслу, а выполнение остаётся в Python и ограничено списком разрешённых действий. Основная модель по умолчанию — `gemma4:31b`; её можно изменить в настройках Zero Control. API-ключ Ollama Cloud вводится в настройках и хранится в Windows Credential Manager, а не в файлах проекта. Переменные окружения `OLLAMA_API_KEY` и `OLLAMA_MODEL` также поддерживаются. Установка приложения Ollama и скачивание весов не требуются: запросы идут напрямую на `https://ollama.com/v1/chat/completions`. В окне есть кнопка «Умная команда…» для ввода задачи своими словами.
+
+Moondream остаётся резервной моделью для текстового помощника и камерного анализа, если Ollama Cloud недоступна. Анализ экрана и резервный анализ камеры используют Ollama Cloud с моделью, поддерживающей изображения.
 
 
 ## Вопросы подключённому ИИ
 
-Скажи «спроси ИИ» и произнеси вопрос либо нажми кнопку «Спросить ИИ…» в главном окне. Запрос отправляется в OpenRouter с настройками `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL` и `OPENROUTER_MODEL`; ответ появляется в отдельном окне. Распознавание голоса остаётся локальным, но текст вопроса и ответ обрабатываются выбранной облачной моделью OpenRouter.
+Скажи «спроси ИИ» и произнеси вопрос либо нажми кнопку «Спросить ИИ…» в главном окне. Запрос отправляется в Ollama Cloud; ответ появляется в отдельном окне. Распознавание голоса остаётся локальным, но текст вопроса и ответ обрабатываются выбранной облачной моделью Ollama.
