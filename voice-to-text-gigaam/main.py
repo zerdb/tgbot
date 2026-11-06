@@ -451,7 +451,8 @@ def _ask_ai_worker(question: str):
 
 def _camera_inspection_worker():
     try:
-        from camera_inspector import inspect_camera, speak
+        from camera_inspector import inspect_camera
+        from notifications import speak_text as speak
         present = inspect_camera()
         if present:
             speak("Начальник есть")
@@ -465,7 +466,8 @@ def _camera_inspection_worker():
 
 def _camera_question_worker(question: str):
     try:
-        from camera_inspector import inspect_camera_question, speak
+        from camera_inspector import inspect_camera_question
+        from notifications import speak_text as speak
         answer = inspect_camera_question(question)
         speak(answer)
         result = (question, answer, None)
