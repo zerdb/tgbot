@@ -277,60 +277,59 @@ class AssistantWindow:
         self.on_command(command)
 
     def _prepare_recording_overlay(self):
-        """Создаёт окно микрофона заранее, чтобы первое нажатие не тратило время на создание Tk-виджетов."""
+        """Создаёт компактный индикатор заранее, чтобы первое нажатие не тормозило."""
         overlay = tk.Toplevel(self.root)
         overlay.withdraw()
         overlay.overrideredirect(True)
         overlay.attributes("-topmost", True)
         overlay.attributes("-alpha", 0.94)
-        # Компактное круглое окно вместо прямоугольной плашки.
-        overlay.configure(bg="#202124")
-        overlay.attributes("-transparentcolor", "#202124")
-        frame = tk.Frame(overlay, bg="#202124", padx=0, pady=0)
+        transparent = "#00ff00"
+        overlay.configure(bg=transparent)
+        overlay.attributes("-transparentcolor", transparent)
+
+        frame = tk.Frame(overlay, bg=transparent, padx=0, pady=0)
         frame.pack()
-        self._mic_canvas = tk.Canvas(frame, width=84, height=84, bg="#202124",
-                                     highlightthickness=0, bd=0)
+        self._mic_canvas = tk.Canvas(
+            frame, width=112, height=112, bg=transparent,
+            highlightthickness=0, bd=0
+        )
         self._mic_canvas.pack()
-        self._mic_ring_outer = self._mic_canvas.create_oval(
-            7, 7, 77, 77, outline="#56302F", width=2)
-        self._mic_ring_inner = self._mic_canvas.create_oval(
-            16, 16, 68, 68, outline="#8E3432", width=2)
-        self._mic_icon = self._mic_canvas.create_text(
-            42, 42, text="🎙", font=("Segoe UI Emoji", 33), fill="#FF5148")
-        self._overlay_label = tk.Label(frame, text="", font=("Segoe UI", 11, "bold"),
-                                       fg="white", bg="#202124")
-        self._overlay_label.pack(pady=(5, 0))
-        self._mic_animation_phase = 0
-        self._mic_animation_job = None
+        # Тёмный круг вместо прежней квадратной подложки.
+        self._mic_canvas.create_oval(
+            4, 4, 108, 108, fill="#202124", outline="#202124"
+        )
+        # Микрофон оставлен прежнего размера и без анимации.
+        self._mic_canvas.create_text(
+            56, 56, text="🎙", font=("Segoe UI Emoji", 43), fill="#FF5148"
+        )
+        self._overlay_label = tk.Label(
+            frame, text="", font=("Segoe UI", 11, "bold"),
+            fg="white", bg="#202124", padx=12, pady=5
+        )
+        self._overlay_label.pack(pady=(0, 0))
+        self._overlay_base_text = ""
+        self._dots_phase = 0
+        self._dots_animation_job = None
         overlay.update_idletasks()
         self._recording_overlay = overlay
 
-    def _animate_recording_mic(self):
-        """Мягкая пульсация колец и значка микрофона во время записи."""
+    def _animate_recording_dots(self):
+        """Перебирает одну, две и три точки после подписи режима."""
         if self._recording_overlay is None or not self._recording_overlay.winfo_viewable():
-            self._mic_animation_job = None
+            self._dots_animation_job = None
             return
-        phase = self._mic_animation_phase
-        # Плавный цикл из 24 кадров: микрофон слегка увеличивается и уменьшается.
-        distance = abs(12 - phase)
-        scale = 1.0 + (12 - distance) / 120.0
-        radius_outer = 32 + (12 - distance) * 0.35
-        radius_inner = 23 + (12 - distance) * 0.30
-        self._mic_canvas.coords(self._mic_ring_outer,
-                                42-radius_outer, 42-radius_outer,
-                                42+radius_outer, 42+radius_outer)
-        self._mic_canvas.coords(self._mic_ring_inner,
-                                42-radius_inner, 42-radius_inner,
-                                42+radius_inner, 42+radius_inner)
-        self._mic_canvas.itemconfigure(self._mic_icon,
-                                       font=("Segoe UI Emoji", int(30 * scale)))
-        self._mic_animation_phase = (phase + 1) % 24
-        self._mic_animation_job = self.root.after(65, self._animate_recording_mic)
+        self._dots_phase = self._dots_phase % 3 + 1
+        self._overlay_label.configure(
+            text=self._overlay_base_text + "." * self._dots_phase
+        )
+        self._dots_animation_job = self.root.after(350, self._animate_recording_dots)
 
     def set_recording_overlay(self, active, mode=None):
         def apply():
             if active:
-                self._overlay_label.configure(text="СЛУШАЮ" if mode == "command" else "ДИКТОВКА")
+                self._overlay_base_text = "СЛУШАЮ" if mode == "command" else "ДИКТОВКА"
+                self._dots_phase = 0
+                self._overlay_label.configure(text=self._overlay_base_text + ".")
                 w = self._recording_overlay.winfo_reqwidth()
                 h = self._recording_overlay.winfo_reqheight()
                 x = (self.root.winfo_screenwidth() - w) // 2
@@ -338,15 +337,17 @@ class AssistantWindow:
                 self._recording_overlay.geometry(f"+{x}+{y}")
                 self._recording_overlay.deiconify()
                 self._recording_overlay.lift()
-                if self._mic_animation_job is None:
-                    self._animate_recording_mic()
+                if self._dots_animation_job is None:
+                    self._dots_animation_job = self.root.after(
+                        350, self._animate_recording_dots
+                    )
             elif self._recording_overlay is not None:
-                if self._mic_animation_job is not None:
+                if self._dots_animation_job is not None:
                     try:
-                        self.root.after_cancel(self._mic_animation_job)
+                        self.root.after_cancel(self._dots_animation_job)
                     except tk.TclError:
                         pass
-                    self._mic_animation_job = None
+                    self._dots_animation_job = None
                 self._recording_overlay.withdraw()
         try:
             self.root.after(0, apply)
