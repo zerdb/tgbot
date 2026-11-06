@@ -19,7 +19,7 @@ class AssistantWindow:
 
     def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None):
         self.root = tk.Tk()
-        self.root.title("GigaAM — голосовой помощник")
+        self.root.title("Zero Control")
         self.root.geometry("760x600")
         self.root.minsize(620, 500)
         self.root.configure(bg=self.BG)
@@ -86,7 +86,7 @@ class AssistantWindow:
         header.bind("<B1-Motion>", self._drag_window)
         brand = ttk.Frame(header)
         brand.pack(side="left", fill="x", expand=True)
-        ttk.Label(brand, text="GigaAM", font=("Segoe UI", 11, "bold"),
+        ttk.Label(brand, text="Zero Control", font=("Segoe UI", 11, "bold"),
                   foreground=self.ACCENT).pack(anchor="w")
         ttk.Label(brand, text="Голосовой помощник", style="Title.TLabel").pack(anchor="w", pady=(1, 0))
         ttk.Label(brand, text="Ваш помощник для голоса, файлов и повседневных задач",
