@@ -284,7 +284,7 @@ class AssistantWindow:
         overlay.attributes("-topmost", True)
         overlay.attributes("-alpha", 0.94)
         overlay.configure(bg="#202124")
-        frame = tk.Frame(overlay, bg="#202124", padx=14, pady=9)
+        frame = tk.Frame(overlay, bg="#202124", padx=14, pady=6)
         frame.pack()
         tk.Label(frame, text="🎙", font=("Segoe UI Emoji", 34),
                  fg="#ff3b30", bg="#202124").pack()
