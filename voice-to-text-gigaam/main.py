@@ -505,6 +505,11 @@ def main():
     from winotify import audio
     import torch
     from transformers import AutoModel
+    from notifications import initialize_speech_engine
+
+    # Загружаем Piper и голос Денис заранее в фоновом потоке.
+    # Интерфейс и загрузка GigaAM не ждут завершения этой операции.
+    initialize_speech_engine()
 
     _ui = AssistantWindow(
         on_close=shutdown,
