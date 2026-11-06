@@ -95,7 +95,7 @@ The application is split by responsibility so features can be maintained indepen
 - `main.py` — startup, microphone hotkeys, speech recognition and command routing.
 - `assistant_window.py` — Tkinter command guide and live microphone/listening status.
 - `windows_actions.py` — Windows actions: lock, reboot, settings, Downloads, Recycle Bin and screenshots.
-- `reminders.py` — reminder parsing, scheduling and background notifications.
+- `reminders.py` — unified notes, tasks and reminders storage, date parsing, scheduling and background notifications.\n- `reminders_window.py` — shared manager for notes, tasks, due dates and completed items.
 - `notifications.py` — Windows toast notifications and local Piper neural speech synthesis.
 - `email_manager.py` — Mail.ru SMTP sending and local address-book storage.
 - `contact_form.py` — desktop form for manually adding contacts.
@@ -103,7 +103,7 @@ The application is split by responsibility so features can be maintained indepen
 - `folder_organizer.py` — preview-first folder organizer with confirmation before moving files.
 - `file_indexer.py` — NTFS MFT indexing and SQLite/FTS search database.
 
-The address book and file index are stored under `%LOCALAPPDATA%\\GigaAMVoiceAssistant`, not in the repository. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
+The address book, file index and unified notes/tasks store are kept under `%LOCALAPPDATA%\\GigaAMVoiceAssistant`, not in the repository. Notes, tasks and reminders use one record format: text, creation time, optional reminder time and completion state. Existing reminder data, clipboard notes and saved AI-memory notes are imported automatically the first time the unified store is opened; original files are left untouched. Voice examples: **«запомни купить фильтр»**, **«напомни завтра в 9 позвонить»**, **«отметь фильтр выполненным»**, **«открой напоминания»**. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
 
 ## Tkinter interface
 
