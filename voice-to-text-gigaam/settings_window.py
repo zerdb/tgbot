@@ -32,8 +32,8 @@ def open_settings_window(parent):
 
         window = tk.Toplevel(parent)
         window.title("Настройки Zero Control")
-        window.geometry("720x780")
-        window.minsize(620, 560)
+        window.geometry("660x690")
+        window.minsize(580, 500)
         window.configure(bg=BG)
 
         style = ttk.Style(window)
@@ -48,12 +48,12 @@ def open_settings_window(parent):
         style.configure("Card.TLabel", background=SURFACE, foreground=TEXT, font=("Segoe UI", 9))
         style.configure("Heading.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 17, "bold"))
         style.configure("CardTitle.TLabel", background=SURFACE, foreground=TEXT, font=("Segoe UI", 10, "bold"))
-        style.configure("TEntry", padding=(9, 7), fieldbackground="#FFFFFF",
+        style.configure("TEntry", padding=(7, 4), fieldbackground="#FFFFFF",
                         foreground=TEXT, bordercolor=BORDER, lightcolor=BORDER,
                         darkcolor=BORDER, insertcolor=TEXT)
         style.configure("TCheckbutton", background=SURFACE, foreground=TEXT, font=("Segoe UI", 9))
         style.map("TCheckbutton", background=[("active", SURFACE)])
-        style.configure("TButton", font=("Segoe UI", 9), padding=(12, 8),
+        style.configure("TButton", font=("Segoe UI", 9), padding=(9, 5),
                         background="#FFFFFF", foreground=TEXT, bordercolor=BORDER)
         style.map("TButton", background=[("active", "#F0EFFF")],
                   foreground=[("active", ACCENT)])
@@ -67,7 +67,7 @@ def open_settings_window(parent):
         vars_ = {}
 
         # Верхняя часть окна остаётся неподвижной, прокручивается только содержимое.
-        header = ttk.Frame(window, style="App.TFrame", padding=(20, 16, 20, 12))
+        header = ttk.Frame(window, style="App.TFrame", padding=(16, 10, 16, 8))
         header.pack(fill="x")
         ttk.Label(header, text="Настройки", style="Heading.TLabel").pack(anchor="w")
         ttk.Label(
@@ -77,7 +77,7 @@ def open_settings_window(parent):
         ).pack(anchor="w", pady=(4, 0))
 
         content_host = tk.Frame(window, bg=BG)
-        content_host.pack(fill="both", expand=True, padx=20)
+        content_host.pack(fill="both", expand=True, padx=16)
         canvas = tk.Canvas(content_host, bg=BG, highlightthickness=0, bd=0)
         scrollbar = ttk.Scrollbar(content_host, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -100,23 +100,29 @@ def open_settings_window(parent):
         def card(title, hint=None):
             outer = tk.Frame(content, bg=SURFACE, highlightthickness=1,
                              highlightbackground=BORDER, bd=0)
-            outer.pack(fill="x", pady=(0, 12))
-            inner = ttk.Frame(outer, style="Card.TFrame", padding=(15, 12))
+            outer.pack(fill="x", pady=(0, 8))
+            inner = ttk.Frame(outer, style="Card.TFrame", padding=(11, 8))
             inner.pack(fill="x")
             ttk.Label(inner, text=title, style="CardTitle.TLabel").pack(anchor="w")
             if hint:
                 ttk.Label(inner, text=hint, style="Card.TLabel",
-                          wraplength=610).pack(anchor="w", pady=(3, 9))
+                          wraplength=590).pack(anchor="w", pady=(2, 5))
             return inner
 
         def add_field(container, key, label):
-            ttk.Label(container, text=label, style="Card.TLabel").pack(anchor="w", pady=(7, 3))
+            index = len(vars_)
+            cell = ttk.Frame(container, style="Card.TFrame")
+            cell.grid(row=index // 2, column=index % 2, sticky="ew",
+                      padx=(0 if index % 2 == 0 else 10, 0), pady=3)
+            ttk.Label(cell, text=label, style="Card.TLabel").pack(anchor="w", pady=(1, 2))
             var = tk.StringVar(master=window, value=str(values.get(key, "")))
-            ttk.Entry(container, textvariable=var).pack(fill="x")
+            ttk.Entry(cell, textvariable=var).pack(fill="x")
             vars_[key] = var
 
         general = card("Подключение и почта",
                        "Основные параметры API и почтового подключения.")
+        general.columnconfigure(0, weight=1)
+        general.columnconfigure(1, weight=1)
         for key, label in [
             ("openrouter_model", "Модель OpenRouter"),
             ("openrouter_base_url", "Адрес API"),
@@ -133,7 +139,7 @@ def open_settings_window(parent):
         camera_row.pack(fill="x")
         ttk.Entry(camera_row, textvariable=camera_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
         camera_status = tk.StringVar(master=window, value="Пароль сохранён" if get_camera_password() else "Пароль не сохранён")
-        ttk.Label(camera, textvariable=camera_status, style="Card.TLabel").pack(anchor="w", pady=(7, 0))
+        ttk.Label(camera, textvariable=camera_status, style="Card.TLabel").pack(anchor="w", pady=(4, 0))
 
         def save_camera_secret():
             try:
@@ -163,7 +169,7 @@ def open_settings_window(parent):
         moon_row.pack(fill="x")
         ttk.Entry(moon_row, textvariable=moondream_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
         moondream_status = tk.StringVar(master=window, value="Ключ сохранён" if get_moondream_api_key() else "Ключ не задан")
-        ttk.Label(moondream, textvariable=moondream_status, style="Card.TLabel").pack(anchor="w", pady=(7, 0))
+        ttk.Label(moondream, textvariable=moondream_status, style="Card.TLabel").pack(anchor="w", pady=(4, 0))
 
         def save_moondream_secret():
             try:
@@ -196,7 +202,7 @@ def open_settings_window(parent):
             "Пароль почты: настроен" if os.getenv("GIGAAM_MAIL_PASSWORD") else "Пароль почты: не настроен"
         )
         ttk.Label(privacy, text=api_status, style="Card.TLabel",
-                  wraplength=610).pack(anchor="w", pady=(8, 0))
+                  wraplength=610).pack(anchor="w", pady=(5, 0))
 
         memory = card("Память помощника",
                       "В память попадают только заметки, которые ты явно попросишь сохранить.")
@@ -220,7 +226,7 @@ def open_settings_window(parent):
                 messagebox.showinfo("История", "История диалога очищена.", parent=window)
 
         memory_actions = ttk.Frame(memory, style="Card.TFrame")
-        memory_actions.pack(fill="x", pady=(8, 0))
+        memory_actions.pack(fill="x", pady=(5, 0))
         ttk.Button(memory_actions, text="Запомнить заметку…", command=add_memory).pack(side="left")
         ttk.Button(memory_actions, text="Очистить заметки", command=clear_memory).pack(side="left", padx=(7, 0))
         ttk.Button(memory_actions, text="Очистить историю", command=clear_history).pack(side="left", padx=(7, 0))
@@ -240,7 +246,7 @@ def open_settings_window(parent):
         footer = tk.Frame(window, bg=SURFACE, highlightthickness=1,
                           highlightbackground=BORDER, bd=0)
         footer.pack(side="bottom", fill="x")
-        footer_inner = ttk.Frame(footer, style="Card.TFrame", padding=(20, 11))
+        footer_inner = ttk.Frame(footer, style="Card.TFrame", padding=(14, 7))
         footer_inner.pack(fill="x")
         ttk.Button(footer_inner, text="Закрыть", command=window.destroy).pack(side="right")
         ttk.Button(footer_inner, text="Сохранить", style="Primary.TButton",
