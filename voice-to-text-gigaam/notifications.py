@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import importlib
-import io
 import os
 import queue
 import subprocess
 import sys
 import tempfile
 import threading
-import wave
 from pathlib import Path
 
 import requests
@@ -31,28 +30,34 @@ _PIPER_MODEL_URL = (
     "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
     "ru/ru_RU/denis/medium/"
 )
-_PIPER_FILES = {
-    _PIPER_MODEL_NAME: "76c2f14e521fef3ed574f97ad492728e",
-    _PIPER_MODEL_NAME + ".json": "e3df5957c07647cab05cf9910ef3ede0",
-}
+_PIPER_MODEL_SHA256 = "15fab56e11a097858ee115545d0f697fc2a316c41a291a5362349fb870411b0a"
 
 _speech_queue: queue.Queue[str] = queue.Queue()
 _speech_start_lock = threading.Lock()
 _speech_worker_started = False
 
 
-def _file_md5(path: Path) -> str:
-    digest = hashlib.md5()
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
     with path.open("rb") as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
 
 
-def _download_piper_voice_file(filename: str, expected_md5: str) -> Path:
+def _download_piper_voice_file(filename: str, expected_sha256: str | None = None) -> Path:
     destination = _PIPER_MODEL_DIR / filename
-    if destination.is_file() and _file_md5(destination) == expected_md5:
-        return destination
+    if destination.is_file():
+        if filename.endswith(".json"):
+            try:
+                with destination.open("r", encoding="utf-8") as source:
+                    config = json.load(source)
+                if config.get("audio", {}).get("sample_rate") and config.get("phoneme_id_map"):
+                    return destination
+            except (OSError, ValueError):
+                pass
+        elif expected_sha256 and _file_sha256(destination) == expected_sha256:
+            return destination
 
     _PIPER_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     url = _PIPER_MODEL_URL + filename + "?download=true"
@@ -70,8 +75,13 @@ def _download_piper_voice_file(filename: str, expected_md5: str) -> Path:
                     if chunk:
                         temporary.write(chunk)
                         digest.update(chunk)
-        if digest.hexdigest() != expected_md5:
-            raise RuntimeError(f"Контрольная сумма файла {filename} не совпала.")
+        if expected_sha256 and digest.hexdigest() != expected_sha256:
+            raise RuntimeError(f"SHA-256 файла {filename} не совпала.")
+        if filename.endswith(".json"):
+            with temporary_path.open("r", encoding="utf-8") as source:
+                config = json.load(source)
+            if not config.get("audio", {}).get("sample_rate") or not config.get("phoneme_id_map"):
+                raise RuntimeError(f"Файл конфигурации голоса {filename} повреждён.")
         os.replace(temporary_path, destination)
         temporary_path = None
         print(f"[Озвучивание] Файл готов: {filename}", flush=True)
@@ -104,12 +114,8 @@ def _ensure_piper_installed():
 
 def _load_piper_voice():
     piper = _ensure_piper_installed()
-    model_path = _download_piper_voice_file(
-        _PIPER_MODEL_NAME, _PIPER_FILES[_PIPER_MODEL_NAME]
-    )
-    _download_piper_voice_file(
-        _PIPER_MODEL_NAME + ".json", _PIPER_FILES[_PIPER_MODEL_NAME + ".json"]
-    )
+    model_path = _download_piper_voice_file(_PIPER_MODEL_NAME, _PIPER_MODEL_SHA256)
+    _download_piper_voice_file(_PIPER_MODEL_NAME + ".json")
     print("[Озвучивание] Загружаю русский голос Denis в память…", flush=True)
     voice = piper.PiperVoice.load(str(model_path))
     print("[Озвучивание] Локальный голос Denis готов.", flush=True)
@@ -117,16 +123,16 @@ def _load_piper_voice():
 
 
 def _speak_with_piper(voice, text: str):
-    import sounddevice as sd
-    import soundfile as sf
+    import winsound
 
-    audio_buffer = io.BytesIO()
-    with wave.open(audio_buffer, "wb") as wav_file:
-        voice.synthesize_wav(text, wav_file)
-    audio_buffer.seek(0)
-    samples, sample_rate = sf.read(audio_buffer, dtype="float32")
-    if samples.size:
-        sd.play(samples, sample_rate, blocking=True)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temporary:
+        wav_path = Path(temporary.name)
+    try:
+        with wav_path.open("wb") as wav_file:
+            voice.synthesize_wav(text, wav_file)
+        winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
+    finally:
+        wav_path.unlink(missing_ok=True)
 
 
 def _speech_worker():
