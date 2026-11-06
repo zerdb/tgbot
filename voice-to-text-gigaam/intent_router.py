@@ -79,14 +79,14 @@ def understand_command(user_text: str) -> dict:
 
     # Открытие произвольной папки — локальное намерение, поиск пути выполняет Python/MFT.
     folder_match = re.search(
-        r"\\b(?:открой|открыть|покажи|показать|зайди в|зайти в|перейди в|перейти в)\\b\\s+"
-        r"(?:(?:мне )?(?:папку|директорию|каталог)\\s+)?(.+)$",
+        r"\b(?:открой|открыть|покажи|показать|зайди в|зайти в|перейди в|перейти в)\\b\\s+"
+        r"(?:(?:мне )?(?:папку|директорию|каталог)\s+)?(.+)$",
         user_text.strip(),
         flags=re.IGNORECASE,
     )
-    if folder_match and re.search(r"\\b(папк|директор|каталог|system\\s*32|system32|систем)\\b", normalized):
+    if folder_match and re.search(r"\b(папк|директор|каталог|system\s*32|system32|систем)\b", normalized):
         folder_name = folder_match.group(1).strip().strip('"«»').rstrip(" .,!?:;")
-        folder_name = re.sub(r"^(?:папку|директорию|каталог)\\s+", "", folder_name, flags=re.IGNORECASE)
+        folder_name = re.sub(r"^(?:папку|директорию|каталог)\s+", "", folder_name, flags=re.IGNORECASE)
         if folder_name:
             return {"action": "open_folder", "confidence": 1.0, "arguments": {"folder": folder_name}}
 
