@@ -286,7 +286,12 @@ def _parse_search_request_ai(raw_query: str) -> dict:
     for value in raw_terms[:8]:
         if isinstance(value, str):
             term = re.sub(r"[^a-zа-яё0-9_.-]", "", value.casefold().replace("ё", "е"))
-            if len(term) > 1 and term not in terms:
+            ignored_terms = {
+                "все", "всех", "файл", "файлы", "файлов", "документ", "документы",
+                "документов", "word", "ворд", "excel", "эксель", "pdf", "пдф", "пфд",
+                "формат", "формата", "формате", "найди", "поищи", "найти", "поискать",
+            }
+            if len(term) > 1 and term not in ignored_terms and term not in terms:
                 terms.append(term)
 
     raw_extensions = data.get("extensions", [])
