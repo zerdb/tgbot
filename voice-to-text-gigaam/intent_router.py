@@ -4,7 +4,7 @@ import json, re
 ACTIONS = {
  "add_contact": "Добавить нового человека в локальную адресную книгу контактов и открыть пустую карточку.",
  "open_contacts": "Открыть общую адресную книгу контактов.",
- "open_assistant_settings": "Открыть настройки GigaAM.",
+ "open_assistant_settings": "Открыть настройки Zero Control.",
  "read_unread_mail": "Прочитать и кратко пересказать непрочитанные письма через IMAP и ИИ.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
  "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
@@ -168,7 +168,7 @@ def understand_command(user_text: str) -> dict:
     camera_question = re.search(r"\b(что|кто|сколько|есть|видно|видишь|опиши|день|ночь|машин|людей|человек|сейчас)\b", normalized)
     if camera_context and camera_question:
         return {"action": "camera_question", "confidence": 1.0, "arguments": {"question": user_text.strip()}}
-    if re.search(r"\b(настройки помощника|настройки gigaam|настройки гигаам)\b", normalized):
+    if re.search(r"\b(настройки помощника|настройки zero control)\b", normalized):
         return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
         return {"action": "read_unread_mail", "confidence": 1.0, "arguments": {}}
