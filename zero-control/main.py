@@ -624,17 +624,17 @@ def main():
             print(f"[GUI] Получено действие из очереди: {ui_action}", flush=True)
             try:
                 if ui_action == "add_contact":
-                    print("[GUI] Открываю адресную книгу.", flush=True)
-                    open_contact_form(parent=_ui.root, start_new=bool(value))
-                    print("[GUI] Вызов адресной книги завершён.", flush=True)
+                    print("[GUI] Открываю раздел контактов почтового клиента.", flush=True)
+                    open_mail_client(_ui.root, initial_tab="contacts", start_new_contact=bool(value))
                 elif ui_action == "email_compose":
-                    print("[GUI] Открываю окно нового письма.", flush=True)
-                    open_email_form(
-                        parent=_ui.root,
-                        add_files_on_open=bool(value.get("attach_copied_files", False)) if isinstance(value, dict) else bool(value),
-                        recipient_name=str(value.get("recipient_name") or "") if isinstance(value, dict) else "",
+                    print("[GUI] Открываю редактор письма в почтовом клиенте.", flush=True)
+                    options = value if isinstance(value, dict) else {}
+                    open_mail_client(
+                        _ui.root,
+                        initial_tab="compose",
+                        add_files_on_open=bool(options.get("attach_copied_files", False)),
+                        recipient_name=str(options.get("recipient_name") or ""),
                     )
-                    print("[GUI] Вызов формы письма завершён.", flush=True)
                 elif ui_action == "camera_question":
                     _ui.set_busy_overlay("Получаю кадр и анализирую вопрос…")
                     threading.Thread(target=_camera_question_worker, args=(str(value or ""),), daemon=True, name="camera-question").start()
