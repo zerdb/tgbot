@@ -123,7 +123,7 @@ def _parse_search_request(raw_query: str) -> dict:
         filters["start"] = filters["end"].replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         text = re.sub(r"\b(?:прошл\w*\s+месяц|за\s+месяц)\b", " ", text)
     else:
-        months = {"январ": 1, "феврал": 2, "март": 3, "апрел": 4, "ма": 5, "июн": 6,
+        months = {"январ": 1, "феврал": 2, "март": 3, "апрел": 4, "май": 5, "июн": 6,
                   "июл": 7, "август": 8, "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12}
         for stem, month in months.items():
             m = re.search(r"\b" + stem + r"[а-я]*\b", text)
