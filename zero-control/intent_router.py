@@ -7,7 +7,7 @@ ACTIONS = {
  "open_assistant_settings": "Открыть настройки Zero Control.",
  "read_unread_mail": "Прочитать и кратко пересказать непрочитанные письма через IMAP и ИИ.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
- "email_compose": "Создать письмо; если просят отправить/прикрепить файл, attach_copied_files=true.",
+ "email_compose": "Подготовить письмо; если просят отправить/прикрепить файлы, attach_copied_files=true. Если назван получатель, передай его имя в recipient_name.",
  "camera_question": "Получить свежий кадр камеры и ответить на вопрос пользователя по изображению; question — вопрос.",
  "save_note": "Сохранить буфер обмена как заметку.",
  "add_note": "Сохранить произнесённый текст как заметку без срока; note_text — текст записи.",
@@ -33,11 +33,11 @@ ACTIONS = {
 SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
 Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
 Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), folder (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
+Допустимые аргументы: attach_copied_files (boolean), recipient_name (string), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), folder (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
 Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
 Если пользователь просит показать, открыть или посмотреть список контактов — выбери open_contacts.
 Фразы «добавь в контакты», «добавь контакт», «сохрани в адресную книгу», «запиши контакт» означают add_contact.
-Просьба отправить/переслать файл или документ по почте => email_compose и attach_copied_files=true.
+Просьба отправить/переслать файлы или документы, в том числе формулировки «отправь файлы Мазярову» и «отправь файлы на почту Мазярову», => email_compose, attach_copied_files=true. Если назван человек, извлеки recipient_name в именительном падеже, сохранив фамилию/имя; не выдумывай адрес. Адресата выбирают только из существующей адресной книги.
 Просто создать письмо => email_compose и attach_copied_files=false.
 Для напоминания передай исходную фразу в reminder_text. Если пользователь говорит «запомни», «сохрани заметку» с произнесённым текстом или «добавь запись», выбери add_note и передай текст в note_text. Если просит отметить запись выполненной, выбери complete_item и передай название или фрагмент в item_text.
 Если просят открыть корзину/мусорное ведро — open_recycle_bin, НЕ open_downloads и НЕ empty_recycle_bin.
@@ -135,7 +135,7 @@ def understand_command(user_text: str) -> dict:
         return {"action": "reminder", "confidence": 1.0, "arguments": {"reminder_text": user_text.strip()}}
 
     # Почта: создание/отправка письма открывает форму; само отправление только после кнопки пользователя.
-    if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт|письм|email|емейл)", normalized):
+    if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт|письм|email|емейл)", normalized) and not re.search(r"\b(файл|файлы|документ|документы|вложени)", normalized):
         attach = bool(re.search(r"\b(файл|файлы|документ|документы|вложени)", normalized))
         return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": attach}}
     if re.search(r"\b(создай|создать|напиши|написать|составь|составить)\b.*\b(письмо|письмецо|email)", normalized):
@@ -264,5 +264,5 @@ def understand_command(user_text: str) -> dict:
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","note_text","item_text","query","question","app","folder","export_format") and isinstance(v,(str,bool))}
+    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","recipient_name","reminder_text","note_text","item_text","query","question","app","folder","export_format") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}
