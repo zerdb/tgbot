@@ -23,12 +23,12 @@ def open_settings_window(parent):
             return
         window = tk.Toplevel(parent)
         window.title("Настройки Zero Control")
-        window.geometry("680x840")
-        window.minsize(580, 740)
-        frame = ttk.Frame(window, padding=16)
+        window.geometry("640x740")
+        window.minsize(540, 600)
+        frame = ttk.Frame(window, padding=10)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="Единые настройки помощника", font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="Ключ Groq и доступ к камере хранятся в защищённом хранилище Windows.", wraplength=570).pack(anchor="w", pady=(4, 12))
+        ttk.Label(frame, text="Ключ Groq и доступ к камере хранятся в защищённом хранилище Windows.", wraplength=570).pack(anchor="w", pady=(2, 6))
         values = load_settings()
         fields = [
             ("groq_model", "Модель Groq"),
@@ -40,11 +40,11 @@ def open_settings_window(parent):
         for key, label in fields:
             ttk.Label(frame, text=label).pack(anchor="w")
             var = tk.StringVar(master=window, value=str(values.get(key, "")))
-            ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(2, 8))
+            ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(1, 4))
             vars_[key] = var
 
-        groq_box = ttk.LabelFrame(frame, text="Groq — основная ИИ-модель", padding=8)
-        groq_box.pack(fill="x", pady=(2, 8))
+        groq_box = ttk.LabelFrame(frame, text="Groq — основная ИИ-модель", padding=6)
+        groq_box.pack(fill="x", pady=(1, 4))
         groq_var = tk.StringVar(master=window)
         ttk.Entry(groq_box, textvariable=groq_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
         groq_status = tk.StringVar(
@@ -70,8 +70,8 @@ def open_settings_window(parent):
         ttk.Button(groq_box, text="Сохранить ключ", command=save_groq_secret).pack(side="left")
         ttk.Button(groq_box, text="Очистить", command=clear_groq_secret).pack(side="left", padx=6)
 
-        camera_box = ttk.LabelFrame(frame, text="Доступ к камере", padding=8)
-        camera_box.pack(fill="x", pady=(2, 8))
+        camera_box = ttk.LabelFrame(frame, text="Доступ к камере", padding=6)
+        camera_box.pack(fill="x", pady=(1, 4))
         camera_var = tk.StringVar(master=window)
         ttk.Entry(camera_box, textvariable=camera_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
         camera_status = tk.StringVar(master=window, value="Сохранено" if get_camera_password() else "Не сохранено")
@@ -94,8 +94,8 @@ def open_settings_window(parent):
         ttk.Button(camera_box, text="Сохранить", command=save_camera_secret).pack(side="left")
         ttk.Button(camera_box, text="Очистить", command=clear_camera_secret).pack(side="left", padx=6)
 
-        moondream_box = ttk.LabelFrame(frame, text="Moondream — резервная ИИ-модель помощника и камеры", padding=8)
-        moondream_box.pack(fill="x", pady=(2, 8))
+        moondream_box = ttk.LabelFrame(frame, text="Moondream — резервная ИИ-модель помощника и камеры", padding=6)
+        moondream_box.pack(fill="x", pady=(1, 4))
         moondream_var = tk.StringVar(master=window)
         ttk.Entry(moondream_box, textvariable=moondream_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
         moondream_status = tk.StringVar(master=window, value="Ключ сохранён" if get_moondream_api_key() else "Ключ не задан")
@@ -119,14 +119,14 @@ def open_settings_window(parent):
         ttk.Button(moondream_box, text="Очистить", command=clear_moondream_secret).pack(side="left", padx=6)
 
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
-        ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(2, 8))
+        ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(1, 4))
         clean_dictation = tk.BooleanVar(master=window, value=bool(values.get("clean_dictation_with_ai", False)))
-        ttk.Checkbutton(frame, text="Очищать текст диктовки с помощью ИИ", variable=clean_dictation).pack(anchor="w", pady=(2, 8))
+        ttk.Checkbutton(frame, text="Очищать текст диктовки с помощью ИИ", variable=clean_dictation).pack(anchor="w", pady=(1, 4))
         status = (
             "Ключ Groq: сохранён" if (os.getenv("GROQ_API_KEY", "").strip() or get_groq_api_key())
             else "Ключ Groq: не задан"
         ) + " · " + ("Пароль почты: настроен" if os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("GIGAAM_MAIL_PASSWORD")) else "Пароль почты: не настроен")
-        ttk.Label(frame, text=status, wraplength=570).pack(anchor="w", pady=(4, 12))
+        ttk.Label(frame, text=status, wraplength=570).pack(anchor="w", pady=(2, 6))
 
         def save():
             payload = {key: var.get() for key, var in vars_.items()}
@@ -140,8 +140,8 @@ def open_settings_window(parent):
             messagebox.showinfo("Настройки", "Настройки сохранены. Перезапусти помощника для применения ко всем модулям.", parent=window)
             window.destroy()
 
-        memory = ttk.LabelFrame(frame, text="Память помощника", padding=8)
-        memory.pack(fill="x", pady=(6, 10))
+        memory = ttk.LabelFrame(frame, text="Память помощника", padding=6)
+        memory.pack(fill="x", pady=(3, 5))
         ttk.Label(memory, text="В память попадают только заметки, которые ты явно попросишь сохранить.").pack(anchor="w")
         def add_memory():
             note = simpledialog.askstring("Память помощника", "Что помощник должен помнить?", parent=window)
@@ -156,7 +156,7 @@ def open_settings_window(parent):
                 forget_notes()
                 messagebox.showinfo("Память", "Сохранённые заметки очищены.", parent=window)
         memory_buttons = ttk.Frame(memory)
-        memory_buttons.pack(fill="x", pady=(5, 0))
+        memory_buttons.pack(fill="x", pady=(3, 0))
         ttk.Button(memory_buttons, text="Запомнить заметку…", command=add_memory).pack(side="left")
         ttk.Button(memory_buttons, text="Очистить заметки", command=clear_memory).pack(side="left", padx=8)
         def clear_history():
