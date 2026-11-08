@@ -13,7 +13,7 @@ from dialog_utils import center_window, apply_modern_style
 def open_workspace(parent):
     win = tk.Toplevel(parent)
     apply_modern_style(win)
-    win.title("GigaAM — файлы")
+    win.title("Zero Control — файлы")
     win.geometry("760x440")
     win.minsize(620, 360)
 
