@@ -12,6 +12,12 @@ from pathlib import Path
 import tkinter as tk
 
 from keyboard_listener import KeyboardListener
+from background_workers import (
+    ask_ai_worker,
+    camera_inspection_worker,
+    camera_question_worker,
+    mail_reader_worker,
+)
 
 # Показываем заставку до импорта модулей приложения.
 _splash = tk.Tk()
@@ -41,7 +47,6 @@ from reminders import start_reminder_service, stop_reminder_service, add_reminde
 from file_search import search_web, search_files, open_folder_by_name, start_file_search_ui
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow, show_ai_answer
-from ai_chat import ask_ai
 from mail_client import open_mail_client
 from workspace_window import open_workspace
 from reminders_window import open_reminders
@@ -441,52 +446,6 @@ def transcribe_and_execute(audio_data: np.ndarray):
         update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
 
 
-def _ask_ai_worker(question: str):
-    try:
-        answer = ask_ai(question)
-        result = (question, answer, None)
-    except Exception as exc:
-        result = (question, None, str(exc))
-    _ui_actions.put(("ai_chat_result", result))
-
-
-def _camera_inspection_worker():
-    try:
-        from camera_inspector import inspect_camera
-        from notifications import speak_text as speak
-        present = inspect_camera()
-        if present:
-            speak("Начальник есть")
-            result = ("Начальник есть", None)
-        else:
-            speak("Начальника нет")
-            result = ("Начальника нет", None)
-    except Exception as exc:
-        result = ("", str(exc))
-    _ui_actions.put(("camera_inspection_result", result))
-
-def _camera_question_worker(question: str):
-    try:
-        from camera_inspector import inspect_camera_question
-        from notifications import speak_text as speak
-        answer = inspect_camera_question(question)
-        speak(answer)
-        result = (question, answer, None)
-    except Exception as exc:
-        result = (question, None, str(exc))
-    _ui_actions.put(("camera_question_result", result))
-
-
-def _mail_reader_worker():
-    try:
-        from mail_reader import summarize_unread
-        answer = summarize_unread()
-        result = ("Сводка непрочитанных писем", answer, None)
-    except Exception as exc:
-        result = ("Сводка непрочитанных писем", None, str(exc))
-    _ui_actions.put(("ai_chat_result", result))
-
-
 def main():
     global _ui, _ui_thread_id, _keyboard_listener, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
 
@@ -598,7 +557,7 @@ def main():
                     show_screen_snapshot(_ui.root)
                 elif ui_action == "camera_question":
                     _ui.set_busy_overlay("Получаю кадр и анализирую вопрос…")
-                    threading.Thread(target=_camera_question_worker, args=(str(value or ""),), daemon=True, name="camera-question").start()
+                    threading.Thread(target=camera_question_worker, args=(str(value or ""), _ui_actions), daemon=True, name="camera-question").start()
                 elif ui_action == "camera_question_result":
                     _ui.set_busy_overlay(None)
                     question, answer, error = value
@@ -609,7 +568,7 @@ def main():
                         show_ai_answer(_ui.root, question, answer, None)
                 elif ui_action == "inspect_camera_image":
                     _ui.set_busy_overlay("Получаю кадр и проверяю его через ИИ…")
-                    threading.Thread(target=_camera_inspection_worker, daemon=True, name="camera-inspection").start()
+                    threading.Thread(target=camera_inspection_worker, args=(_ui_actions,), daemon=True, name="camera-inspection").start()
                 elif ui_action == "camera_inspection_result":
                     _ui.set_busy_overlay(None)
                     result_text, error = value
@@ -630,7 +589,7 @@ def main():
                     )
                     if approved:
                         _ui.set_busy_overlay("Проверяю входящую почту…")
-                        threading.Thread(target=_mail_reader_worker, daemon=True, name="mail-reader").start()
+                        threading.Thread(target=mail_reader_worker, args=(_ui_actions,), daemon=True, name="mail-reader").start()
                     else:
                         _ui.set_busy_overlay(None)
                 elif ui_action == "ai_chat":
@@ -638,7 +597,7 @@ def main():
                     if question:
                         print("[ИИ] Отправляю вопрос подключённой модели.", flush=True)
                         _ui.set_busy_overlay("Жду ответ ИИ…")
-                        threading.Thread(target=_ask_ai_worker, args=(question,), daemon=True).start()
+                        threading.Thread(target=ask_ai_worker, args=(question, _ui_actions), daemon=True).start()
                 elif ui_action == "ai_chat_result":
                     question, answer, error = value
                     _ui.set_busy_overlay(None)
