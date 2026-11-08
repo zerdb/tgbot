@@ -41,46 +41,31 @@ def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
     return _ask_moondream(image_data, key, prompt)
 
 
-def show_screen_snapshot(parent):
-    """Capture the current Windows desktop and display the image without AI analysis or speech."""
-    from PIL import Image, ImageGrab, ImageTk
+def show_screen_snapshot(parent=None):
+    """Capture the desktop, save it, and open it with the OS default image viewer."""
+    from datetime import datetime
+    import os
+    from pathlib import Path
+    from PIL import ImageGrab
 
     try:
         screenshot = ImageGrab.grab(all_screens=True)
     except Exception as exc:
-        # Keep capture failures visible in the GUI without invoking the spoken messagebox wrapper.
-        win = tk.Toplevel(parent)
-        apply_modern_style(win)
-        win.title("Снимок экрана")
-        ttk.Label(
-            win,
-            text="Не удалось сделать снимок экрана:\n" + str(exc),
-            padding=20,
-            wraplength=560,
-        ).pack(fill="both", expand=True)
-        ttk.Button(win, text="Закрыть", command=win.destroy).pack(pady=(0, 12))
-        center_window(win, parent)
+        print("[Экран] Не удалось сделать снимок экрана: " + str(exc), flush=True)
         return
 
-    win = tk.Toplevel(parent)
-    apply_modern_style(win)
-    win.title("Снимок монитора")
-    screen_w = max(640, win.winfo_screenwidth() - 100)
-    screen_h = max(420, win.winfo_screenheight() - 160)
-    screenshot.thumbnail((screen_w, screen_h), Image.Resampling.LANCZOS)
-    photo = ImageTk.PhotoImage(screenshot, master=win)
+    screenshot_dir = Path(__file__).resolve().parent / "Скриншоты"
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+    screenshot_path = screenshot_dir / f"Screenshot_{timestamp}.png"
+    screenshot.save(screenshot_path, format="PNG")
+    print(f"[Экран] Снимок сохранён: {screenshot_path}", flush=True)
 
-    container = ttk.Frame(win, padding=8)
-    container.pack(fill="both", expand=True)
-    image_label = ttk.Label(container, image=photo)
-    image_label.image = photo
-    image_label.pack(fill="both", expand=True)
-    ttk.Button(container, text="Закрыть", command=win.destroy).pack(anchor="e", pady=(8, 0))
-
-    win.geometry(f"{screenshot.width + 24}x{screenshot.height + 64}")
-    center_window(win, parent)
-    win.lift()
-    win.focus_force()
+    try:
+        os.startfile(str(screenshot_path))
+        print("[Экран] Открываю снимок в приложении по умолчанию.", flush=True)
+    except OSError as exc:
+        print(f"[Экран] Снимок сохранён, но не удалось открыть его автоматически: {exc}", flush=True)
 
 
 def open_screen_inspector(parent, auto_capture=False):
