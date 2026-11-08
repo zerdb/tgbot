@@ -120,6 +120,8 @@ def open_settings_window(parent):
 
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(2, 8))
+        clean_dictation = tk.BooleanVar(master=window, value=bool(values.get("clean_dictation_with_ai", False)))
+        ttk.Checkbutton(frame, text="Очищать текст диктовки с помощью ИИ", variable=clean_dictation).pack(anchor="w", pady=(2, 8))
         status = (
             "Ключ Groq: сохранён" if (os.getenv("GROQ_API_KEY", "").strip() or get_groq_api_key())
             else "Ключ Groq: не задан"
@@ -129,6 +131,7 @@ def open_settings_window(parent):
         def save():
             payload = {key: var.get() for key, var in vars_.items()}
             payload["remember_chat_history"] = remember.get()
+            payload["clean_dictation_with_ai"] = clean_dictation.get()
             try:
                 save_settings(payload)
             except OSError as exc:
