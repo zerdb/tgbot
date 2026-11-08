@@ -604,6 +604,7 @@ def main():
         on_open_screen=lambda: open_screen_inspector(_ui.root),
         on_open_other=lambda: open_camera_viewer(_ui.root),
         on_open_notes=lambda: open_notes_window(_ui.root),
+        on_open_settings=lambda: _ui_actions.put(("open_assistant_settings", None)),
     )
     _ui_thread_id = threading.get_ident()
     # Сначала создаём и отображаем главное окно, затем убираем заставку —
