@@ -51,7 +51,7 @@ def copied_file_paths() -> list[str]:
         user32.CloseClipboard()
 
 
-def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: bool = False):
+def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: bool = False, recipient_name: str = ""):
     """Open the composer; snapshot copied Explorer files before creating any GUI windows."""
     # Read CF_HDROP immediately when the command is received, before Tk schedules
     # the window. Keep this snapshot even if another UI action changes the clipboard.
@@ -85,6 +85,33 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
             selected_address["value"] = book_items[index][1].strip() if 0 <= index < len(book_items) else ""
 
         recipient.bind("<<ComboboxSelected>>", select_contact)
+
+        # Имя получателя извлечено ИИ из голосовой команды. Сопоставляем его
+        # с фамилией/именем в адресной книге, учитывая русские падежные окончания.
+        def name_key(value):
+            value = re.sub(r"[^а-яa-z0-9 ]", " ", str(value or "").lower().replace("ё", "е"))
+            tokens = []
+            for token in value.split():
+                token = re.sub(r"(иями|ями|ами|ого|ему|ому|ыми|ими|иях|иях|а|я|у|ю|е|ы|и|ом|ем)$", "", token)
+                if token:
+                    tokens.append(token)
+            return tokens
+
+        if recipient_name:
+            spoken_tokens = set(name_key(recipient_name))
+            matches = []
+            for index, (saved_name, _address) in enumerate(book_items):
+                saved_tokens = set(name_key(saved_name))
+                if spoken_tokens and spoken_tokens.intersection(saved_tokens):
+                    matches.append(index)
+            if len(matches) == 1:
+                recipient.current(matches[0])
+                select_contact()
+                print(f"[Почта] ИИ выбрал контакт из адресной книги: {book_items[matches[0]][0]}", flush=True)
+            elif len(matches) > 1:
+                print(f"[Почта] Имя «{recipient_name}» подходит нескольким контактам; получатель не выбран автоматически.", flush=True)
+            else:
+                print(f"[Почта] Контакт «{recipient_name}» не найден в адресной книге.", flush=True)
 
         ttk.Label(outer, text="Или введите email вручную").pack(anchor="w")
         manual_address_var = tk.StringVar(master=root)
