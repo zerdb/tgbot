@@ -428,9 +428,11 @@ def handle_command(text: str):
         # с пустой карточкой; «открой контакты» показывает список.
         _ui_actions.put(("add_contact", action == "add_contact"))
     elif action == "email_compose":
+        recipient_name = str(args.get("recipient_name") or "").strip()
+        print(f"[Почта] Получатель из голосовой команды: {recipient_name or 'не распознан'}", flush=True)
         _ui_actions.put(("email_compose", {
             "attach_copied_files": bool(args.get("attach_copied_files", False)),
-            "recipient_name": str(args.get("recipient_name") or "").strip(),
+            "recipient_name": recipient_name,
         }))
     elif action == "inspect_camera_image":
         _ui_actions.put(("inspect_camera_image", None))
