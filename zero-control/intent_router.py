@@ -68,6 +68,20 @@ def _is_natural_information_question(text: str) -> bool:
     return "?" in normalized or any(cue in normalized for cue in cues)
 
 
+def _file_search_query(user_text: str) -> str:
+    """Extract a local filename search query and expand spoken repeated digits."""
+    query = re.sub(r"^.*?\b(?:найди|поищи|найти|поискать)\b", "", user_text, flags=re.IGNORECASE).strip()
+    query = re.sub(r"\b(?:мне|файл|файлы|документ|документы|папку)\b", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"\b(?:пдф|пфд|pdf)\b", ".pdf", query, flags=re.IGNORECASE)
+    query = re.sub(r"\s+", " ", query).strip(" .,!?:;")
+    counts = {"один": 1, "одна": 1, "одно": 1, "два": 2, "две": 2, "три": 3, "четыре": 4, "пять": 5, "шесть": 6, "семь": 7, "восемь": 8, "девять": 9, "десять": 10}
+    digit_nouns = {"нул": "0", "единиц": "1", "дво": "2", "тро": "3", "четвер": "4", "пят": "5", "шестер": "6", "семер": "7", "восьмер": "8", "девят": "9"}
+    for count_word, count in counts.items():
+        for stem, digit in digit_nouns.items():
+            query = re.sub(r"\b" + count_word + r"\s+" + stem + r"[а-яё]*\b", digit * count, query, flags=re.IGNORECASE)
+    return query.strip()
+
+
 def understand_command(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
 
@@ -154,10 +168,10 @@ def understand_command(user_text: str) -> dict:
         return {"action": "save_note", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(создай|сделай)\b.*\b(excel|эксель|таблицу из буфера)", normalized):
         return {"action": "clipboard_to_excel", "confidence": 1.0, "arguments": {}}
-    if re.search(r"\b(найди|поищи|найти)\b.*\b(файл|папку|документ)", normalized):
-        query = re.sub(r"^.*?\b(?:найди|поищи|найти)\b", "", normalized).strip()
-        query = re.sub(r"\b(?:файл|папку|документ)\b", "", query).strip()
-        return {"action": "search_files", "confidence": 1.0, "arguments": {"query": query or user_text.strip()}}
+    if re.search(r"\b(найди|поищи|найти|поискать)\b", normalized) and not re.search(r"\b(в интернете|в интернет|в сети|в google)\b", normalized):
+        query = _file_search_query(user_text)
+        if query:
+            return {"action": "search_files", "confidence": 1.0, "arguments": {"query": query}}
     if re.search(r"\b(поищи|найди|найти)\b", normalized) and re.search(r"\b(в интернете|в интернет|в сети|в google)\b", normalized):
         query = re.sub(r"^.*?\b(?:поищи|найди|найти)\b", "", normalized).strip()
         query = re.sub(r"\b(?:в интернете|в интернет|в сети|в google)\b", "", query).strip()
