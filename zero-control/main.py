@@ -408,13 +408,42 @@ def handle_command(text: str):
         else:
             print("Проверьте подключение к интернету и доступность резервной модели Moondream.")
         return
+    # Приёмник работает с единым контрактом намерения, а не с догадками
+    # по исходной расшифровке. arguments оставлен как fallback для старых модулей.
     action = intent.get("action", "unknown")
-    args = intent.get("arguments") or {}
+    args = intent.get("parameters") or intent.get("arguments") or {}
+    kind = intent.get("kind", "execute")
     confidence = float(intent.get("confidence", 0) or 0)
+    target = intent.get("target") or {}
+    source = intent.get("source") or {}
+    print(
+        "[Намерение] тип=%s цель=%s:%s источник=%s способ=%s" % (
+            kind,
+            target.get("type", ""),
+            target.get("name", ""),
+            source.get("type", ""),
+            intent.get("method", ""),
+        ),
+        flush=True,
+    )
+    if kind == "clarify":
+        if _ui is not None:
+            _ui.set_busy_overlay(None)
+            clarification = str(intent.get("clarification") or "Уточни, пожалуйста, что именно нужно сделать.")
+            show_ai_answer(_ui.root, "Нужно уточнение", clarification, None)
+        else:
+            print(str(intent.get("clarification") or "Нужно уточнить задачу."), flush=True)
+        return
+    if kind == "respond" and action != "ai_chat":
+        question = str(args.get("question") or intent.get("response") or text).strip()
+        if _ui is not None:
+            _ui.set_busy_overlay("Жду ответ ИИ…")
+        _ui_actions.put(("ai_chat", question))
+        return
     if action == "unknown" or confidence < 0.55:
         if _ui is not None:
             _ui.set_busy_overlay(None)
-        print("Не совсем понял задачу. Повтори её другими словами.")
+        print("Не удалось надёжно определить намерение. Сформулируй цель или уточни место действия.")
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
