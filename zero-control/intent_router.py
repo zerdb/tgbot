@@ -128,7 +128,7 @@ def _classify_semantically(user_text: str) -> dict:
         except Exception as fallback_error:
             raise RuntimeError("Groq: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
 
-    match = re.search(r"\\{.*\\}", str(content or ""), flags=re.S)
+    match = re.search(r"\{.*\}", str(content or ""), flags=re.S)
     if not match:
         raise RuntimeError("Модель вернула некорректный JSON намерения.")
     parsed = json.loads(match.group(0))
