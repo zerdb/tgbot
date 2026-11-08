@@ -18,7 +18,7 @@ from winotify import Notification, audio
 
 
 def show_notification(title: str, message: str):
-    toast = Notification(app_id="GigaAM Voice Assistant", title=title, msg=message, duration="long")
+    toast = Notification(app_id="Zero Control", title=title, msg=message, duration="long")
     toast.set_audio(audio.Default, loop=False)
     toast.show()
 
