@@ -35,9 +35,7 @@ class KeyboardListenerTests(unittest.TestCase):
             start_recording,
             promote_to_dictation,
             stop_recording,
-        )
-        self.listener.set_dictation_state_callback(
-            lambda: self.state["recording"] and self.state["mode"] == "text"
+            lambda: self.state["recording"] and self.state["mode"] == "text",
         )
 
     def send(self, key, event):
