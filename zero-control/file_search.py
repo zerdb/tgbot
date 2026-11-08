@@ -242,9 +242,10 @@ def _parse_search_request_ai(raw_query: str) -> dict:
   "sort": "relevance"
 }
 Правила:
-- term_groups — группы обязательных понятий. Для каждого понятия перечисли 1–4 варианта написания или точных синонима; совпасть должен хотя бы один вариант внутри каждой группы. Разные группы должны совпасть все. Не добавляй широкие или предположительные ассоциации.
-- Сохраняй исходные значимые слова и частичные формы. Не добавляй слова-фильтры. Для запроса «тёмный экран» допустимы группы [["тёмный"], ["экран", "дисплей"]], но не добавляй несвязанные слова.
-- Распознавай синонимы и ошибки распознавания: Word/ворд/Ворд/«в формате W» => расширения .doc и .docx; PDF/пдф/пфд => .pdf; Excel/эксель => .xls и .xlsx; PowerPoint => .ppt и .pptx.
+- term_groups — группы смысловых понятий из запроса. Для каждого понятия укажи исходную нормализованную форму и до 6 действительно подходящих вариантов: лемму/основу, формы того же слова, общеупотребительные синонимы, распространённые варианты написания и вероятные ошибки распознавания речи. Совпасть должен хотя бы один вариант внутри каждой группы. Не выдумывай варианты и не добавляй широкие ассоциации.
+- Сохраняй все самостоятельные понятия запроса, но не превращай служебные слова в условия поиска. Разные группы означают разные важные части запроса. Пример «тёмный экран»: [["темный", "тёмный", "темная"], ["экран", "дисплей", "монитор", "screen"]]. Пример «договор с Ивановым»: [["договор", "контракт"], ["иванов", "иванова", "ивановым"]]. Не добавляй несвязанные слова.
+- Понимай разговорные названия категорий файлов и передавай их через extensions, а не через поиск слова категории в имени: фотография/фото/картинка => .jpg, .jpeg, .png, .gif, .webp, .bmp; видео/ролик => .mp4, .mkv, .avi, .mov, .wmv, .webm; музыка/аудио => .mp3, .wav, .flac, .m4a, .aac; архив => .zip, .rar, .7z; презентация => .ppt, .pptx; таблица Excel => .xls, .xlsx. Тему/предмет файла оставляй в term_groups.
+- Учитывай русские и английские названия, транслитерацию и ошибки ASR только когда они правдоподобны в данном контексте. Например, «отпуск» может соответствовать vacation/holiday, а «экран» — screen/display. Не подменяй точное понятие отдалённой ассоциацией.
 - «договор ПФД» означает term_groups [["договор"]] и extensions [".pdf"]. «договор в формате ворд» — term_groups [["договор"]] и extensions [".doc", ".docx"].
 - Не превращай тип файла в term_groups. Каждая группа — отдельное обязательное понятие; варианты внутри группы — взаимозаменяемые формулировки.
 - Размеры используй в байтах, двоичные единицы: 1 КБ=1024, 1 МБ=1024^2, 1 ГБ=1024^3.
@@ -299,7 +300,7 @@ def _parse_search_request_ai(raw_query: str) -> dict:
             if not isinstance(raw_group, list):
                 continue
             group = []
-            for value in raw_group[:4]:
+            for value in raw_group[:6]:
                 term = clean_term(value)
                 if term and term not in group:
                     group.append(term)
@@ -600,6 +601,28 @@ def _search_worker(query: str, parent, export_format=None):
                 ]
                 group_results.append(set.union(*alternatives) if alternatives else set())
             matches = list(set.intersection(*group_results)) if group_results else []
+            if not matches and len(group_results) > 1:
+                # If no path satisfies every concept, keep the best partial
+                # candidates instead of reporting a false absolute "not found".
+                # The local scorer never invents files or sends filenames to AI.
+                coverage = {}
+                for group_index, result_set in enumerate(group_results):
+                    for candidate in result_set:
+                        coverage.setdefault(candidate, set()).add(group_index)
+                if coverage:
+                    best_coverage = max(len(hit_groups) for hit_groups in coverage.values())
+                    minimum_coverage = max(1, (len(group_results) + 1) // 2)
+                    if best_coverage >= minimum_coverage:
+                        matches = [
+                            path for path, hit_groups in coverage.items()
+                            if len(hit_groups) == best_coverage
+                        ]
+                        print(
+                            "[Поиск файлов] Точных совпадений по всем понятиям нет; "
+                            f"показываю наиболее близкие варианты ({best_coverage}/"
+                            f"{len(group_results)} понятий совпало).",
+                            flush=True,
+                        )
         else:
             if filters["exact_size"] is not None:
                 matches = refresh_and_search(
