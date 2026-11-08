@@ -14,9 +14,10 @@ import tempfile
 import time
 import unicodedata
 from pathlib import Path
+from agent_core import APP_DATA
 from typing import Callable
 
-APP_DATA = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant"
+
 DB_PATH = APP_DATA / "file_index.sqlite3"
 BATCH_SIZE = 50_000
 MAX_RESULTS = 1000
