@@ -33,6 +33,13 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
     ttk.Label(header, text="✉  Почта", font=("Segoe UI", 19, "bold")).pack(side="left")
     ttk.Label(header, text="Входящие · письма · контакты").pack(side="left", padx=(14, 0), pady=(7, 0))
 
+    # Основная навигация всегда сверху и доступна из любого раздела.
+    nav = ttk.Frame(outer)
+    nav.pack(fill="x", pady=(0, 10))
+    ttk.Button(nav, text="📥  Входящие", command=lambda: notebook.select(inbox_tab) if "notebook" in locals() else None).pack(side="left", padx=(0, 6))
+    ttk.Button(nav, text="✍  Новое письмо", command=lambda: notebook.select(compose_tab) if "notebook" in locals() else None).pack(side="left", padx=6)
+    ttk.Button(nav, text="👥  Контакты", command=lambda: notebook.select(contacts_tab) if "notebook" in locals() else None).pack(side="left", padx=6)
+
     notebook = ttk.Notebook(outer)
     notebook.pack(fill="both", expand=True)
 
@@ -343,7 +350,7 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
         if not name:
             messagebox.showwarning("Нет имени", "Укажи имя контакта.", parent=win)
             return
-        if email and not re.fullmatch(r"[\\w.+-]+@[\\w.-]+\\.[a-zа-я]{2,}", email, re.IGNORECASE):
+        if email and not re.fullmatch(r"[\w.+-]+@[\w.-]+\.[a-zа-я]{2,}", email, re.IGNORECASE):
             messagebox.showwarning("Неверная почта", "Проверь адрес электронной почты.", parent=win)
             return
         book = load_address_book()
@@ -402,14 +409,6 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
     ttk.Button(contact_buttons, text="Сохранить", command=save_contact).pack(side="left", padx=7)
     ttk.Button(contact_buttons, text="Удалить", command=delete_contact).pack(side="left")
     ttk.Button(contact_buttons, text="✉  Написать письмо", command=write_to_contact).pack(side="left", padx=7)
-
-    # Навигация верхними кнопками с иконками.
-    nav = ttk.Frame(outer)
-    nav.pack(fill="x", pady=(10, 0))
-    ttk.Button(nav, text="📥  Входящие", command=lambda: notebook.select(inbox_tab)).pack(side="left", padx=(0, 6))
-    ttk.Button(nav, text="✍  Новое письмо", command=lambda: notebook.select(compose_tab)).pack(side="left", padx=6)
-    ttk.Button(nav, text="👥  Контакты", command=lambda: notebook.select(contacts_tab)).pack(side="left", padx=6)
-    ttk.Label(nav, text="Контакты общие для писем и голосовых команд.").pack(side="right")
 
     def normalized_tokens(value):
         value = re.sub(r"[^а-яa-z0-9 ]", " ", str(value or "").lower().replace("ё", "е"))
