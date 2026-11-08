@@ -67,38 +67,31 @@ def open_settings_window(parent):
         keys_box = ttk.LabelFrame(frame, text="API-ключи и доступ к камере", padding=4)
         keys_box.pack(fill="x", pady=(1, 3))
 
-        def add_secret_row(label, getter, setter):
+        secret_vars = {}
+        secret_setters = {
+            "Groq:": set_groq_api_key,
+            "Камера:": set_camera_password,
+            "Moondream:": set_moondream_api_key,
+        }
+
+        def add_secret_row(label, getter):
             row = ttk.Frame(keys_box)
             row.pack(fill="x", pady=1)
             ttk.Label(row, text=label, width=13).pack(side="left")
             value = tk.StringVar(master=window)
-            entry = ttk.Entry(row, textvariable=value, show="*", width=1)
-            entry.pack(side="left", fill="x", expand=True, padx=(3, 5))
-            saved = bool(getter())
-            state = tk.StringVar(master=window, value="сохранён" if saved else "не задан")
-            ttk.Label(row, textvariable=state, width=11).pack(side="right")
+            ttk.Entry(row, textvariable=value, show="*", width=1).pack(
+                side="left", fill="x", expand=True, padx=(3, 5)
+            )
+            state = "ключ уже сохранён" if getter() else "ключ не задан"
+            ttk.Label(row, text=state, width=18).pack(side="right")
+            secret_vars[label] = value
 
-            def save_on_leave(_event=None):
-                secret = value.get().strip()
-                if not secret:
-                    return
-                try:
-                    setter(secret)
-                    state.set("сохранён")
-                except Exception as exc:
-                    state.set("ошибка")
-                    messagebox.showerror("Ключ доступа", str(exc), parent=window)
-
-            entry.bind("<FocusOut>", save_on_leave)
-            entry.bind("<Return>", save_on_leave)
-            return entry
-
-        add_secret_row("Groq:", get_groq_api_key, set_groq_api_key)
-        add_secret_row("Камера:", get_camera_password, set_camera_password)
-        add_secret_row("Moondream:", get_moondream_api_key, set_moondream_api_key)
+        add_secret_row("Groq:", get_groq_api_key)
+        add_secret_row("Камера:", get_camera_password)
+        add_secret_row("Moondream:", get_moondream_api_key)
         ttk.Label(
             keys_box,
-            text="Вставь ключ и перейди к другому полю — он сохранится автоматически.",
+            text="Новые ключи сохраняются только кнопкой «Сохранить» внизу.",
             wraplength=520,
         ).pack(anchor="w", pady=(2, 0))
 
@@ -117,8 +110,12 @@ def open_settings_window(parent):
             payload["remember_chat_history"] = remember.get()
             payload["clean_dictation_with_ai"] = clean_dictation.get()
             try:
+                for label, value in secret_vars.items():
+                    secret = value.get().strip()
+                    if secret:
+                        secret_setters[label](secret)
                 save_settings(payload)
-            except OSError as exc:
+            except Exception as exc:
                 messagebox.showerror("Настройки", f"Не удалось сохранить настройки: {exc}", parent=window)
                 return
             messagebox.showinfo("Настройки", "Настройки сохранены. Перезапусти помощника для применения ко всем модулям.", parent=window)
