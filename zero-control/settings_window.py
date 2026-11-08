@@ -75,14 +75,42 @@ def open_settings_window(parent):
             "Moondream:": set_moondream_api_key,
         }
 
+        def show_paste_menu(event, entry, paste_callback):
+            menu = tk.Menu(window, tearoff=False)
+            menu.add_command(label="Вставить", command=paste_callback)
+            menu.add_command(label="Выделить всё", command=lambda: (entry.focus_set(), entry.select_range(0, "end")))
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
         def add_secret_row(label, getter):
             row = ttk.Frame(keys_box)
             row.pack(fill="x", pady=1)
             ttk.Label(row, text=label, width=13).pack(side="left")
             value = tk.StringVar(master=window)
-            ttk.Entry(row, textvariable=value, show="*", width=1).pack(
-                side="left", fill="x", expand=True, padx=(3, 5)
-            )
+            entry = ttk.Entry(row, textvariable=value, show="*", width=1)
+            entry.pack(side="left", fill="x", expand=True, padx=(3, 5))
+
+            def paste_secret(_event=None, target=entry, variable=value):
+                try:
+                    clipboard_text = window.clipboard_get()
+                    target.focus_set()
+                    target.delete(0, "end")
+                    target.insert(0, clipboard_text)
+                    variable.set(clipboard_text)
+                except tk.TclError:
+                    messagebox.showwarning(
+                        "Буфер обмена",
+                        "В буфере обмена нет доступного текста.",
+                        parent=window,
+                    )
+                return "break"
+
+            entry.bind("<Control-v>", paste_secret)
+            entry.bind("<Control-V>", paste_secret)
+            entry.bind("<Shift-Insert>", paste_secret)
+            entry.bind("<Button-3>", lambda event, target=entry, paste=paste_secret: show_paste_menu(event, target, paste))
             state = "ключ уже сохранён" if getter() else "ключ не задан"
             ttk.Label(row, text=state, width=18).pack(side="right")
             secret_vars[label] = value
