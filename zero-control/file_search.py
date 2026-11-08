@@ -232,7 +232,12 @@ def _search_worker(query: str, parent):
             result_sets = [set(refresh_and_search(term, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))) for term in terms]
             matches = list(set.intersection(*result_sets)) if result_sets else []
         else:
-            if filters["extensions"]:
+            if filters["exact_size"] is not None:
+                matches = refresh_and_search(
+                    "__SIZE_EQ__:" + str(filters["exact_size"]),
+                    report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+                )
+            elif filters["extensions"]:
                 result_sets = [
                     set(refresh_and_search("__EXT__:" + ext, report=lambda message: print(f"[Поиск файлов] {message}", flush=True)))
                     for ext in sorted(filters["extensions"])
