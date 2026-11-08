@@ -37,7 +37,7 @@ def start_file_search_ui(parent, busy_callback=None):
     parent.after(100, _poll_search_queues)
 
 
-def search_files(text: str, parent=None):
+def search_files(text: str, parent=None, export_format=None):
     # May be called from the speech-recognition worker: never touch Tk here.
     query = re.sub(r"^\s*найди\s+(?:файл\s+)?", "", text, flags=re.IGNORECASE).strip().strip('"«»')
     query = query.rstrip(" \t\r\n.,!?;:…。،؛؟").strip()
@@ -47,8 +47,12 @@ def search_files(text: str, parent=None):
     if parent is None:
         print("Поиск файлов требует запущенного главного окна приложения.")
         return
+    if export_format not in (None, "excel", "word", "text"):
+        export_format = None
     print(f"Запрос на поиск файла: «{query}»", flush=True)
-    _search_requests.put((query, parent))
+    if export_format:
+        print(f"После поиска будет создан новый документ: {export_format}.", flush=True)
+    _search_requests.put((query, parent, export_format))
 
 
 def _parse_search_request_local(raw_query: str) -> dict:
@@ -396,7 +400,121 @@ def _parse_search_request(raw_query: str) -> dict:
         return _parse_search_request_local(raw_query)
 
 
-def _search_worker(query: str, parent):
+def _format_export_size(value: int) -> str:
+    amount = float(value)
+    for unit in ("Б", "КБ", "МБ", "ГБ", "ТБ"):
+        if amount < 1024 or unit == "ТБ":
+            return f"{amount:.0f} {unit}" if unit == "Б" else f"{amount:.1f} {unit}"
+        amount /= 1024
+    return f"{value} Б"
+
+
+def export_file_results(results, query: str, export_format: str) -> Path:
+    """Create a fresh Excel, Word, or text report and open it."""
+    from datetime import datetime
+    import subprocess
+
+    if export_format not in {"excel", "word", "text"}:
+        raise ValueError("Неизвестный формат экспорта.")
+
+    documents = Path.home() / "Documents"
+    output_dir = documents / "Zero Control Exports"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    safe_query = re.sub(r"[^a-zA-Zа-яА-ЯёЁ0-9_-]+", "_", query).strip("_")[:48] or "search"
+    extensions = {"excel": ".xlsx", "word": ".docx", "text": ".txt"}
+    output_path = output_dir / f"Результаты_{safe_query}_{stamp}{extensions[export_format]}"
+
+    rows = []
+    for path, created_at, size in results:
+        try:
+            created_text = datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M:%S")
+        except (OSError, OverflowError, ValueError):
+            created_text = "—"
+        rows.append((path.name, str(path), created_text, int(size), _format_export_size(int(size))))
+
+    if export_format == "excel":
+        from openpyxl import Workbook
+        from openpyxl.worksheet.table import Table, TableStyleInfo
+        from openpyxl.styles import Font, Alignment
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Результаты поиска"
+        sheet.append(["Название файла", "Полный путь", "Дата создания", "Размер (байт)", "Размер"])
+        for row in rows:
+            sheet.append(list(row))
+            sheet.cell(sheet.max_row, 3).number_format = "DD.MM.YYYY HH:MM:SS"
+        for cell in sheet[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.alignment = Alignment(horizontal="center")
+        sheet.freeze_panes = "A2"
+        sheet.column_dimensions["A"].width = 34
+        sheet.column_dimensions["B"].width = 85
+        sheet.column_dimensions["C"].width = 22
+        sheet.column_dimensions["D"].width = 20
+        sheet.column_dimensions["E"].width = 16
+        if rows:
+            table = Table(displayName="SearchResults", ref=f"A1:E{len(rows) + 1}")
+            table.tableStyleInfo = TableStyleInfo(
+                name="TableStyleMedium2",
+                showFirstColumn=False,
+                showLastColumn=False,
+                showRowStripes=True,
+                showColumnStripes=False,
+            )
+            sheet.add_table(table)
+        sheet.auto_filter.ref = f"A1:E{len(rows) + 1}"
+        workbook.save(output_path)
+
+    elif export_format == "word":
+        from docx import Document
+        from docx.enum.section import WD_ORIENT
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Inches, Pt
+
+        document = Document()
+        section = document.sections[0]
+        section.orientation = WD_ORIENT.LANDSCAPE
+        section.page_width, section.page_height = section.page_height, section.page_width
+        section.left_margin = Inches(0.45)
+        section.right_margin = Inches(0.45)
+        title = document.add_heading("Результаты поиска файлов", level=1)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        document.add_paragraph(f"Запрос: {query}")
+        document.add_paragraph(f"Найдено файлов: {len(rows)}")
+        table = document.add_table(rows=1, cols=5)
+        table.style = "Table Grid"
+        headers = ["Название файла", "Полный путь", "Дата создания", "Размер (байт)", "Размер"]
+        for cell, value in zip(table.rows[0].cells, headers):
+            cell.text = value
+            for run in cell.paragraphs[0].runs:
+                run.bold = True
+                run.font.size = Pt(8)
+        for row in rows:
+            cells = table.add_row().cells
+            for cell, value in zip(cells, row):
+                cell.text = str(value)
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(7)
+        document.save(output_path)
+
+    else:
+        with output_path.open("w", encoding="utf-8-sig", newline="") as file:
+            file.write("Название файла\tПолный путь\tДата создания\tРазмер (байт)\tРазмер\n")
+            for row in rows:
+                safe_values = [str(value).replace("\\t", " ").replace("\\r", " ").replace("\\n", " ") for value in row]
+                file.write("\\t".join(safe_values) + "\\n")
+
+    if export_format == "text":
+        subprocess.Popen(["notepad.exe", str(output_path)])
+    else:
+        os.startfile(str(output_path))
+    return output_path
+
+
+def _search_worker(query: str, parent, export_format=None):
     from datetime import datetime
     parsed = _parse_search_request(query)
     filters = parsed["filters"]
@@ -474,7 +592,7 @@ def _search_worker(query: str, parent):
         elif sort_mode == "date_desc" or filters["start"] or filters["end"]:
             filtered.sort(key=lambda item: item[2], reverse=True)
         matches = [(item[0], item[3], item[1]) for item in filtered]
-        _search_results.put(("success", parent, (display_query, matches)))
+        _search_results.put(("success", parent, (display_query, matches, export_format)))
     except Exception as exc:
         error_text = str(exc)
         print(f"Ошибка MFT-поиска: {error_text}", flush=True)
@@ -607,13 +725,13 @@ def _poll_search_queues():
             return
         while True:
             try:
-                query, request_parent = _search_requests.get_nowait()
+                query, request_parent, export_format = _search_requests.get_nowait()
             except queue.Empty:
                 break
             if request_parent is parent:
                 if _busy_callback:
                     _busy_callback("Ищу файлы…")
-                threading.Thread(target=_search_worker, args=(query, parent), daemon=True, name="file-search").start()
+                threading.Thread(target=_search_worker, args=(query, parent, export_format), daemon=True, name="file-search").start()
 
         while True:
             try:
@@ -663,10 +781,22 @@ def _poll_search_queues():
                 from tkinter import messagebox
                 messagebox.showerror("Ошибка поиска файлов", f"Не удалось выполнить поиск «{query}»:\n{error_text}", parent=parent)
             else:
-                query, matches = payload
+                query, matches, export_format = payload
                 if matches:
                     print(f"Найдено файлов: {len(matches)}", flush=True)
-                    show_file_results(parent, matches, query)
+                    if export_format:
+                        try:
+                            exported_path = export_file_results(matches, query, export_format)
+                            print(f"Экспортировано {len(matches)} файлов: {exported_path}", flush=True)
+                        except Exception as exc:
+                            from tkinter import messagebox
+                            messagebox.showerror(
+                                "Ошибка экспорта",
+                                f"Файлы найдены ({len(matches)}), но документ не удалось создать:\n{exc}",
+                                parent=parent,
+                            )
+                    else:
+                        show_file_results(parent, matches, query)
                 else:
                     print(f"Файлы по запросу «{query}» не найдены.", flush=True)
                     from tkinter import messagebox
