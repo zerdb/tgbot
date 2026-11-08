@@ -371,7 +371,7 @@ def _handle_command_worker(text: str):
     """Единая точка входа: показывает ожидание только на время обработки команды."""
     print(f"Распознана команда: {text}")
     if _ui is not None:
-        _ui_actions.put(("busy", "Понимаю команду…"))
+        _ui_actions.put(("busy", "Обработка…"))
     try:
         from intent_router import understand_command
         intent = understand_command(text)
