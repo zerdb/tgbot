@@ -5,6 +5,8 @@ import json
 import os
 import urllib.error
 import urllib.request
+import ssl
+import time
 
 ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b"
@@ -32,14 +34,27 @@ def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90):
         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
                  "Accept": "application/json",
                  "User-Agent": "ZeroControl/1.0 (Groq API client)"}, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1000]
-        raise RuntimeError("Groq HTTP %s: %s" % (exc.code, detail)) from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise RuntimeError("Groq недоступен: %s" % exc) from exc
+    # Кратковременные TLS EOF иногда возникают на сетевом маршруте до Groq.
+    # Повторяем только такие сбои; HTTP-ошибки и прочие причины не маскируем.
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:1000]
+            raise RuntimeError("Groq HTTP %s: %s" % (exc.code, detail)) from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            reason = getattr(exc, "reason", exc)
+            transient_tls_eof = (
+                isinstance(reason, (ssl.SSLError, ConnectionError))
+                and ("EOF" in str(reason).upper() or "SSL" in str(reason).upper())
+            ) or "UNEXPECTED_EOF_WHILE_READING" in str(exc).upper()
+            if transient_tls_eof and attempt < 2:
+                print("[Groq] Временный TLS-сбой; повтор запроса %s/3." % (attempt + 2), flush=True)
+                time.sleep(attempt + 1)
+                continue
+            raise RuntimeError("Groq недоступен: %s" % exc) from exc
 
     choices = data.get("choices") or []
     content = (choices[0].get("message") or {}).get("content") if choices else None
