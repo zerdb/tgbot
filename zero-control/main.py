@@ -12,6 +12,7 @@ from pathlib import Path
 import tkinter as tk
 
 from keyboard_listener import KeyboardListener
+from command_handler import CommandHandler
 from background_workers import (
     ask_ai_worker,
     camera_inspection_worker,
@@ -41,10 +42,8 @@ _splash.update()
 from notifications import install_messagebox_voice
 install_messagebox_voice()
 
-from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note, paste_clipboard_to_application
-from installed_apps import open_installed_application
-from reminders import start_reminder_service, stop_reminder_service, add_reminder, add_note, complete_item_by_text, deliver_due_reminders
-from file_search import search_web, search_files, open_folder_by_name, start_file_search_ui
+from reminders import start_reminder_service, stop_reminder_service, deliver_due_reminders
+from file_search import start_file_search_ui
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow, show_ai_answer
 from mail_client import open_mail_client
@@ -55,6 +54,7 @@ from camera_window import open_camera_viewer
 from notes_window import open_notes_window
 
 _ui = None  # GUI создаётся позже, после загрузки модулей
+_command_handler = None
 
 
 SAMPLE_RATE = 16000
@@ -274,154 +274,12 @@ def transcribe_and_paste(audio_data: np.ndarray):
 
 
 def handle_command(text: str):
-    """Run semantic classification away from Tk's event loop when called by a GUI control."""
-    if _ui is not None and _ui_thread_id == threading.get_ident():
-        threading.Thread(
-            target=_handle_command_worker,
-            args=(text,),
-            daemon=True,
-            name="command-handler",
-        ).start()
+    """Совместимый callback для GUI; логика находится в CommandHandler."""
+    if _command_handler is None:
+        print("Обработчик команд ещё не инициализирован.")
         return
-    _handle_command_worker(text)
+    _command_handler.handle_command(text)
 
-
-def _handle_command_worker(text: str):
-    """Единая точка входа: показывает ожидание только на время обработки команды."""
-    print(f"Распознана команда: {text}")
-    if _ui is not None:
-        _ui_actions.put(("busy", "Обработка…"))
-    try:
-        from intent_router import understand_command
-        intent = understand_command(text)
-    except Exception as exc:
-        if _ui is not None:
-            _ui_actions.put(("busy", None))
-        error_text = str(exc)
-        print(f"Не удалось определить команду: {error_text}")
-        if "HTTP 402" in error_text:
-            print("У Groq закончились доступные стартовые кредиты или выбранная модель требует платных кредитов. Простые команды Zero Control выполняются локально; для ИИ-классификации нужен доступный баланс или резервная модель.")
-        elif "ключ Groq" in error_text:
-            print("Добавьте API-ключ Groq в настройках Zero Control.")
-        else:
-            print("Проверьте подключение к интернету и доступность резервной модели Moondream.")
-        return
-    # Все команды приходят к приёмнику в одном версионированном формате.
-    action = intent.get("action", "unknown")
-    args = intent.get("parameters") or {}
-    kind = intent.get("kind", "execute")
-    confidence = float(intent.get("confidence", 0) or 0)
-    target = intent.get("target") or {}
-    source = intent.get("source") or {}
-    print(
-        "[Намерение] тип=%s цель=%s:%s источник=%s способ=%s" % (
-            kind,
-            target.get("type", ""),
-            target.get("name", ""),
-            source.get("type", ""),
-            intent.get("method", ""),
-        ),
-        flush=True,
-    )
-    if kind == "clarify":
-        if _ui is not None:
-            _ui_actions.put(("busy", None))
-            clarification = str(intent.get("clarification") or "Уточни, пожалуйста, что именно нужно сделать.")
-            _ui_actions.put(("show_ai_answer", ("Нужно уточнение", clarification, None)))
-        else:
-            print(str(intent.get("clarification") or "Нужно уточнить задачу."), flush=True)
-        return
-    if kind == "respond" and action not in ("ai_chat", "camera_question"):
-        question = str(args.get("question") or intent.get("response") or text).strip()
-        if _ui is not None:
-            _ui_actions.put(("busy", "Жду ответ ИИ…"))
-        _ui_actions.put(("ai_chat", question))
-        return
-    if action == "unknown" or confidence < 0.55:
-        if _ui is not None:
-            _ui_actions.put(("busy", None))
-        print("Не удалось надёжно определить намерение. Сформулируй цель или уточни место действия.")
-        return
-    print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
-    parent = _ui.root if _ui is not None else None
-    keep_busy = action in ("search_files", "open_folder", "ai_chat", "read_unread_mail", "inspect_camera_image", "camera_question")
-    if _ui is not None and not keep_busy:
-        _ui_actions.put(("busy", None))
-    if action == "ai_chat":
-        question = str(args.get("question") or text).strip()
-        if _ui is not None:
-            _ui_actions.put(("busy", "Жду ответ ИИ…"))
-        _ui_actions.put(("ai_chat", question))
-    elif action in ("add_contact", "open_contacts"):
-        print("[GUI] Открываю общую адресную книгу.", flush=True)
-        # Для голосового «добавь в контакты» открываем ту же книгу сразу
-        # с пустой карточкой; «открой контакты» показывает список.
-        _ui_actions.put(("add_contact", action == "add_contact"))
-    elif action == "email_compose":
-        recipient_name = str(args.get("recipient_name") or "").strip()
-        print(f"[Почта] Получатель из голосовой команды: {recipient_name or 'не распознан'}", flush=True)
-        attach_files = bool(args.get("attach_copied_files", False))
-        attachment_paths = []
-        if attach_files:
-            try:
-                from clipboard_files import copied_file_paths
-                attachment_paths = copied_file_paths()
-                print(f"[Почта] Файлов в буфере обмена: {len(attachment_paths)}", flush=True)
-            except Exception as exc:
-                print(f"[Почта] Не удалось получить список файлов из буфера: {exc}", flush=True)
-        _ui_actions.put(("email_compose", {
-            "attach_copied_files": attach_files,
-            "attachment_paths": attachment_paths,
-            "recipient_name": recipient_name,
-        }))
-    elif action == "inspect_camera_image":
-        _ui_actions.put(("inspect_camera_image", None))
-    elif action == "camera_question":
-        _ui_actions.put(("camera_question", str(args.get("question") or text).strip()))
-    elif action == "open_assistant_settings":
-        _ui_actions.put((action, None))
-    elif action == "open_reminders":
-        _ui_actions.put(("open_reminders", None))
-    elif action == "open_mail_client":
-        _ui_actions.put(("open_mail_client", None))
-    elif action == "read_unread_mail":
-        _ui_actions.put(("confirm_read_mail", None))
-    elif action == "save_note": save_clipboard_as_note()
-    elif action == "clipboard_to_excel": paste_clipboard_to_excel()
-    elif action == "lock_computer": lock_computer()
-    elif action == "reboot_computer": reboot_computer()
-    elif action == "open_downloads": open_downloads()
-    elif action == "open_recycle_bin": open_recycle_bin()
-    elif action == "open_application": open_application(str(args.get("app") or ""))
-    elif action == "open_installed_application": open_installed_application(str(args.get("app_name") or ""))
-    elif action == "open_settings": open_settings()
-    elif action == "empty_recycle_bin": empty_recycle_bin()
-    elif action == "screenshot": take_screenshot()
-    elif action == "inspect_screen": _ui_actions.put(("inspect_screen", None))
-    elif action == "paste_clipboard_to_application": paste_clipboard_to_application(str(args.get("app_name") or ""))
-    elif action == "reminder": add_reminder(str(args.get("reminder_text") or text))
-    elif action == "add_note": add_note(str(args.get("note_text") or text))
-    elif action == "complete_item":
-        if not complete_item_by_text(str(args.get("item_text") or "")):
-            print("Не нашёл подходящую активную запись. Открой заметки и дела, чтобы выбрать её.")
-    elif action == "organize_folder": _ui_actions.put(("organize_folder", None))
-    elif action == "search_web": search_web(str(args.get("query") or text))
-    elif action == "open_folder":
-        if _ui is not None:
-            _ui_actions.put(("busy", "Ищу папку…"))
-        if open_folder_by_name(str(args.get("folder") or text), parent) and _ui is not None:
-            _ui_actions.put(("busy", None))
-    elif action == "search_files":
-        if _ui is not None:
-            _ui_actions.put(("busy", "Ищу файлы…"))
-        search_files(
-            str(args.get("query") or text),
-            parent,
-            export_format=args.get("export_format"),
-        )
-    else:
-        print("Эта операция пока не подключена.")
-    # Быстрые команды не включают общую плашку «Обрабатываю команду…».
 
 def transcribe_and_execute(audio_data: np.ndarray):
     if not _transcription_lock.acquire(blocking=False):
@@ -447,7 +305,7 @@ def transcribe_and_execute(audio_data: np.ndarray):
 
 
 def main():
-    global _ui, _ui_thread_id, _keyboard_listener, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
+    global _ui, _ui_thread_id, _keyboard_listener, _command_handler, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
 
     # Заставка уже показана до импорта модулей приложения.
     # Долгая загрузка проходит за заставкой; главное окно пока не открываем.
@@ -480,6 +338,11 @@ def main():
         on_open_settings=lambda: _ui_actions.put(("open_assistant_settings", None)),
     )
     _ui_thread_id = threading.get_ident()
+    _command_handler = CommandHandler(
+        get_ui=lambda: _ui,
+        get_ui_thread_id=lambda: _ui_thread_id,
+        ui_actions=_ui_actions,
+    )
     # Сначала создаём и отображаем главное окно, затем убираем заставку —
     # между ними не должно быть пустой паузы.
     _ui.root.update_idletasks()
