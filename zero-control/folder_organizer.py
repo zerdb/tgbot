@@ -76,8 +76,6 @@ class FolderOrganizer:
         self.tree.column("count", width=70, anchor="center")
         self.tree.column("examples", width=440)
         self.tree.pack(fill="both", expand=True)
-        footer = ttk.Frame(self.window, padding=(14, 8, 14, 12))
-        footer.pack(side="bottom", fill="x")
         self.status_var = tk.StringVar(value="Выберите папку для предварительного просмотра.")
         ttk.Label(footer, textvariable=self.status_var).pack(side="left", fill="x", expand=True)
         self.organize_button = ttk.Button(footer, text="Разложить файлы", command=self.organize, state="disabled")
