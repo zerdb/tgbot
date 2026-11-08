@@ -248,7 +248,7 @@ def _search_worker(query: str, parent):
                     continue
                 if filters["end"] and datetime.fromtimestamp(timestamp) > filters["end"]:
                     continue
-                filtered.append((path, size, stat.st_mtime))
+                filtered.append((path, size, stat.st_mtime, stat.st_ctime))
             except (OSError, ValueError):
                 continue
 
@@ -261,7 +261,7 @@ def _search_worker(query: str, parent):
             filtered.sort(key=lambda item: item[2])
         elif sort_mode == "date_desc" or filters["start"] or filters["end"]:
             filtered.sort(key=lambda item: item[2], reverse=True)
-        matches = [item[0] for item in filtered]
+        matches = [(item[0], item[3], item[1]) for item in filtered]
         _search_results.put(("success", parent, (display_query, matches)))
     except Exception as exc:
         error_text = str(exc)
@@ -469,32 +469,69 @@ def _poll_search_queues():
             _polling_parent = None
 
 
-def show_file_results(parent, paths: list[Path], query: str):
+def show_file_results(parent, results: list[tuple[Path, float, int]], query: str):
     import tkinter as tk
     from tkinter import ttk, messagebox
+    from datetime import datetime
     from dialog_utils import activate_modal
 
     window = tk.Toplevel(parent)
     window.title(f"Результаты поиска: {query}")
-    window.geometry("850x420")
-    window.minsize(550, 260)
+    window.geometry("1000x500")
+    window.minsize(650, 300)
     window.transient(parent)
-    ttk.Label(window, text=f"Найдено файлов: {len(paths)}. Двойной щелчок — открыть файл.").pack(anchor="w", padx=12, pady=(12, 6))
+    ttk.Label(
+        window,
+        text=f"Найдено файлов: {len(results)}. Двойной щелчок — открыть файл.",
+    ).pack(anchor="w", padx=12, pady=(12, 6))
+
     frame = ttk.Frame(window)
     frame.pack(fill="both", expand=True, padx=12, pady=6)
-    scrollbar = ttk.Scrollbar(frame)
-    scrollbar.pack(side="right", fill="y")
-    listing = tk.Listbox(frame, yscrollcommand=scrollbar.set, font=("Segoe UI", 10))
-    listing.pack(side="left", fill="both", expand=True)
-    scrollbar.config(command=listing.yview)
-    for path in paths:
-        listing.insert("end", str(path))
+    columns = ("file", "created", "size")
+    listing = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
+    listing.heading("file", text="Файл")
+    listing.heading("created", text="Дата создания")
+    listing.heading("size", text="Размер")
+    listing.column("file", width=610, minwidth=260, stretch=True)
+    listing.column("created", width=155, minwidth=135, stretch=False, anchor="center")
+    listing.column("size", width=110, minwidth=95, stretch=False, anchor="e")
+
+    y_scrollbar = ttk.Scrollbar(frame, orient="vertical", command=listing.yview)
+    x_scrollbar = ttk.Scrollbar(frame, orient="horizontal", command=listing.xview)
+    listing.configure(yscrollcommand=y_scrollbar.set, xscrollcommand=x_scrollbar.set)
+    listing.grid(row=0, column=0, sticky="nsew")
+    y_scrollbar.grid(row=0, column=1, sticky="ns")
+    x_scrollbar.grid(row=1, column=0, sticky="ew")
+    frame.rowconfigure(0, weight=1)
+    frame.columnconfigure(0, weight=1)
+
+    def format_size(value: int) -> str:
+        amount = float(value)
+        for unit in ("Б", "КБ", "МБ", "ГБ", "ТБ"):
+            if amount < 1024 or unit == "ТБ":
+                return f"{amount:.0f} {unit}" if unit == "Б" else f"{amount:.1f} {unit}"
+            amount /= 1024
+        return f"{value} Б"
+
+    paths = []
+    for index, (path, created_at, size) in enumerate(results):
+        paths.append(path)
+        try:
+            created_text = datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M")
+        except (OSError, OverflowError, ValueError):
+            created_text = "—"
+        listing.insert(
+            "",
+            "end",
+            iid=str(index),
+            values=(str(path), created_text, format_size(size)),
+        )
 
     def open_selected(_event=None):
-        selection = listing.curselection()
+        selection = listing.selection()
         if selection:
             try:
-                os.startfile(str(paths[selection[0]]))
+                os.startfile(str(paths[int(selection[0])]))
             except OSError as exc:
                 messagebox.showerror("Не удалось открыть файл", str(exc), parent=window)
 
