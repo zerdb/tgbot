@@ -462,7 +462,11 @@ def handle_command(text: str):
     elif action == "search_files":
         if _ui is not None:
             _ui.set_busy_overlay("Ищу файлы…")
-        search_files(str(args.get("query") or text), parent)
+        search_files(
+            str(args.get("query") or text),
+            parent,
+            export_format=args.get("export_format"),
+        )
     else:
         print("Эта операция пока не подключена.")
     if not keep_busy and _ui is not None:
