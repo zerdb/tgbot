@@ -123,7 +123,7 @@ def open_settings_window(parent):
         status = (
             "Ключ Groq: сохранён" if (os.getenv("GROQ_API_KEY", "").strip() or get_groq_api_key())
             else "Ключ Groq: не задан"
-        ) + " · " + ("Пароль почты: настроен" if os.getenv("GIGAAM_MAIL_PASSWORD") else "Пароль почты: не настроен")
+        ) + " · " + ("Пароль почты: настроен" if os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("GIGAAM_MAIL_PASSWORD")) else "Пароль почты: не настроен")
         ttk.Label(frame, text=status, wraplength=570).pack(anchor="w", pady=(4, 12))
 
         def save():
