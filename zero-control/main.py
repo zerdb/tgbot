@@ -36,6 +36,10 @@ _splash.geometry(f"+{_splash_x}+{_splash_y}")
 _splash.update_idletasks()
 _splash.update()
 
+# Все стандартные уведомления приложения озвучиваются голосом Denis.
+from notifications import install_messagebox_voice
+install_messagebox_voice()
+
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
 from reminders import start_reminder_service, stop_reminder_service, add_reminder, add_note, complete_item_by_text, deliver_due_reminders
 from file_search import search_web, search_files, open_folder_by_name, start_file_search_ui
