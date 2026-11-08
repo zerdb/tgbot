@@ -185,7 +185,38 @@ def _understand_command(user_text: str) -> dict:
         print("[Команды] Локальный быстрый запуск приложения: %s." % app, flush=True)
         return {"action": "open_application", "confidence": 1.0, "parameters": {"app": app}}
 
-    """Semantic classification handles requests that need contextual interpretation."""
+    # Сначала пробуем локальный каталог действий. Обычные команды Windows и
+    # запуск приложений не должны ждать сеть или расходовать квоту языковой модели.
+    # Семантический слой оставляем для запросов, где важны контекст и извлечение
+    # сложных параметров (письма, заметки, напоминания и т.п.).
+    local_intent = _understand_command_rules(user_text)
+    local_action = local_intent.get("action", "unknown")
+    local_first_actions = {
+        "inspect_screen",
+        "open_settings",
+        "open_assistant_settings",
+        "open_folder",
+        "add_contact",
+        "open_contacts",
+        "organize_folder",
+        "open_reminders",
+        "open_mail_client",
+        "open_application",
+        "open_installed_application",
+        "open_downloads",
+        "open_recycle_bin",
+        "empty_recycle_bin",
+        "lock_computer",
+        "reboot_computer",
+        "screenshot",
+        "search_files",
+        "search_web",
+        "camera_question",
+    }
+    if local_action in local_first_actions:
+        print("[Команды] Локальная маршрутизация: %s." % local_action, flush=True)
+        return local_intent
+
     try:
         semantic = _classify_semantically(user_text)
         if semantic.get("kind") == "clarify":
@@ -346,7 +377,7 @@ def _understand_command_rules(user_text: str) -> dict:
         app_name = open_match.group(1).strip().strip('"«»')
         app_name = re.sub(r"\s+(?:на компьютере|на пк|пожалуйста)$", "", app_name, flags=re.IGNORECASE).strip()
         if app_name and not re.search(
-            r"\b(папк|директор|каталог|файл|документ|загрузк|корзин|настройк|контакт|почт|напоминан|заметк|дела|задач)\w*\b",
+            r"\b(папк|директор|каталог|файл|документ|загрузк|корзин|настройк|параметр|контакт|почт|напоминан|заметк|дела|задач)\w*\b",
             app_name.lower().replace("ё", "е"),
         ):
             return {
