@@ -170,11 +170,7 @@ def _classify_semantically(user_text: str) -> dict:
         "clarification": parsed.get("clarification", ""),
         "response": parsed.get("response", ""),
     }
-    try:
-        from local_intents import record_intent
-        record_intent(user_text, result, provider)
-    except Exception as exc:
-        print("[Намерения] Журнал недоступен: %s" % exc, flush=True)
+    result["_semantic_provider"] = provider
     return result
 
 
@@ -678,7 +674,7 @@ def understand_command(user_text: str) -> dict:
     if kind == "respond" and not safe.get("question"):
         safe["question"] = user_text.strip()
 
-    return {
+    result = {
         "schema_version": 1,
         "kind": kind,
         "action": action,
@@ -698,4 +694,12 @@ def understand_command(user_text: str) -> dict:
         "clarification": clarification,
         "response": response,
     }
+    provider = raw.get("_semantic_provider")
+    if provider:
+        try:
+            from local_intents import record_intent
+            record_intent(user_text, result, str(provider))
+        except Exception as exc:
+            print("[Намерения] Журнал недоступен: %s" % exc, flush=True)
+    return result
 
