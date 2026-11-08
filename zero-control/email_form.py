@@ -70,8 +70,11 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
         root.minsize(560, 480)
         root.attributes("-topmost", True)
 
+        # Нижняя панель закреплена отдельно, чтобы вложения не вытесняли кнопки.
+        footer = ttk.Frame(root, padding=(16, 8, 16, 14))
+        footer.pack(side="bottom", fill="x")
         outer = ttk.Frame(root, padding=16)
-        outer.pack(fill="both", expand=True)
+        outer.pack(side="top", fill="both", expand=True)
         ttk.Label(outer, text="Новое письмо", font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(0, 12))
 
         book_items = [(name, item.get("email", "")) for name, item in load_address_book().items() if item.get("email")]
@@ -207,8 +210,8 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
         ttk.Button(controls, text="Добавить файлы…", command=add_files).pack(side="left")
         ttk.Button(controls, text="Убрать выбранные", command=remove_files).pack(side="left", padx=8)
 
-        buttons = ttk.Frame(outer)
-        buttons.pack(fill="x", pady=(14, 0))
+        buttons = ttk.Frame(footer)
+        buttons.pack(fill="x")
         ttk.Label(buttons, textvariable=status_var).pack(side="left")
 
         def send():
