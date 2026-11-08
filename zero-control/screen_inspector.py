@@ -160,3 +160,6 @@ def open_screen_inspector(parent, auto_capture=False):
 
     if auto_capture:
         win.after(150, capture)
+        # После голосового запроса сразу предлагаем анализ; отправка снимка ИИ
+        # всё равно требует отдельного подтверждения пользователя.
+        win.after(450, analyze)
