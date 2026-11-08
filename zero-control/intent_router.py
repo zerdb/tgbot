@@ -97,8 +97,8 @@ def _file_search_query(user_text: str) -> str:
     )
     query = re.sub(r"\b(?:мне)\b", " ", query, flags=re.IGNORECASE)
     # «файлы/документы» — тип объекта, а не часть имени; убираем только в начале запроса.
-    query = re.sub(r"^(?:мне\\s+)?(?:файл\\w*|документ\\w*)\\s+", "", query, flags=re.IGNORECASE)
-    query = re.sub(r"^(?:с\\s+)?(?:названием|именем)\\s+", "", query, flags=re.IGNORECASE)
+    query = re.sub(r"^(?:мне\s+)?(?:файл\w*|документ\w*)\s+", "", query, flags=re.IGNORECASE)
+    query = re.sub(r"^(?:с\s+)?(?:названием|именем)\s+", "", query, flags=re.IGNORECASE)
     query = re.sub(r"\b(?:пдф|пфд|pdf)\b", ".pdf", query, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip(" .,!?:;")
     query = re.sub(r"\bдве\s+тысячи\s+двадцать\s+пять\b", "2025", query, flags=re.IGNORECASE)
