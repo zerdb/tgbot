@@ -119,6 +119,7 @@ def _classify_semantically(user_text: str) -> dict:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_text[:4000]},
     ]
+    provider = "groq"
     try:
         from groq_client import chat
         content = chat(messages, temperature=0, max_tokens=800)
@@ -127,6 +128,7 @@ def _classify_semantically(user_text: str) -> dict:
         print("[Команды] Groq недоступна (%s). Пробую Moondream." % primary_error, flush=True)
         try:
             from moondream_client import chat as moondream_chat
+            provider = "moondream"
             content = moondream_chat(messages, temperature=0, max_tokens=800)
             print("[Команды] Семантическая классификация через Moondream.", flush=True)
         except Exception as fallback_error:
@@ -155,7 +157,7 @@ def _classify_semantically(user_text: str) -> dict:
         key: value for key, value in raw.items()
         if key in allowed and isinstance(value, (str, bool))
     }
-    return {
+    result = {
         "schema_version": 1,
         "kind": parsed.get("kind"),
         "action": action,
@@ -168,10 +170,27 @@ def _classify_semantically(user_text: str) -> dict:
         "clarification": parsed.get("clarification", ""),
         "response": parsed.get("response", ""),
     }
+    try:
+        from local_intents import record_intent
+        record_intent(user_text, result, provider)
+    except Exception as exc:
+        print("[Намерения] Журнал недоступен: %s" % exc, flush=True)
+    return result
 
 
 def _understand_command(user_text: str) -> dict:
-    """Use a deterministic fast path for trivial local app launches before AI."""
+    """Use deterministic local rules before calling a semantic model."""
+    # Сначала проверяем точные фразы, которые пользователь сам подтвердил
+    # в настройках. Это обычные данные, не исполняемый код и не regex.
+    try:
+        from local_intents import match_local_intent
+        learned = match_local_intent(user_text)
+        if learned:
+            print("[Команды] Пользовательское локальное правило: %s." % learned.get("action"), flush=True)
+            return learned
+    except Exception as exc:
+        print("[Команды] Пользовательские правила недоступны: %s" % exc, flush=True)
+
     # Запуск встроенных приложений Windows не требует семантической модели:
     # точная короткая команда сразу передаётся локальному диспетчеру.
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
