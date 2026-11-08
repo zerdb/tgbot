@@ -70,7 +70,7 @@ def _is_natural_information_question(text: str) -> bool:
 
 def _file_search_query(user_text: str) -> str:
     """Extract a flexible local file-search request without discarding filters."""
-    query = re.sub(r"^.*?\b(?:найди|поищи|найти|поискать)\b", "", user_text, flags=re.IGNORECASE).strip()
+    query = re.sub(r"^.*?\b(?:найди|поищи|найти|поискать|где)\b", "", user_text, flags=re.IGNORECASE).strip()
     query = re.sub(r"\b(?:мне)\b", " ", query, flags=re.IGNORECASE)
     query = re.sub(r"\b(?:пдф|пфд|pdf)\b", ".pdf", query, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip(" .,!?:;")
@@ -173,6 +173,23 @@ def understand_command(user_text: str) -> dict:
     folder_query = re.search(r"\b(?:найди|поищи|найти|поискать)\b.*\bпапк\w*\s+(?:с\s+названи\w*\s+)?(.+)$", user_text, re.IGNORECASE)
     if folder_query and folder_query.group(1).strip():
         return {"action": "open_folder", "confidence": 1.0, "arguments": {"folder": folder_query.group(1).strip().strip("«»")}}
+    # Вопросы о расположении файлов с критериями — локальный MFT-поиск,
+    # а не общий вопрос к ИИ (например: «Где файлы больше 10 ГБ?»).
+    file_subject = re.search(r"\b(файл\w*|документ\w*|пдф|pdf|фотографи\w*|архив\w*)\b", normalized)
+    file_criteria = re.search(
+        r"\b(больше|свыше|крупнее|меньше|до|созданн\w*|измененн\w*|"
+        r"сегодня|вчера|прошл\w*\s+недел\w*|прошл\w*\s+месяц|"
+        r"последние|новые|недавние|старые|самые большие|самые маленькие|"
+        r"pdf|пдф|word|ворд|excel|эксель|презентаци\w*)\b",
+        normalized,
+    )
+    if file_subject and file_criteria and not re.search(
+        r"\b(в интернете|в интернет|в сети|в google)\b", normalized
+    ):
+        query = _file_search_query(user_text)
+        if query:
+            return {"action": "search_files", "confidence": 1.0, "arguments": {"query": query}}
+
     if re.search(r"\b(найди|поищи|найти|поискать)\b", normalized) and not re.search(r"\b(в интернете|в интернет|в сети|в google)\b", normalized):
         query = _file_search_query(user_text)
         if query:
