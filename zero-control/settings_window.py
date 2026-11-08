@@ -64,86 +64,43 @@ def open_settings_window(parent):
             ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(0, 2))
             vars_[key] = var
 
-        groq_box = ttk.LabelFrame(frame, text="Groq — основная ИИ-модель", padding=6)
-        groq_box.pack(fill="x", pady=(1, 4))
-        groq_var = tk.StringVar(master=window)
-        ttk.Entry(groq_box, textvariable=groq_var, show="*").pack(fill="x", pady=(0, 3))
-        groq_status = tk.StringVar(
-            master=window,
-            value="Ключ сохранён" if (os.getenv("GROQ_API_KEY", "").strip() or get_groq_api_key()) else "Ключ не задан",
-        )
-        ttk.Label(groq_box, textvariable=groq_status).pack(anchor="w", pady=(0, 2))
-        def save_groq_secret():
-            try:
-                set_groq_api_key(groq_var.get())
-                groq_var.set("")
-                groq_status.set("Ключ сохранён в защищённом хранилище Windows")
-                messagebox.showinfo("Groq", "Ключ сохранён. Перезапусти помощника для применения.", parent=window)
-            except Exception as exc:
-                messagebox.showerror("Groq", str(exc), parent=window)
-        def clear_groq_secret():
-            try:
-                delete_groq_api_key()
-                groq_var.set("")
-                groq_status.set("Ключ не задан — облачная модель недоступна")
-            except Exception as exc:
-                messagebox.showerror("Groq", str(exc), parent=window)
-        groq_box_buttons = ttk.Frame(groq_box)
-        groq_box_buttons.pack(fill="x", pady=(1, 0))
-        ttk.Button(groq_box_buttons, text="Сохранить ключ", command=save_groq_secret).pack(side="left")
-        ttk.Button(groq_box_buttons, text="Очистить", command=clear_groq_secret).pack(side="left", padx=(6, 0))
+        keys_box = ttk.LabelFrame(frame, text="API-ключи и доступ к камере", padding=4)
+        keys_box.pack(fill="x", pady=(1, 3))
 
-        camera_box = ttk.LabelFrame(frame, text="Доступ к камере", padding=6)
-        camera_box.pack(fill="x", pady=(1, 4))
-        camera_var = tk.StringVar(master=window)
-        ttk.Entry(camera_box, textvariable=camera_var, show="*").pack(fill="x", pady=(0, 3))
-        camera_status = tk.StringVar(master=window, value="Сохранено" if get_camera_password() else "Не сохранено")
-        ttk.Label(camera_box, textvariable=camera_status).pack(anchor="w", pady=(0, 2))
-        def save_camera_secret():
-            try:
-                set_camera_password(camera_var.get())
-                camera_var.set("")
-                camera_status.set("Сохранено в защищённом хранилище Windows")
-                messagebox.showinfo("Камера", "Данные доступа сохранены.", parent=window)
-            except Exception as exc:
-                messagebox.showerror("Камера", str(exc), parent=window)
-        def clear_camera_secret():
-            try:
-                delete_camera_password()
-                camera_var.set("")
-                camera_status.set("Не сохранено")
-            except Exception as exc:
-                messagebox.showerror("Камера", str(exc), parent=window)
-        camera_box_buttons = ttk.Frame(camera_box)
-        camera_box_buttons.pack(fill="x", pady=(1, 0))
-        ttk.Button(camera_box_buttons, text="Сохранить", command=save_camera_secret).pack(side="left")
-        ttk.Button(camera_box_buttons, text="Очистить", command=clear_camera_secret).pack(side="left", padx=(6, 0))
+        def add_secret_row(label, getter, setter):
+            row = ttk.Frame(keys_box)
+            row.pack(fill="x", pady=1)
+            ttk.Label(row, text=label, width=13).pack(side="left")
+            value = tk.StringVar(master=window)
+            entry = ttk.Entry(row, textvariable=value, show="*", width=1)
+            entry.pack(side="left", fill="x", expand=True, padx=(3, 5))
+            saved = bool(getter())
+            state = tk.StringVar(master=window, value="сохранён" if saved else "не задан")
+            ttk.Label(row, textvariable=state, width=11).pack(side="right")
 
-        moondream_box = ttk.LabelFrame(frame, text="Moondream — резервная ИИ-модель помощника и камеры", padding=6)
-        moondream_box.pack(fill="x", pady=(1, 4))
-        moondream_var = tk.StringVar(master=window)
-        ttk.Entry(moondream_box, textvariable=moondream_var, show="*").pack(fill="x", pady=(0, 3))
-        moondream_status = tk.StringVar(master=window, value="Ключ сохранён" if get_moondream_api_key() else "Ключ не задан")
-        ttk.Label(moondream_box, textvariable=moondream_status).pack(anchor="w", pady=(0, 2))
-        def save_moondream_secret():
-            try:
-                set_moondream_api_key(moondream_var.get())
-                moondream_var.set("")
-                moondream_status.set("Ключ сохранён в защищённом хранилище Windows")
-                messagebox.showinfo("Moondream", "Ключ сохранён. Moondream останется резервной моделью помощника и камеры.", parent=window)
-            except Exception as exc:
-                messagebox.showerror("Moondream", str(exc), parent=window)
-        def clear_moondream_secret():
-            try:
-                delete_moondream_api_key()
-                moondream_var.set("")
-                moondream_status.set("Ключ не задан — резервная модель недоступна")
-            except Exception as exc:
-                messagebox.showerror("Moondream", str(exc), parent=window)
-        moondream_box_buttons = ttk.Frame(moondream_box)
-        moondream_box_buttons.pack(fill="x", pady=(1, 0))
-        ttk.Button(moondream_box_buttons, text="Сохранить ключ", command=save_moondream_secret).pack(side="left")
-        ttk.Button(moondream_box_buttons, text="Очистить", command=clear_moondream_secret).pack(side="left", padx=(6, 0))
+            def save_on_leave(_event=None):
+                secret = value.get().strip()
+                if not secret:
+                    return
+                try:
+                    setter(secret)
+                    state.set("сохранён")
+                except Exception as exc:
+                    state.set("ошибка")
+                    messagebox.showerror("Ключ доступа", str(exc), parent=window)
+
+            entry.bind("<FocusOut>", save_on_leave)
+            entry.bind("<Return>", save_on_leave)
+            return entry
+
+        add_secret_row("Groq:", get_groq_api_key, set_groq_api_key)
+        add_secret_row("Камера:", get_camera_password, set_camera_password)
+        add_secret_row("Moondream:", get_moondream_api_key, set_moondream_api_key)
+        ttk.Label(
+            keys_box,
+            text="Вставь ключ и перейди к другому полю — он сохранится автоматически.",
+            wraplength=520,
+        ).pack(anchor="w", pady=(2, 0))
 
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(1, 4))
