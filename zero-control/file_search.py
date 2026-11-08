@@ -51,10 +51,17 @@ def search_files(text: str, parent=None):
 
 
 def _search_worker(query: str, parent):
-    print(f"Ищу «{query}» по MFT и SQLite. Первое индексирование может занять некоторое время...", flush=True)
+    extension_match = re.search(r"\.(pdf|docx?|xlsx?|pptx?|txt)\s*$", query, flags=re.IGNORECASE)
+    extension = "." + extension_match.group(1).casefold() if extension_match else None
+    search_term = query[:extension_match.start()].strip() if extension_match else query
+    search_term = search_term.strip("* ").strip()
+    display_query = f"*{search_term}*{extension}" if extension else query
+    print(f"Ищу «{display_query}» по MFT и SQLite. Первое индексирование может занять некоторое время...", flush=True)
     try:
-        matches = refresh_and_search(query, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
-        _search_results.put(("success", parent, (query, matches)))
+        matches = refresh_and_search(search_term, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
+        if extension:
+            matches = [path for path in matches if path.suffix.casefold() == extension]
+        _search_results.put(("success", parent, (display_query, matches)))
     except Exception as exc:
         error_text = str(exc)
         print(f"Ошибка MFT-поиска: {error_text}", flush=True)
