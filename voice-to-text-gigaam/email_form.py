@@ -63,7 +63,7 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
             return
         root = tk.Toplevel(parent)
         apply_modern_style(root)
-        root.title("GigaAM — отправка почты")
+        root.title("Zero Control — отправка почты")
         root.geometry("650x590")
         root.minsize(560, 480)
         root.attributes("-topmost", True)
