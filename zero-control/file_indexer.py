@@ -231,10 +231,17 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
             char for char in unicodedata.normalize("NFKC", query).casefold()
             if char.isalnum()
         )
+        if query in ("__SORT_SIZE_DESC__", "__SORT_SIZE_ASC__"):
+            direction = "DESC" if query == "__SORT_SIZE_DESC__" else "ASC"
+            rows = connection.execute(
+                "SELECT full_path FROM files ORDER BY size " + direction + " LIMIT ?",
+                (MAX_RESULTS,),
+            ).fetchall()
+            return [Path(row[0]) for row in rows]
+
         if not needle:
             # Пустая строка означает запрос только по фильтрам: типу, дате,
-            # размеру, диску или расположению. Возвращаем ограниченный набор
-            # индексированных файлов, фильтрация выполняется в file_search.py.
+            # диску или расположению. Фильтрация выполняется в file_search.py.
             rows = connection.execute(
                 "SELECT full_path FROM files ORDER BY name COLLATE NOCASE LIMIT ?",
                 (MAX_RESULTS,),
