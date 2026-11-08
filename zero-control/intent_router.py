@@ -98,19 +98,19 @@ def understand_command(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
 
     # Вопросы о текущем экране направляем в модуль снимка и анализа, а не в обычный текстовый ИИ.
-    if re.search(r"\\b(что|что сейчас|посмотри|посмотреть|прочитай|прочитать|опиши|увидь|видишь)\\b.*\\b(на экране|экран|монитор)", normalized) or normalized in ("что у меня на экране", "что видно на экране", "посмотри на экран"):
+    if re.search(r"\b(что|что сейчас|посмотри|посмотреть|прочитай|прочитать|опиши|увидь|видишь)\\b.*\\b(на экране|экран|монитор)", normalized) or normalized in ("что у меня на экране", "что видно на экране", "посмотри на экран"):
         return {"action": "inspect_screen", "confidence": 1.0, "arguments": {}}
 
     # Открытие программы и вставка текста из буфера — единая локальная команда.
     paste_match = re.search(
-        r"\\b(блокнот|notepad|word|ворд|microsoft word)\\b.*\\b(вставь|вставить|вставить текст|вставить содержимое)\\b.*\\b(буфер|скопированн|clipboard)",
+        r"\b(блокнот|notepad|word|ворд|microsoft word)\\b.*\\b(вставь|вставить|вставить текст|вставить содержимое)\\b.*\\b(буфер|скопированн|clipboard)",
         normalized,
     ) or re.search(
-        r"\\b(вставь|вставить)\\b.*\\b(текст|содержимое)\\b.*\\b(из буфера|из буфера обмена|скопированн)",
+        r"\b(вставь|вставить)\\b.*\\b(текст|содержимое)\\b.*\\b(из буфера|из буфера обмена|скопированн)",
         normalized,
     )
     if paste_match:
-        app_match = re.search(r"\\b(блокнот|notepad|word|ворд|microsoft word)\\b", normalized)
+        app_match = re.search(r"\b(блокнот|notepad|word|ворд|microsoft word)\\b", normalized)
         if app_match:
             app = "Блокнот" if app_match.group(1) in ("блокнот", "notepad") else "Word"
             return {"action": "paste_clipboard_to_application", "confidence": 1.0, "arguments": {"app_name": app}}
