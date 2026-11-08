@@ -443,7 +443,7 @@ def _handle_command_worker(text: str):
         else:
             print(str(intent.get("clarification") or "Нужно уточнить задачу."), flush=True)
         return
-    if kind == "respond" and action != "ai_chat":
+    if kind == "respond" and action not in ("ai_chat", "camera_question"):
         question = str(args.get("question") or intent.get("response") or text).strip()
         if _ui is not None:
             _ui_actions.put(("busy", "Жду ответ ИИ…"))
