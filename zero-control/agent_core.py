@@ -39,6 +39,7 @@ DEFAULTS = {
     "imap_host": "imap.mail.ru",
     "imap_port": 993,
     "remember_chat_history": True,
+    "clean_dictation_with_ai": False,
 }
 
 
@@ -74,7 +75,7 @@ def save_settings(values: dict) -> dict:
                 value = max(1, min(65535, int(value)))
             except (TypeError, ValueError):
                 continue
-        elif key == "remember_chat_history":
+        elif key in ("remember_chat_history", "clean_dictation_with_ai"):
             value = bool(value)
         else:
             value = str(value).strip()
