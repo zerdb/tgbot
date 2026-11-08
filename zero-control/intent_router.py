@@ -107,7 +107,7 @@ def understand_command(user_text: str) -> dict:
     paste_verb = bool(re.search(r"\b(встав\w*|остав\w*|сохран\w*|помест\w*|перенес\w*)\b", normalized))
     if clipboard_context and paste_verb:
         app_match = re.search(
-            r"\b(блокнот|notepad|word|ворд|ворт|мicrosoft\s+word)\b",
+            r"\b(блокнот|notepad|word|ворд|ворт|microsoft\s+word)\b",
             normalized,
         )
         app_token = app_match.group(1) if app_match else ""
