@@ -368,11 +368,8 @@ def handle_command(text: str):
 
 
 def _handle_command_worker(text: str):
-    """Единая точка входа: сразу показывает статус, затем определяет намерение."""
+    """Единая точка входа: определяет намерение без общей плашки занятости."""
     print(f"Распознана команда: {text}")
-    # Команда уже распознана: не ждём ответа классификатора, чтобы показать индикатор.
-    if _ui is not None:
-        _ui_actions.put(("busy", "Обрабатываю команду…"))
     try:
         from intent_router import understand_command
         intent = understand_command(text)
@@ -501,8 +498,7 @@ def _handle_command_worker(text: str):
         )
     else:
         print("Эта операция пока не подключена.")
-    if not keep_busy and _ui is not None:
-        _ui_actions.put(("busy", None))
+    # Быстрые команды не включают общую плашку «Обрабатываю команду…».
 
 def transcribe_and_execute(audio_data: np.ndarray):
     if not _transcription_lock.acquire(blocking=False):
