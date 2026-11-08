@@ -315,9 +315,31 @@ def _understand_command_legacy(user_text: str) -> dict:
     if action not in ACTIONS: action = "unknown"
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
-    raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","recipient_name","reminder_text","note_text","item_text","query","question","app","app_name","folder","export_format") and isinstance(v,(str,bool))}
-    return {"action":action,"confidence":confidence,"arguments":safe}
+    raw = parsed.get("parameters") if isinstance(parsed.get("parameters"), dict) else parsed.get("arguments")
+    if not isinstance(raw, dict):
+        raw = {}
+    safe = {
+        key: value for key, value in raw.items()
+        if key in (
+            "attach_copied_files", "recipient_name", "reminder_text", "note_text",
+            "item_text", "query", "question", "app", "app_name", "folder",
+            "export_format",
+        ) and isinstance(value, (str, bool))
+    }
+    return {
+        "schema_version": 1,
+        "kind": parsed.get("kind"),
+        "action": action,
+        "goal": parsed.get("goal", ""),
+        "target": parsed.get("target") if isinstance(parsed.get("target"), dict) else {},
+        "source": parsed.get("source") if isinstance(parsed.get("source"), dict) else {},
+        "method": parsed.get("method", ""),
+        "parameters": safe,
+        "confidence": confidence,
+        "clarification": parsed.get("clarification", ""),
+        "response": parsed.get("response", ""),
+        "arguments": safe,
+    }
 
 def understand_command(user_text: str) -> dict:
     """Return a versioned intent envelope for the execution receiver.
