@@ -74,6 +74,7 @@ def _file_search_query(user_text: str) -> str:
     query = re.sub(r"\b(?:мне)\b", " ", query, flags=re.IGNORECASE)
     query = re.sub(r"\b(?:пдф|пфд|pdf)\b", ".pdf", query, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip(" .,!?:;")
+    query = re.sub(r"\bдве\s+тысячи\s+двадцать\s+пять\b", "2025", query, flags=re.IGNORECASE)
     counts = {"один": 1, "одна": 1, "одно": 1, "два": 2, "две": 2, "три": 3, "четыре": 4, "пять": 5, "шесть": 6, "семь": 7, "восемь": 8, "девять": 9, "десять": 10}
     digit_nouns = {"нул": "0", "единиц": "1", "дво": "2", "тро": "3", "четвер": "4", "пят": "5", "шестер": "6", "семер": "7", "восьмер": "8", "девят": "9"}
     for count_word, count in counts.items():
