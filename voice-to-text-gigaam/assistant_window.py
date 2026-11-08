@@ -1,4 +1,4 @@
-"""Modern light Tkinter interface for the GigaAM voice assistant."""
+"""Modern light Tkinter interface for Zero Control."""
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
