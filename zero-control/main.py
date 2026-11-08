@@ -7,11 +7,11 @@ import tempfile
 import threading
 import queue
 import traceback
-import ctypes
-from ctypes import wintypes
 from pathlib import Path
 
 import tkinter as tk
+
+from keyboard_listener import KeyboardListener
 
 # Показываем заставку до импорта модулей приложения.
 _splash = tk.Tk()
@@ -55,15 +55,6 @@ _ui = None  # GUI создаётся позже, после загрузки м�
 SAMPLE_RATE = 16000
 CHANNELS = 1
 MAX_CHUNK_SECONDS = 24
-
-WH_KEYBOARD_LL = 13
-WM_KEYDOWN, WM_KEYUP = 0x0100, 0x0101
-WM_SYSKEYDOWN, WM_SYSKEYUP = 0x0104, 0x0105
-VK_RSHIFT, VK_RCONTROL = 0xA1, 0xA3
-_pressed_physical_right = set()
-_keyboard_events = queue.SimpleQueue()
-_keyboard_hook = None
-_keyboard_hook_proc = None
 
 PROJECT_DIR = Path(__file__).resolve().parent
 MODEL_DIR = Path(os.getenv("ZERO_CONTROL_MODEL_DIR", os.getenv("GIGAAM_MODEL_DIR", str(PROJECT_DIR.parent / "GigaAM-v3")))).expanduser().resolve()
@@ -169,83 +160,6 @@ def promote_to_dictation():
     print("Режим переключён на диктовку: удерживайте Right Ctrl + Right Shift.")
     update_ui_status("ДИКТОВКА", recording="text")
 
-
-class KBDLLHOOKSTRUCT(ctypes.Structure):
-    _fields_ = [("vkCode", wintypes.DWORD), ("scanCode", wintypes.DWORD),
-                ("flags", wintypes.DWORD), ("time", wintypes.DWORD),
-                ("dwExtraInfo", ctypes.c_size_t)]
-
-HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
-user32 = ctypes.WinDLL("user32", use_last_error=True)
-user32.SetWindowsHookExW.argtypes = (
-    ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD
-)
-user32.SetWindowsHookExW.restype = wintypes.HHOOK
-user32.CallNextHookEx.argtypes = (
-    wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
-)
-user32.CallNextHookEx.restype = ctypes.c_ssize_t
-user32.UnhookWindowsHookEx.argtypes = (wintypes.HHOOK,)
-user32.UnhookWindowsHookEx.restype = wintypes.BOOL
-
-def _native_keyboard_event(n_code, w_param, l_param):
-    # Не запускаем запись и не трогаем состояние приложения из системного callback.
-    # Только передаём событие в очередь для обработки главным потоком Tkinter.
-    if n_code >= 0 and w_param in (WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP):
-        try:
-            vk = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents.vkCode
-            if vk in (VK_RCONTROL, VK_RSHIFT):
-                _keyboard_events.put((vk, w_param))
-        except Exception:
-            pass
-    return user32.CallNextHookEx(_keyboard_hook, n_code, w_param, l_param)
-
-
-def process_keyboard_events():
-    """Обрабатывает физические Right Ctrl/Shift только в главном потоке GUI."""
-    while True:
-        try:
-            vk, event = _keyboard_events.get_nowait()
-        except queue.Empty:
-            break
-
-        if event in (WM_KEYDOWN, WM_SYSKEYDOWN):
-            if vk in _pressed_physical_right:
-                continue
-            _pressed_physical_right.add(vk)
-            if vk == VK_RCONTROL:
-                start_recording("text" if VK_RSHIFT in _pressed_physical_right else "command")
-            elif VK_RCONTROL in _pressed_physical_right:
-                with _lock:
-                    active = _recording
-                if active:
-                    promote_to_dictation()
-        else:
-            _pressed_physical_right.discard(vk)
-            if vk == VK_RSHIFT:
-                with _lock:
-                    should_stop = _recording and _recording_mode == "text"
-                if should_stop:
-                    stop_recording()
-            elif vk == VK_RCONTROL:
-                stop_recording()
-
-def install_right_only_keyboard_hook():
-    global _keyboard_hook, _keyboard_hook_proc
-    _keyboard_hook_proc = HOOKPROC(_native_keyboard_event)
-    # For WH_KEYBOARD_LL, use a null module handle for this in-process callback.
-    _keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _keyboard_hook_proc, None, 0)
-    if not _keyboard_hook:
-        raise ctypes.WinError(ctypes.get_last_error())
-
-
-def remove_keyboard_hook():
-    global _keyboard_hook, _keyboard_hook_proc
-    if _keyboard_hook:
-        user32.UnhookWindowsHookEx(_keyboard_hook)
-        _keyboard_hook = None
-    _keyboard_hook_proc = None
-    _pressed_physical_right.clear()
 
 def stop_recording():
     global _stream, _recording
@@ -574,7 +488,7 @@ def _mail_reader_worker():
 
 
 def main():
-    global _ui, _ui_thread_id, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
+    global _ui, _ui_thread_id, _keyboard_listener, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
 
     # Заставка уже показана до импорта модулей приложения.
     # Долгая загрузка проходит за заставкой; главное окно пока не открываем.
@@ -618,7 +532,15 @@ def main():
     configure_ffmpeg()
     load_model()
     _ui.set_busy_overlay(None)
-    install_right_only_keyboard_hook()
+    _keyboard_listener = KeyboardListener(
+        start_recording=start_recording,
+        promote_to_dictation=promote_to_dictation,
+        stop_recording=stop_recording,
+    )
+    _keyboard_listener.set_dictation_state_callback(
+        lambda: _recording and _recording_mode == "text"
+    )
+    _keyboard_listener.install()
     start_file_search_ui(_ui.root, busy_callback=_ui.set_busy_overlay)
     # Таймер очереди напоминаний обслуживается главным потоком Tkinter.
     start_reminder_service()
@@ -632,7 +554,8 @@ def main():
             return
 
         try:
-            process_keyboard_events()
+            if _keyboard_listener is not None:
+                _keyboard_listener.process_events()
         except Exception:
             print("[GUI] Ошибка обработки клавиатурных событий:", flush=True)
             traceback.print_exc()
@@ -744,7 +667,8 @@ def shutdown():
         active = _recording
     if active:
         stop_recording()
-    remove_keyboard_hook()
+    if _keyboard_listener is not None:
+        _keyboard_listener.remove()
     print("Работа программы завершена.")
 
 if __name__ == "__main__":
