@@ -329,6 +329,38 @@ def transcribe_and_paste(audio_data: np.ndarray):
         print("Распознаю речь локально...")
         text = transcribe_parts(audio_data, "фрагмент")
         if text:
+            try:
+                from agent_core import load_settings
+                if load_settings().get("clean_dictation_with_ai", False):
+                    print("Очищаю текст диктовки с помощью ИИ...")
+                    from groq_client import chat
+                    cleaned = chat(
+                        [
+                            {
+                                "role": "system",
+                                "content": (
+                                    "Ты редактор расшифровки русской устной речи. "
+                                    "Убери слова-паразиты, случайные повторы, запинки, "
+                                    "оговорки и незавершённые дубли фраз. Сохрани исходный "
+                                    "смысл, факты, имена, числа и стиль говорящего. "
+                                    "Не пересказывай и не сокращай содержательные мысли, "
+                                    "не добавляй ничего от себя. Верни только готовый текст "
+                                    "без пояснений и кавычек."
+                                ),
+                            },
+                            {"role": "user", "content": text},
+                        ],
+                        temperature=0.1,
+                        max_tokens=max(300, min(2000, len(text) // 2 + 200)),
+                        timeout=60,
+                    ).strip()
+                    if cleaned:
+                        text = cleaned
+                        print("ИИ-очистка диктовки завершена.")
+                    else:
+                        print("ИИ вернул пустой текст; использую исходную расшифровку.")
+            except Exception as exc:
+                print(f"Не удалось очистить диктовку через ИИ; использую исходный текст: {exc}")
             pyperclip.copy(text)
             keyboard.send("ctrl+v")
             print(f"Текст распознан и вставлен: {text}")
