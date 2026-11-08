@@ -135,6 +135,8 @@ def _parse_search_request(raw_query: str) -> dict:
             if m:
                 year_match = re.search(r"\b(20\d{2})\b", text)
                 year = int(year_match.group(1)) if year_match else now.year
+                if year_match:
+                    text = text[:year_match.start()] + " " + text[year_match.end():]
                 filters["start"] = datetime(year, month, 1)
                 next_month = datetime(year + (month == 12), month % 12 + 1, 1)
                 filters["end"] = next_month - timedelta(microseconds=1)
