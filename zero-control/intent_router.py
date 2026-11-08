@@ -104,12 +104,13 @@ def understand_command(user_text: str) -> dict:
     # Команды с буфером обрабатываем до классификатора: ASR может превратить
     # «вставь» в «оставь», а «вставь туда» — не назвать приложение явно.
     clipboard_context = bool(re.search(r"\b(буфер\w*|скопированн\w*|clipboard)\b", normalized))
-    paste_verb = bool(re.search(r"\b(встав\w*|остав\w*|сохран\w*|помест\w*|перенес\w*)\b", normalized))
-    if clipboard_context and paste_verb:
-        app_match = re.search(
-            r"\b(блокнот|notepad|word|ворд|ворт|microsoft\s+word)\b",
-            normalized,
-        )
+    app_match = re.search(
+        r"\b(блокнот|notepad|word|ворд|ворт|microsoft\s+word)\b",
+        normalized,
+    )
+    paste_verb = bool(re.search(r"\b(встав\w*|остав\w*|помест\w*|перенес\w*)\b", normalized))
+    save_to_named_app = bool(app_match and re.search(r"\b(сохран\w*|запиш\w*)\b", normalized))
+    if clipboard_context and (paste_verb or save_to_named_app):
         app_token = app_match.group(1) if app_match else ""
         # Если пользователь говорит «вставь туда», без названия приложения,
         # используем Word как целевое приложение по умолчанию.
