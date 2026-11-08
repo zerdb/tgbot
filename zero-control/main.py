@@ -460,8 +460,18 @@ def handle_command(text: str):
     elif action == "email_compose":
         recipient_name = str(args.get("recipient_name") or "").strip()
         print(f"[Почта] Получатель из голосовой команды: {recipient_name or 'не распознан'}", flush=True)
+        attach_files = bool(args.get("attach_copied_files", False))
+        attachment_paths = []
+        if attach_files:
+            try:
+                from email_form import copied_file_paths
+                attachment_paths = copied_file_paths()
+                print(f"[Почта] Файлов в буфере обмена: {len(attachment_paths)}", flush=True)
+            except Exception as exc:
+                print(f"[Почта] Не удалось получить список файлов из буфера: {exc}", flush=True)
         _ui_actions.put(("email_compose", {
-            "attach_copied_files": bool(args.get("attach_copied_files", False)),
+            "attach_copied_files": attach_files,
+            "attachment_paths": attachment_paths,
             "recipient_name": recipient_name,
         }))
     elif action == "inspect_camera_image":
@@ -664,6 +674,7 @@ def main():
                         initial_tab="compose",
                         add_files_on_open=bool(options.get("attach_copied_files", False)),
                         recipient_name=str(options.get("recipient_name") or ""),
+                        initial_attachment_paths=options.get("attachment_paths") or [],
                     )
                 elif ui_action == "inspect_screen":
                     print("[Экран] Открываю анализ свежего снимка экрана.", flush=True)
