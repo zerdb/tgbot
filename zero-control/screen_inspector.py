@@ -48,8 +48,10 @@ def open_screen_inspector(parent):
     win.geometry("920x700")
     win.minsize(680, 500)
     center_window(win, parent)
+    footer = ttk.Frame(win, padding=(14, 8, 14, 12))
+    footer.pack(side="bottom", fill="x")
     frame = ttk.Frame(win, padding=14)
-    frame.pack(fill="both", expand=True)
+    frame.pack(side="top", fill="both", expand=True)
 
     ttk.Label(frame, text="Анализ содержимого экрана", font=("Segoe UI", 17, "bold")).pack(anchor="w")
     ttk.Label(
@@ -61,7 +63,7 @@ def open_screen_inspector(parent):
 
     question = tk.StringVar(master=win, value="Опиши, что сейчас открыто на экране, и выдели важную информацию.")
     ttk.Entry(frame, textvariable=question).pack(fill="x", pady=6)
-    output = tk.Text(frame, wrap="word", font=("Segoe UI", 10), padx=8, pady=8)
+    output = tk.Text(frame, wrap="word", height=12, font=("Segoe UI", 10), padx=8, pady=8)
     output.pack(fill="both", expand=True)
     captured = {"image": None, "path": None}
 
@@ -147,8 +149,8 @@ def open_screen_inspector(parent):
 
         threading.Thread(target=work, daemon=True, name="screen-analysis").start()
 
-    row = ttk.Frame(frame)
-    row.pack(fill="x", pady=8)
+    row = ttk.Frame(footer)
+    row.pack(fill="x")
     for label, command in [
         ("📸 Снимок экрана", capture),
         ("🖼 Открыть изображение…", choose),
