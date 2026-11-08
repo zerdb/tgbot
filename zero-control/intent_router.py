@@ -23,7 +23,7 @@ ACTIONS = {
  "open_settings": "Открыть настройки Windows.",
  "empty_recycle_bin": "Очистить корзину.",
  "screenshot": "Сделать скриншот.",
- "inspect_screen": "Сделать свежий снимок экрана и открыть модуль его анализа.",
+ "inspect_screen": "Сделать свежий снимок экрана и открыть сохранённое изображение в стандартном просмотрщике Windows.",
  "paste_clipboard_to_application": "Открыть указанную программу и вставить в неё текст из буфера обмена; app_name — название приложения.",
  "reminder": "Создать напоминание; reminder_text сохранить равным исходной фразе.",
  "organize_folder": "Открыть мастер сортировки файлов.",
@@ -418,7 +418,13 @@ def _understand_command_rules(user_text: str) -> dict:
         before_mail = re.search(r"\b(?:отправь|отправить|перешли|переслать)\s+(.+?)\s+(?:на\s+)?(?:почту|почте|email|емейл)\b", user_text, re.IGNORECASE)
         candidate = (after_mail.group(1) if after_mail else before_mail.group(1) if before_mail else "").strip(" .,!?:;«»\"")
         candidate = re.sub(r"\b(?:мне|файлы?|документы?|вложения?|пожалуйста|срочно)\b", " ", candidate, flags=re.IGNORECASE)
-        candidate = re.sub(r"\s+", " ", candidate).strip()
+        candidate = re.split(
+            r"\s+\b(?:о|об|про|насчет|насчёт|на тему|по поводу)\b\s+",
+            candidate,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        candidate = re.sub(r"\s+", " ", candidate).strip(" .,!?:;«»\\\"")
         if candidate and not re.search(r"\b(?:файл|файлы|документ|документы|вложение|вложения|письмо|письма)\b", candidate, re.IGNORECASE):
             recipient_name = candidate
         return {"action": "email_compose", "confidence": 1.0, "parameters": {"attach_copied_files": attach, "recipient_name": recipient_name}}
@@ -437,9 +443,7 @@ def _understand_command_rules(user_text: str) -> dict:
             flags=re.IGNORECASE,
         )[0].strip()
         recipient_name = re.sub(r"^(?:кому|для)\s+", "", recipient_name, flags=re.IGNORECASE).strip()
-        # Короткая форма «письмо Шамилю о встрече» — имя до темы.
-        if recipient_name:
-            recipient_name = recipient_name.split()[0]
+        # Сохраняем полное имя адресата (имя + фамилию), не обрезая его до первого слова.
         return {
             "action": "email_compose",
             "confidence": 1.0,
