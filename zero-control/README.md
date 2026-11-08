@@ -20,7 +20,7 @@ py -m pip install -U huggingface_hub
 hf download ai-sage/GigaAM-v3 --revision e2e_rnnt --local-dir GigaAM-v3
 ```
 
-Place the resulting `GigaAM-v3` folder **next to** `voice-to-text-gigaam`, like this:
+Place the resulting `GigaAM-v3` folder **next to** `zero-control`, like this:
 
 ```text
 tgbot/
@@ -29,7 +29,7 @@ tgbot/
 │   ├── modeling_gigaam.py
 │   ├── pytorch_model.bin
 │   └── tokenizer.model
-└── voice-to-text-gigaam/
+└── zero-control/
     ├── main.py
     ├── requirements.txt
     └── README.md
@@ -41,7 +41,7 @@ Do not put the model weights into GitHub; the model is downloaded separately.
 
 Use Python 3.10 or newer. Install FFmpeg and add it to PATH if required by your audio environment.
 
-From the `voice-to-text-gigaam` folder:
+From the `zero-control` folder:
 
 ```powershell
 py -m venv .venv
