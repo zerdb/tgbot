@@ -93,7 +93,7 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
             value = re.sub(r"[^а-яa-z0-9 ]", " ", str(value or "").lower().replace("ё", "е"))
             tokens = []
             for token in value.split():
-                token = re.sub(r"(иями|ями|ами|ого|ему|ому|ыми|ими|иях|иях|а|я|у|ю|е|ы|и|ом|ем)$", "", token)
+                token = re.sub(r"(иями|ями|ами|ого|ему|ому|ыми|ими|иях|иях|а|я|у|ю|е|ы|и|ом|ем|ь|ъ)$", "", token)
                 if token:
                     tokens.append(token)
             return tokens
