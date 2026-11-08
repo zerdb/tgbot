@@ -401,8 +401,32 @@ def _understand_command_rules(user_text: str) -> dict:
         if candidate and not re.search(r"\b(?:файл|файлы|документ|документы|вложение|вложения|письмо|письма)\b", candidate, re.IGNORECASE):
             recipient_name = candidate
         return {"action": "email_compose", "confidence": 1.0, "parameters": {"attach_copied_files": attach, "recipient_name": recipient_name}}
-    if re.search(r"\b(создай|создать|напиши|написать|составь|составить)\b.*\b(письмо|письмецо|email)", normalized):
-        return {"action": "email_compose", "confidence": 1.0, "parameters": {"attach_copied_files": False}}
+    compose_match = re.search(
+        r"\b(?:создай|создать|напиши|написать|составь|составить)\b.*?\b(?:письмо|письмецо|email)\b\s*(.*)$",
+        user_text.strip(),
+        flags=re.IGNORECASE,
+    )
+    if compose_match:
+        # Имя после слова «письмо» — адресат: «напиши письмо Шамилю».
+        recipient_name = compose_match.group(1).strip(" .,!?:;«»\"")
+        recipient_name = re.split(
+            r"\s+\b(?:о|об|про|насчет|насчёт|на тему|по поводу)\b\s+",
+            recipient_name,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0].strip()
+        recipient_name = re.sub(r"^(?:кому|для)\s+", "", recipient_name, flags=re.IGNORECASE).strip()
+        # Короткая форма «письмо Шамилю о встрече» — имя до темы.
+        if recipient_name:
+            recipient_name = recipient_name.split()[0]
+        return {
+            "action": "email_compose",
+            "confidence": 1.0,
+            "parameters": {
+                "attach_copied_files": False,
+                "recipient_name": recipient_name,
+            },
+        }
     if re.search(r"\b(открой|открыть|покажи)\b.*\b(почту|почтовый клиент|входящие)", normalized):
         return {"action": "open_mail_client", "confidence": 1.0, "parameters": {}}
 
