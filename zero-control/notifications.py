@@ -181,7 +181,7 @@ def speak_text(message: str):
 
 
 def install_messagebox_voice():
-    """Replace informational Tk message boxes with Denis speech; speak before confirmations."""
+    """Speak message-box text and then display the original Tk dialog."""
     import tkinter.messagebox as messagebox
 
     if getattr(messagebox, "_zero_control_voice_installed", False):
@@ -198,26 +198,28 @@ def install_messagebox_voice():
         parts = [str(part).strip() for part in (title, message) if str(part or "").strip()]
         return ". ".join(parts)
 
-    def _speak_only(title, message, **kwargs):
+    def _speak_then_show(original, title, message, **kwargs):
         speak_text(_announcement(title, message))
-        return "ok"
-
-    def _speak_then_confirm(original, title, message, **kwargs):
-        speak_text(_announcement(title, message))
-        # Confirmation windows stay available, but only appear after Denis finishes speaking.
+        # Show the full original dialog after Denis finishes speaking.
         _speech_queue.join()
         return original(title, message, **kwargs)
 
-    messagebox.showinfo = _speak_only
-    messagebox.showwarning = _speak_only
-    messagebox.showerror = _speak_only
-    messagebox.askyesno = lambda title, message, **kwargs: _speak_then_confirm(
+    messagebox.showinfo = lambda title, message, **kwargs: _speak_then_show(
+        original_showinfo, title, message, **kwargs
+    )
+    messagebox.showwarning = lambda title, message, **kwargs: _speak_then_show(
+        original_showwarning, title, message, **kwargs
+    )
+    messagebox.showerror = lambda title, message, **kwargs: _speak_then_show(
+        original_showerror, title, message, **kwargs
+    )
+    messagebox.askyesno = lambda title, message, **kwargs: _speak_then_show(
         original_askyesno, title, message, **kwargs
     )
-    messagebox.askokcancel = lambda title, message, **kwargs: _speak_then_confirm(
+    messagebox.askokcancel = lambda title, message, **kwargs: _speak_then_show(
         original_askokcancel, title, message, **kwargs
     )
-    messagebox.askretrycancel = lambda title, message, **kwargs: _speak_then_confirm(
+    messagebox.askretrycancel = lambda title, message, **kwargs: _speak_then_show(
         original_askretrycancel, title, message, **kwargs
     )
     messagebox._zero_control_voice_installed = True
