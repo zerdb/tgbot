@@ -5,6 +5,7 @@ import ctypes
 import os
 import re
 import threading
+from email.utils import parseaddr
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -84,8 +85,13 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
 
         def select_contact(_event=None):
             index = recipient.current()
-            selected_address["value"] = book_items[index][1].strip() if 0 <= index < len(book_items) else ""
-            manual_address_var.set(selected_address["value"])
+            if 0 <= index < len(book_items):
+                contact_name, contact_email = book_items[index]
+                selected_address["value"] = contact_email.strip()
+                manual_address_var.set(f"{contact_name} <{selected_address['value']}>")
+            else:
+                selected_address["value"] = ""
+                manual_address_var.set("")
 
         recipient.bind("<<ComboboxSelected>>", select_contact)
 
@@ -207,7 +213,8 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
 
         def send():
             manual_address = manual_address_var.get().strip()
-            address = manual_address or selected_address["value"]
+            # В поле «Кому» показываем имя и адрес, но SMTP получает только email.
+            address = parseaddr(manual_address)[1].strip() or selected_address["value"]
             if not address:
                 messagebox.showwarning(
                     "Нет получателя",
