@@ -18,8 +18,10 @@ def open_reminders(parent):
     win.minsize(620, 440)
     center_window(win, parent)
 
+    footer = ttk.Frame(win, padding=(14, 8, 14, 12))
+    footer.pack(side="bottom", fill="x")
     frame = ttk.Frame(win, padding=14)
-    frame.pack(fill="both", expand=True)
+    frame.pack(side="top", fill="both", expand=True)
 
     ttk.Label(frame, text="Заметки и дела", font=("Segoe UI", 17, "bold")).pack(anchor="w")
     ttk.Label(
@@ -214,8 +216,8 @@ def open_reminders(parent):
             delete_item(item["id"])
             refresh()
 
-    buttons = ttk.Frame(frame)
-    buttons.pack(fill="x", pady=(9, 0))
+    buttons = ttk.Frame(footer)
+    buttons.pack(fill="x")
     ttk.Button(buttons, text="＋ Новая запись", command=lambda: edit_dialog()).pack(side="left")
     ttk.Button(
         buttons, text="Изменить",
