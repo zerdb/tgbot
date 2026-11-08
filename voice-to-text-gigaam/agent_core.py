@@ -1,12 +1,35 @@
-"""Shared configuration and explicit user-approved AI memory for GigaAM."""
+"""Shared configuration and explicit user-approved AI memory for Zero Control."""
 from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 from threading import RLock
 
-APP_DATA = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant"
+APP_DATA = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "ZeroControl"
+LEGACY_APP_DATA = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant"
+
+
+def _migrate_legacy_app_data() -> None:
+    """Copy legacy user data to the new app folder without deleting originals."""
+    if not LEGACY_APP_DATA.is_dir():
+        return
+    try:
+        APP_DATA.mkdir(parents=True, exist_ok=True)
+        for source in LEGACY_APP_DATA.iterdir():
+            target = APP_DATA / source.name
+            if target.exists():
+                continue
+            if source.is_file():
+                shutil.copy2(source, target)
+            elif source.is_dir():
+                shutil.copytree(source, target, dirs_exist_ok=True)
+    except OSError as exc:
+        print(f"Не удалось перенести старые данные Zero Control: {exc}")
+
+
+_migrate_legacy_app_data()
 CONFIG_PATH = APP_DATA / "settings.json"
 MEMORY_PATH = APP_DATA / "assistant_memory.json"
 _LOCK = RLock()
@@ -74,7 +97,7 @@ def get_groq_api_key() -> str:
     """Read Groq API key from Windows Credential Manager."""
     try:
         import keyring
-        return keyring.get_password("GigaAMVoiceAssistant", "groq_api_key") or ""
+        return keyring.get_password("ZeroControl", "groq_api_key") or keyring.get_password("GigaAMVoiceAssistant", "groq_api_key") or ""
     except Exception as exc:
         print(f"Не удалось прочитать ключ Groq: {exc}")
         return ""
@@ -85,13 +108,17 @@ def set_groq_api_key(api_key: str) -> None:
     if not api_key:
         raise ValueError("Ключ Groq не может быть пустым.")
     import keyring
-    keyring.set_password("GigaAMVoiceAssistant", "groq_api_key", api_key)
+    keyring.set_password("ZeroControl", "groq_api_key", api_key)
 
 
 def delete_groq_api_key() -> None:
     import keyring
     try:
-        keyring.delete_password("GigaAMVoiceAssistant", "groq_api_key")
+        keyring.delete_password("ZeroControl", "groq_api_key")
+        try:
+            keyring.delete_password("GigaAMVoiceAssistant", "groq_api_key")
+        except keyring.errors.PasswordDeleteError:
+            pass
     except keyring.errors.PasswordDeleteError:
         pass
 
@@ -101,7 +128,7 @@ def get_camera_password() -> str:
     """Read the shared camera password from Windows Credential Manager."""
     try:
         import keyring
-        return keyring.get_password("GigaAMVoiceAssistant", "camera") or ""
+        return keyring.get_password("ZeroControl", "camera") or keyring.get_password("GigaAMVoiceAssistant", "camera") or ""
     except Exception as exc:
         print(f"Не удалось прочитать пароль камеры: {exc}")
         return ""
@@ -113,13 +140,17 @@ def set_camera_password(password: str) -> None:
     if not password:
         raise ValueError("Пароль камеры не может быть пустым.")
     import keyring
-    keyring.set_password("GigaAMVoiceAssistant", "camera", password)
+    keyring.set_password("ZeroControl", "camera", password)
 
 
 def delete_camera_password() -> None:
     import keyring
     try:
-        keyring.delete_password("GigaAMVoiceAssistant", "camera")
+        keyring.delete_password("ZeroControl", "camera")
+        try:
+            keyring.delete_password("GigaAMVoiceAssistant", "camera")
+        except keyring.errors.PasswordDeleteError:
+            pass
     except keyring.errors.PasswordDeleteError:
         pass
 
@@ -128,7 +159,7 @@ def get_moondream_api_key() -> str:
     """Read Moondream API key from Windows Credential Manager."""
     try:
         import keyring
-        return keyring.get_password("GigaAMVoiceAssistant", "moondream_api_key") or ""
+        return keyring.get_password("ZeroControl", "moondream_api_key") or keyring.get_password("GigaAMVoiceAssistant", "moondream_api_key") or ""
     except Exception as exc:
         print(f"Не удалось прочитать ключ Moondream: {exc}")
         return ""
@@ -139,13 +170,17 @@ def set_moondream_api_key(api_key: str) -> None:
     if not api_key:
         raise ValueError("Ключ Moondream не может быть пустым.")
     import keyring
-    keyring.set_password("GigaAMVoiceAssistant", "moondream_api_key", api_key)
+    keyring.set_password("ZeroControl", "moondream_api_key", api_key)
 
 
 def delete_moondream_api_key() -> None:
     import keyring
     try:
-        keyring.delete_password("GigaAMVoiceAssistant", "moondream_api_key")
+        keyring.delete_password("ZeroControl", "moondream_api_key")
+        try:
+            keyring.delete_password("GigaAMVoiceAssistant", "moondream_api_key")
+        except keyring.errors.PasswordDeleteError:
+            pass
     except keyring.errors.PasswordDeleteError:
         pass
 
