@@ -375,6 +375,10 @@ def understand_command(user_text: str) -> dict:
         target.setdefault("type", "application")
         target.setdefault("name", safe.get("app_name", ""))
         target.setdefault("location", "")
+        # The target is the semantic destination; mirror it into the legacy
+        # execution parameter consumed by the existing Windows adapter.
+        if target.get("name") and not safe.get("app_name"):
+            safe["app_name"] = str(target["name"])
         raw.setdefault("goal", "Перенести содержимое буфера обмена в приложение")
         raw.setdefault("method", "Открыть целевое приложение и вставить содержимое буфера")
     elif action == "save_note":
@@ -391,6 +395,17 @@ def understand_command(user_text: str) -> dict:
         target.setdefault("type", "application")
         target.setdefault("name", safe.get("app_name") or safe.get("app", ""))
         target.setdefault("location", "")
+        if target.get("name"):
+            if action == "open_application":
+                safe.setdefault("app", str(target["name"]))
+            else:
+                safe.setdefault("app_name", str(target["name"]))
+    elif action == "open_folder":
+        target.setdefault("type", "folder")
+        target.setdefault("name", safe.get("folder", ""))
+        target.setdefault("location", "")
+        if target.get("name"):
+            safe.setdefault("folder", str(target["name"]))
     elif action in ("search_files", "search_web"):
         target.setdefault("type", "filesystem" if action == "search_files" else "website")
         target.setdefault("name", safe.get("query", ""))
