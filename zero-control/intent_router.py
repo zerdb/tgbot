@@ -406,6 +406,24 @@ def _understand_command_rules(user_text: str) -> dict:
     if re.search(r"\b(открой|открыть|покажи)\b.*\b(почту|почтовый клиент|входящие)", normalized):
         return {"action": "open_mail_client", "confidence": 1.0, "parameters": {}}
 
+    # Локальный поиск: разговорные синонимы «отыщи/разыщи/поищи».
+    search_verb = r"\b(найди\w*|найти|поищи\w*|поискать|отыщи\w*|разыщи\w*|подбери\w*)\b"
+    web_scope = re.search(r"\b(в интернете|в интернет\w*|в сети|в google|через google|в браузере)\b", normalized)
+    if re.search(search_verb, normalized) and web_scope:
+        query = re.sub(search_verb, "", normalized, count=1).strip()
+        query = re.sub(r"\b(в интернете|в интернет\w*|в сети|в google|через google|в браузере)\b", "", query).strip(" .,!?:;")
+        if query:
+            return {"action": "search_web", "confidence": 1.0, "parameters": {"query": query}}
+    if re.search(search_verb, normalized) and re.search(r"\b(файл\w*|документ\w*|папк\w*|каталог\w*)\b", normalized):
+        folder_match_local = re.search(r"\b(?:папк\w*|каталог\w*)\s+(?:с\s+названи\w*\s+)?(.+)$", user_text, re.IGNORECASE)
+        if folder_match_local and re.search(r"\b(папк\w*|каталог\w*)\b", normalized):
+            folder_name = folder_match_local.group(1).strip().strip(" .,!?:;«»")
+            if folder_name:
+                return {"action": "open_folder", "confidence": 1.0, "parameters": {"folder": folder_name}}
+        query = _file_search_query(user_text)
+        if query:
+            return {"action": "search_files", "confidence": 1.0, "parameters": {"query": query}}
+
     # Частые приложения из разрешённого списка.
     app_patterns = (
         (r"\b(блокнот|notepad)\b", "notepad"),
