@@ -536,9 +536,7 @@ def main():
         start_recording=start_recording,
         promote_to_dictation=promote_to_dictation,
         stop_recording=stop_recording,
-    )
-    _keyboard_listener.set_dictation_state_callback(
-        lambda: _recording and _recording_mode == "text"
+        is_dictation_active=lambda: _recording and _recording_mode == "text",
     )
     _keyboard_listener.install()
     start_file_search_ui(_ui.root, busy_callback=_ui.set_busy_overlay)
