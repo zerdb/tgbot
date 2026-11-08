@@ -8,7 +8,7 @@ from dialog_utils import center_window, apply_modern_style
 
 
 def open_mail_client(parent):
-    win=tk.Toplevel(parent); win.title("GigaAM — почта"); win.geometry("1160x760"); win.minsize(900,600)
+    win=tk.Toplevel(parent); win.title("Zero Control — почта"); win.geometry("1160x760"); win.minsize(900,600)
     apply_modern_style(win)
     root=ttk.Frame(win,padding=12); root.pack(fill="both",expand=True)
     ttk.Label(root,text="✉  Почта",font=("Segoe UI",18,"bold")).pack(anchor="w")
