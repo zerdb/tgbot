@@ -72,7 +72,7 @@ def _file_search_query(user_text: str) -> str:
     """Extract a flexible local file-search request without discarding filters."""
     query = re.sub(r"^.*?\b(?:найди|поищи|найти|поискать|где)\b", "", user_text, flags=re.IGNORECASE).strip()
     query = re.sub(
-        r"\s+(?:и\s+)?(?:добавь|выгрузи|экспортируй|сохрани|запиши)\b.*$",
+        r"\s+(?:и\s+)?(?:добавь|выгрузи|экспортируй|сохрани|запиши|сформируй|подготовь|создай|сделай\s+выгрузку)\b.*$",
         "",
         query,
         flags=re.IGNORECASE,
