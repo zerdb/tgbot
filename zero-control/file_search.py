@@ -393,13 +393,23 @@ def _parse_search_request_ai(raw_query: str) -> dict:
 
 
 def _parse_search_request(raw_query: str) -> dict:
-    """Prefer Groq's structured interpretation; retain the local parser as fallback."""
+    """Prefer Groq's structured interpretation; fall back if it drops the search intent."""
     try:
-        return _parse_search_request_ai(raw_query)
+        parsed = _parse_search_request_ai(raw_query)
+        filters = parsed["filters"]
+        has_filters = any((
+            filters["extensions"], filters["min_size"] is not None,
+            filters["max_size"] is not None, filters["exact_size"] is not None,
+            filters["start"] is not None, filters["end"] is not None,
+            filters["drive"], filters["folder"], filters["sort"],
+        ))
+        if parsed["terms"] or has_filters:
+            return parsed
+        raise ValueError("ИИ не выделил ни поисковых слов, ни фильтров.")
     except Exception as exc:
         print(
-            f"[Поиск файлов] ИИ-разбор недоступен или некорректен ({exc}); "
-            "использую локальный разбор запроса.",
+            f"[Поиск файлов] ИИ-разбор не дал условий поиска ({exc}); "
+            "использую локальный разбор исходной фразы.",
             flush=True,
         )
         return _parse_search_request_local(raw_query)
@@ -533,6 +543,16 @@ def _search_worker(query: str, parent, export_format=None):
     parsed = _parse_search_request(query)
     filters = parsed["filters"]
     terms = parsed["terms"]
+    has_filters = any((
+        filters["extensions"], filters["min_size"] is not None,
+        filters["max_size"] is not None, filters["exact_size"] is not None,
+        filters["start"] is not None, filters["end"] is not None,
+        filters["drive"], filters["folder"], filters["sort"],
+    ))
+    if not terms and not has_filters:
+        print(f"Файлы по запросу «{query}» не найдены: не удалось распознать поисковые условия.", flush=True)
+        _search_results.put(("success", parent, (query, [], export_format)))
+        return
     extension = next(iter(filters["extensions"])) if filters["extensions"] and len(filters["extensions"]) == 1 else None
     display_query = query
     if extension and not terms:
