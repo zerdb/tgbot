@@ -25,7 +25,7 @@ def open_camera_viewer(parent):
         )
         return
 
-    url = os.environ.get("GIGAAM_CAMERA_RTSP_URL", "").strip()
+    url = os.environ.get("ZERO_CONTROL_CAMERA_RTSP_URL", os.environ.get("GIGAAM_CAMERA_RTSP_URL", "")).strip()
     if not url:
         from agent_core import get_camera_password
         camera_secret = get_camera_password()
@@ -43,7 +43,7 @@ def open_camera_viewer(parent):
 
     win = tk.Toplevel(parent)
     apply_modern_style(win)
-    win.title("GigaAM — просмотр камеры")
+    win.title("Zero Control — просмотр камеры")
     win.geometry("960x600")
     win.minsize(640, 400)
     frame = ttk.Frame(win, padding=10)
