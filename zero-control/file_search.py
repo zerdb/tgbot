@@ -261,7 +261,7 @@ def _parse_search_request_ai(raw_query: str) -> dict:
         max_tokens=500,
         timeout=45,
     )
-    match = re.search(r"\\{.*\\}", answer, flags=re.S)
+    match = re.search(r"\{.*\}", answer, flags=re.S)
     if not match:
         raise ValueError("ИИ не вернул JSON поисковых условий.")
     data = json.loads(match.group(0))
@@ -340,7 +340,7 @@ def _parse_search_request_ai(raw_query: str) -> dict:
     elif period == "this_year":
         filters["start"] = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         filters["end"] = now
-    elif isinstance(period, str) and re.fullmatch(r"month:20\\d{2}-(?:0[1-9]|1[0-2])", period):
+    elif isinstance(period, str) and re.fullmatch(r"month:20\d{2}-(?:0[1-9]|1[0-2])", period):
         year, month = map(int, period[6:].split("-"))
         filters["start"] = datetime(year, month, 1)
         next_month = datetime(year + (month == 12), month % 12 + 1, 1)
