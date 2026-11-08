@@ -453,6 +453,14 @@ def understand_command(user_text: str) -> dict:
     response = str(raw.get("response") or "")
     if kind == "clarify" and not clarification:
         clarification = response or "Уточни, пожалуйста, что именно нужно сделать и где."
+    # Never execute a destination-dependent operation with an invented or
+    # missing target. Ask once, then let the next utterance complete the intent.
+    if action == "paste_clipboard_to_application" and not safe.get("app_name"):
+        kind = "clarify"
+        clarification = "В какое приложение вставить содержимое буфера обмена?"
+    if action == "open_installed_application" and not safe.get("app_name"):
+        kind = "clarify"
+        clarification = "Какое приложение нужно открыть?"
     if kind == "respond" and not safe.get("question"):
         safe["question"] = user_text.strip()
 
