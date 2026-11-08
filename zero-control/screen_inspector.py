@@ -54,7 +54,7 @@ def show_screen_snapshot(parent):
         win.title("Снимок экрана")
         ttk.Label(
             win,
-            text="Не удалось сделать снимок экрана:\\n" + str(exc),
+            text="Не удалось сделать снимок экрана:\n" + str(exc),
             padding=20,
             wraplength=560,
         ).pack(fill="both", expand=True)
