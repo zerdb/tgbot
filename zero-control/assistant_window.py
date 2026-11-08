@@ -138,22 +138,20 @@ class AssistantWindow:
         for col, (symbol, title, hint, callback) in enumerate(cards):
             card = tk.Frame(actions, bg=self.SURFACE, highlightthickness=1,
                             highlightbackground=self.BORDER, bd=0, cursor="hand2")
-            grid_row, grid_col = divmod(col, 3)
-            card.grid(row=grid_row, column=grid_col, sticky="nsew", padx=(0 if grid_col == 0 else 5, 0 if grid_col == 2 else 5), pady=(0, 6))
-            actions.columnconfigure(grid_col, weight=1, uniform="action")
+            card.grid(row=0, column=col, sticky="nsew",
+                      padx=(0 if col == 0 else 3, 0 if col == len(cards) - 1 else 3))
+            actions.columnconfigure(col, weight=1, uniform="action")
             icon = tk.Label(card, text=symbol, bg=self.SURFACE, fg=self.ACCENT,
-                            font=("Segoe UI Symbol", 16, "bold"))
-            icon.pack(anchor="w", padx=8, pady=(7, 1))
+                            font=("Segoe UI Symbol", 12, "bold"))
+            icon.pack(pady=(5, 1))
             name = tk.Label(card, text=title, bg=self.SURFACE, fg=self.TEXT,
-                            font=("Segoe UI", 9, "bold"))
-            name.pack(anchor="w", padx=8)
-            desc = tk.Label(card, text=hint, bg=self.SURFACE, fg=self.MUTED,
-                            font=("Segoe UI", 7), wraplength=105, justify="left")
-            desc.pack(anchor="w", padx=8, pady=(2, 7))
-            for widget in (card, icon, name, desc):
+                            font=("Segoe UI", 8, "bold"), wraplength=92,
+                            justify="center", height=2)
+            name.pack(fill="x", padx=2, pady=(0, 5))
+            for widget in (card, icon, name):
                 widget.bind("<Button-1>", lambda _e, fn=callback: fn())
-                widget.bind("<Enter>", lambda _e, c=card, ws=(icon, name, desc): self._hover_card(c, ws, True))
-                widget.bind("<Leave>", lambda _e, c=card, ws=(icon, name, desc): self._hover_card(c, ws, False))
+                widget.bind("<Enter>", lambda _e, c=card, ws=(icon, name): self._hover_card(c, ws, True))
+                widget.bind("<Leave>", lambda _e, c=card, ws=(icon, name): self._hover_card(c, ws, False))
 
         ttk.Label(outer, text="Команды", style="Section.TLabel").pack(anchor="w", pady=(0, 5))
         command_area = tk.Frame(outer, bg=self.SURFACE, highlightthickness=1,
