@@ -18,7 +18,7 @@ def chat(messages, temperature=0.2, max_tokens=1200):
     request = urllib.request.Request(
         ENDPOINT, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
-                 "Accept": "application/json", "User-Agent": "GigaAMVoiceAssistant/1.0"},
+                 "Accept": "application/json", "User-Agent": "ZeroControl/1.0"},
         method="POST")
     try:
         with urllib.request.urlopen(request, timeout=90) as response:
