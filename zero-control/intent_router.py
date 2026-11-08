@@ -178,7 +178,7 @@ def _understand_command(user_text: str) -> dict:
             target = semantic.get("target") if isinstance(semantic.get("target"), dict) else {}
             source = semantic.get("source") if isinstance(semantic.get("source"), dict) else {}
             normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip()
-            email_request = bool(re.search(r"\b(почт\\w*|email|емейл)\\b", normalized) and re.search(r"\b(отправ\\w*|перешл\\w*|пошл\\w*)\\b", normalized))
+            email_request = bool(re.search(r"\b(почт\w*|email|емейл)\\b", normalized) and re.search(r"\b(отправ\w*|перешл\w*|пошл\w*)\\b", normalized))
             recipient = str(target.get("name") or "").strip()
             if email_request and target.get("type") == "person" and recipient:
                 semantic["kind"] = "execute"
