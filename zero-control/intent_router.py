@@ -135,9 +135,19 @@ def understand_command(user_text: str) -> dict:
         return {"action": "reminder", "confidence": 1.0, "arguments": {"reminder_text": user_text.strip()}}
 
     # Почта: создание/отправка письма открывает форму; само отправление только после кнопки пользователя.
-    if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт|письм|email|емейл)", normalized) and not re.search(r"\b(файл|файлы|документ|документы|вложени)", normalized):
+    if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт|письм|email|емейл)", normalized):
         attach = bool(re.search(r"\b(файл|файлы|документ|документы|вложени)", normalized))
-        return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": attach}}
+        recipient_name = ""
+        # Получатель может стоять как после слова «почту», так и перед ним:
+        # «отправь на почту Шамилю» / «отправь Шамилю на почту».
+        after_mail = re.search(r"\b(?:почту|почте|email|емейл)\s+(.+)$", user_text, re.IGNORECASE)
+        before_mail = re.search(r"\b(?:отправь|отправить|перешли|переслать)\s+(.+?)\s+(?:на\s+)?(?:почту|почте|email|емейл)\b", user_text, re.IGNORECASE)
+        candidate = (after_mail.group(1) if after_mail else before_mail.group(1) if before_mail else "").strip(" .,!?:;«»\"")
+        candidate = re.sub(r"\b(?:мне|файлы?|документы?|вложения?|пожалуйста|срочно)\b", " ", candidate, flags=re.IGNORECASE)
+        candidate = re.sub(r"\s+", " ", candidate).strip()
+        if candidate and not re.search(r"\b(?:файл|файлы|документ|документы|вложение|вложения|письмо|письма)\b", candidate, re.IGNORECASE):
+            recipient_name = candidate
+        return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": attach, "recipient_name": recipient_name}}
     if re.search(r"\b(создай|создать|напиши|написать|составь|составить)\b.*\b(письмо|письмецо|email)", normalized):
         return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": False}}
     if re.search(r"\b(открой|открыть|покажи)\b.*\b(почту|почтовый клиент|входящие)", normalized):
