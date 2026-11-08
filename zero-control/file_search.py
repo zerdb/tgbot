@@ -59,9 +59,9 @@ def _parse_search_request(raw_query: str) -> dict:
     filters = {"extensions": None, "min_size": None, "max_size": None,
                "start": None, "end": None, "date_field": "mtime",
                "drive": None, "folder": None, "sort": None}
-    if re.search(r"\\b(?:последние|новые|недавние)\\s+(?:документ\\w*|файл\\w*)\\b", text):
+    if re.search(r"\b(?:последние|новые|недавние)\s+(?:документ\w*|файл\w*)\b", text):
         filters["sort"] = "date_desc"
-    elif re.search(r"\\b(?:старые|самые\\s+старые)\\s+(?:документ\\w*|файл\\w*)\\b", text):
+    elif re.search(r"\b(?:старые|самые\s+старые)\s+(?:документ\w*|файл\w*)\b", text):
         filters["sort"] = "date_asc"
     ext_groups = [
         (r"\b(?:таблиц\w*\s+excel|excel|эксель)\b", {".xls", ".xlsx"}),
