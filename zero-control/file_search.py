@@ -50,17 +50,180 @@ def search_files(text: str, parent=None):
     _search_requests.put((query, parent))
 
 
+def _parse_search_request(raw_query: str) -> dict:
+    """Turn natural-language file-search modifiers into local filesystem filters."""
+    from datetime import datetime, timedelta
+
+    text = str(raw_query or "").casefold().replace("ё", "е").strip()
+    now = datetime.now()
+    filters = {"extensions": None, "min_size": None, "max_size": None,
+               "start": None, "end": None, "date_field": "mtime",
+               "drive": None, "folder": None, "sort": None}
+    ext_groups = [
+        (r"\b(?:таблиц\w*\s+excel|excel|эксель)\b", {".xls", ".xlsx"}),
+        (r"\b(?:документ\w*\s+word|word|ворд)\b", {".doc", ".docx"}),
+        (r"\b(?:презентаци\w*)\b", {".ppt", ".pptx"}),
+        (r"\b(?:фотографи\w*\s+jpg|картинк\w*\s+jpg|jpg|jpeg)\b", {".jpg", ".jpeg"}),
+        (r"\b(?:картинк\w*\s+png|png)\b", {".png"}),
+        (r"\b(?:фотографи\w*|фото|изображени\w*|картинк\w*)\b", {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}),
+        (r"\b(?:архив\w*|zip)\b", {".zip", ".rar", ".7z"}),
+        (r"\b(?:видео|ролик\w*)\b", {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm"}),
+        (r"\b(?:музык\w*|аудио|песн\w*)\b", {".mp3", ".wav", ".flac", ".m4a", ".aac"}),
+        (r"\bpdf\b", {".pdf"}),
+        (r"\b(?:все\s+)?pdf[- ]?файл\w*\b", {".pdf"}),
+    ]
+    for pattern, extensions in ext_groups:
+        if re.search(pattern, text):
+            filters["extensions"] = extensions
+            text = re.sub(pattern, " ", text)
+
+    # Уточнение расширения, уже поддержанное прежней версией.
+    explicit = re.search(r"\.(pdf|docx?|xlsx?|pptx?|txt|jpg|jpeg|png|zip|rar|7z|mp4|mkv|avi|mov)\b", text)
+    if explicit:
+        filters["extensions"] = {"." + explicit.group(1)}
+        text = text.replace(explicit.group(0), " ")
+
+    # Область поиска: буква диска или стандартные пользовательские каталоги.
+    drive = re.search(r"\b(?:на\s+)?диск[еа]?\s+([a-z])\b", text)
+    if drive:
+        filters["drive"] = drive.group(1).upper() + ":"
+        text = text[:drive.start()] + " " + text[drive.end():]
+    folder_patterns = [
+        (r"\b(?:в\s+)?загрузк\w*\b", "downloads"),
+        (r"\b(?:на\s+)?рабочем\s+столе\b", "desktop"),
+        (r"\b(?:в\s+)?документ\w*\b", "documents"),
+        (r"\b(?:в\s+)?изображени\w*\b", "pictures"),
+    ]
+    for pattern, folder in folder_patterns:
+        match = re.search(pattern, text)
+        if match:
+            filters["folder"] = folder
+            text = text[:match.start()] + " " + text[match.end():]
+            break
+
+    # Периоды дат; для "созданные" используется creation time (Windows ctime).
+    if re.search(r"\bсозданн\w*\b", text):
+        filters["date_field"] = "ctime"
+    if re.search(r"\b(?:сегодня|за\s+сегодня|сегодняшн\w*)\b", text):
+        filters["start"], filters["end"] = now.replace(hour=0, minute=0, second=0, microsecond=0), now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        text = re.sub(r"\b(?:за\s+)?сегодняшн\w*|\bсегодня\b", " ", text)
+    elif re.search(r"\b(?:вчера|вчерашн\w*)\b", text):
+        day = (now - timedelta(days=1)).date()
+        filters["start"] = datetime.combine(day, datetime.min.time())
+        filters["end"] = datetime.combine(day, datetime.max.time())
+        text = re.sub(r"\bвчерашн\w*|\bвчера\b", " ", text)
+    elif re.search(r"\b(?:прошл\w*\s+недел\w*|последн\w*\s+7\s+дн\w*)\b", text):
+        filters["start"] = now - timedelta(days=7)
+        filters["end"] = now
+        text = re.sub(r"\bпрошл\w*\s+недел\w*|\bпоследн\w*\s+7\s+дн\w*", " ", text)
+    elif re.search(r"\b(?:прошл\w*\s+месяц|за\s+месяц)\b", text):
+        first_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        filters["end"] = first_this - timedelta(microseconds=1)
+        filters["start"] = filters["end"].replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        text = re.sub(r"\b(?:прошл\w*\s+месяц|за\s+месяц)\b", " ", text)
+    else:
+        months = {"январ": 1, "феврал": 2, "март": 3, "апрел": 4, "ма": 5, "июн": 6,
+                  "июл": 7, "август": 8, "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12}
+        for stem, month in months.items():
+            m = re.search(r"\b" + stem + r"[а-я]*\b", text)
+            if m:
+                year_match = re.search(r"\b(20\d{2})\b", text)
+                year = int(year_match.group(1)) if year_match else now.year
+                filters["start"] = datetime(year, month, 1)
+                next_month = datetime(year + (month == 12), month % 12 + 1, 1)
+                filters["end"] = next_month - timedelta(microseconds=1)
+                text = text[:m.start()] + " " + text[m.end():]
+                break
+
+    # Размер: поддерживаются байты, КБ, МБ и ГБ.
+    size_re = re.search(r"\b(больше|свыше|крупнее|меньше|до)\s+(\d+(?:[.,]\d+)?)\s*(байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|гб|гбайт\w*)?\b", text)
+    if size_re:
+        amount = float(size_re.group(2).replace(",", "."))
+        unit = (size_re.group(3) or "мб").casefold()
+        multiplier = 1 if unit.startswith(("б", "байт")) else 1024 if unit.startswith("к") else 1024**3 if unit.startswith("г") else 1024**2
+        size = int(amount * multiplier)
+        if size_re.group(1) in ("больше", "свыше", "крупнее"):
+            filters["min_size"] = size
+        else:
+            filters["max_size"] = size
+        text = text[:size_re.start()] + " " + text[size_re.end():]
+    if re.search(r"\b(?:большие|крупные|самые\s+большие)\s+файл\w*\b", text):
+        filters["sort"] = "size_desc"
+    if re.search(r"\b(?:маленькие|мелкие|самые\s+маленькие)\s+файл\w*\b", text):
+        filters["sort"] = "size_asc"
+    if re.search(r"\b(?:последние|новые|недавние)\s+(?:документ\w*|файл\w*)\b", text):
+        filters["sort"] = "date_desc"
+    if re.search(r"\b(?:старые|самые\s+старые)\s+(?:документ\w*|файл\w*)\b", text):
+        filters["sort"] = "date_asc"
+
+    # Служебные слова не должны становиться частью имени.
+    text = re.sub(r"\b(?:найди|поищи|найти|поискать|мне|все|всех|файл\w*|документ\w*|документы|за|на|больше|свыше|крупнее|меньше|до|мегабайт\w*|гигабайт\w*|мб|гб|байт\w*|созданн\w*|измененн\w*|изменен\w*|последние|новые|недавние|самые|большие|маленькие|старые)\b", " ", text)
+    terms = [part for part in re.findall(r"[a-zа-яё0-9_.-]+", text) if len(part) > 1 or part.isdigit()]
+    return {"terms": terms, "filters": filters}
+
+
 def _search_worker(query: str, parent):
-    extension_match = re.search(r"\.(pdf|docx?|xlsx?|pptx?|txt)\s*$", query, flags=re.IGNORECASE)
-    extension = "." + extension_match.group(1).casefold() if extension_match else None
-    search_term = query[:extension_match.start()].strip() if extension_match else query
-    search_term = search_term.strip("* ").strip()
-    display_query = f"*{search_term}*{extension}" if extension else query
+    parsed = _parse_search_request(query)
+    filters = parsed["filters"]
+    terms = parsed["terms"]
+    extension = next(iter(filters["extensions"])) if filters["extensions"] and len(filters["extensions"]) == 1 else None
+    display_query = query
+    if extension and not terms:
+        display_query = "*" + extension
+    elif extension:
+        display_query = "*" + " ".join(terms) + "*" + extension
     print(f"Ищу «{display_query}» по MFT и SQLite. Первое индексирование может занять некоторое время...", flush=True)
     try:
-        matches = refresh_and_search(search_term, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
-        if extension:
-            matches = [path for path in matches if path.suffix.casefold() == extension]
+        if terms:
+            result_sets = [set(refresh_and_search(term, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))) for term in terms]
+            matches = list(set.intersection(*result_sets)) if result_sets else []
+        else:
+            matches = refresh_and_search("", report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
+
+        filtered = []
+        for path in matches:
+            try:
+                stat = path.stat()
+                size = stat.st_size
+                timestamp = stat.st_ctime if filters["date_field"] == "ctime" else stat.st_mtime
+                if filters["extensions"] and path.suffix.casefold() not in filters["extensions"]:
+                    continue
+                if filters["drive"] and (not path.drive or path.drive.upper() != filters["drive"]):
+                    continue
+                if filters["folder"]:
+                    home = Path.home()
+                    roots = {
+                        "downloads": home / "Downloads",
+                        "desktop": home / "Desktop",
+                        "documents": home / "Documents",
+                        "pictures": home / "Pictures",
+                    }
+                    try:
+                        path.resolve().relative_to(roots[filters["folder"]].resolve())
+                    except (ValueError, OSError):
+                        continue
+                if filters["min_size"] is not None and size <= filters["min_size"]:
+                    continue
+                if filters["max_size"] is not None and size >= filters["max_size"]:
+                    continue
+                if filters["start"] and datetime.fromtimestamp(timestamp) < filters["start"]:
+                    continue
+                if filters["end"] and datetime.fromtimestamp(timestamp) > filters["end"]:
+                    continue
+                filtered.append((path, size, stat.st_mtime))
+            except (OSError, ValueError):
+                continue
+
+        sort_mode = filters["sort"]
+        if sort_mode == "size_desc":
+            filtered.sort(key=lambda item: item[1], reverse=True)
+        elif sort_mode == "size_asc":
+            filtered.sort(key=lambda item: item[1])
+        elif sort_mode == "date_asc":
+            filtered.sort(key=lambda item: item[2])
+        elif sort_mode == "date_desc" or filters["start"] or filters["end"]:
+            filtered.sort(key=lambda item: item[2], reverse=True)
+        matches = [item[0] for item in filtered]
         _search_results.put(("success", parent, (display_query, matches)))
     except Exception as exc:
         error_text = str(exc)
