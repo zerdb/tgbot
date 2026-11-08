@@ -374,7 +374,7 @@ def understand_command(user_text: str) -> dict:
     """
     raw = _understand_command(user_text)
     if not isinstance(raw, dict):
-        raw = {"action": "unknown", "confidence": 0.0, "arguments": {}}
+        raw = {"action": "unknown", "confidence": 0.0, "parameters": {}}
 
     action = str(raw.get("action") or "unknown")
     params = raw.get("parameters") if isinstance(raw.get("parameters"), dict) else {}
@@ -480,8 +480,5 @@ def understand_command(user_text: str) -> dict:
         "confidence": confidence,
         "clarification": clarification,
         "response": response,
-        # Compatibility adapter for the current receiver while it migrates
-        # to the versioned contract.
-        "arguments": safe,
     }
 
