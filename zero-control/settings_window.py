@@ -130,6 +130,22 @@ def open_settings_window(parent):
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(1, 4))
         clean_dictation = tk.BooleanVar(master=window, value=bool(values.get("clean_dictation_with_ai", False)))
         ttk.Checkbutton(frame, text="Очищать текст диктовки с помощью ИИ", variable=clean_dictation).pack(anchor="w", pady=(1, 4))
+
+        learning = ttk.LabelFrame(frame, text="Обучение локальной маршрутизации", padding=6)
+        learning.pack(fill="x", pady=(3, 5))
+        ttk.Label(
+            learning,
+            text="Просматривай команды, распознанные ИИ, проверяй действие и параметры и добавляй подтверждённые фразы в локальные правила.",
+            wraplength=540,
+        ).pack(anchor="w")
+        def open_intent_learning():
+            from local_intents_window import open_recognized_intents_window
+            open_recognized_intents_window(window)
+        ttk.Button(
+            learning,
+            text="Распознанные намерения…",
+            command=open_intent_learning,
+        ).pack(anchor="w", pady=(5, 0))
         status = (
             "Ключ Groq: сохранён" if (os.getenv("GROQ_API_KEY", "").strip() or get_groq_api_key())
             else "Ключ Groq: не задан"
