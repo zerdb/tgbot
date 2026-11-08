@@ -33,23 +33,36 @@ ACTIONS = {
  "open_folder": "Открыть папку по названию или пути; folder — название или путь папки.",
  "unknown": "Неясная или неподдерживаемая задача."
 }
-SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
-Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
-Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), recipient_name (string), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), app_name (string), folder (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
-Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
-Если пользователь просит показать, открыть или посмотреть список контактов — выбери open_contacts.
-Фразы «добавь в контакты», «добавь контакт», «сохрани в адресную книгу», «запиши контакт» означают add_contact.
-Просьба отправить/переслать файлы или документы, в том числе формулировки «отправь файлы Мазярову» и «отправь файлы на почту Мазярову», => email_compose, attach_copied_files=true. Если назван человек, извлеки recipient_name в именительном падеже, сохранив фамилию/имя; не выдумывай адрес. Адресата выбирают только из существующей адресной книги.
-Просто создать письмо => email_compose и attach_copied_files=false.
-Для напоминания передай исходную фразу в reminder_text. Если пользователь говорит «запомни», «сохрани заметку» с произнесённым текстом или «добавь запись», выбери add_note и передай текст в note_text. Если просит отметить запись выполненной, выбери complete_item и передай название или фрагмент в item_text.
-Если просят открыть корзину/мусорное ведро — open_recycle_bin, НЕ open_downloads и НЕ empty_recycle_bin.
-Если просят очистить/опустошить корзину — empty_recycle_bin.
-Если пользователь спрашивает «что на экране», «посмотри экран», «прочитай экран» или просит увидеть содержимое текущего экрана — выбери inspect_screen, не ai_chat.
-Если пользователь просит открыть конкретную программу и вставить текст/содержимое из буфера обмена, выбери paste_clipboard_to_application и передай app_name (например, Блокнот или Word).
-Блокнот — open_application app="notepad"; калькулятор — app="calculator"; браузер — app="browser"; Word — app="word"; Excel — app="excel"; папка Изображения/Картинки/Фото — app="images".
-Не путай корзину с загрузками. Неясная задача => unknown. Не придумывай действия и параметры.
-Доступные действия: """ + json.dumps(ACTIONS, ensure_ascii=False)
+SYSTEM_PROMPT = """Ты — слой понимания намерений русскоязычного Windows-помощника Zero Control.
+Распознавание речи уже завершено: входной текст — результат ASR. Не исправляй его механически и не подбирай команду по совпадению отдельных слов. Восстанови наиболее вероятный смысл всей фразы с учётом контекста.
+Разделяй три результата:
+1) execute — пользователь хочет выполнить действие на компьютере;
+2) respond — пользователь задаёт вопрос или хочет обычный ответ/объяснение;
+3) clarify — намерение или обязательный параметр нельзя определить достаточно надёжно.
+Верни один JSON-объект строго по контракту:
+{
+  "schema_version": 1,
+  "kind": "execute|respond|clarify",
+  "action": "одно действие из списка ниже",
+  "goal": "краткая формулировка цели пользователя",
+  "target": {"type": "application|file|folder|website|system|person|list|other|null", "name": "название или пустая строка", "location": "где находится/куда направить или пустая строка"},
+  "source": {"type": "clipboard|spoken_text|screen|camera|email|filesystem|none|other", "name": "что именно является источником или пустая строка"},
+  "method": "как выполнить действие, кратко; если несущественно — пустая строка",
+  "parameters": {},
+  "confidence": 0.0,
+  "clarification": "один короткий уточняющий вопрос или пустая строка",
+  "response": "короткий ответ пользователю для kind=respond либо пояснение для clarify; иначе пустая строка"
+}
+Не добавляй Markdown, комментарии или текст вне JSON.
+Для совместимости дублируй параметры выполнения в объекте parameters. Допустимые ключи параметров: attach_copied_files (boolean), recipient_name (string), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), app_name (string), folder (string), export_format (string).
+Не выдумывай отсутствующие сведения. Если пользователь просит вставить/перенести/поместить содержимое буфера, source.type=clipboard; target должен указывать приложение или место назначения, а method описывает открытие цели и вставку. Не выбирай приложение по умолчанию, если из контекста его нельзя надёжно понять: задай уточняющий вопрос (kind=clarify). Если цель явно указана — используй её независимо от формулировки глагола.
+Если пользователь хочет сохранить содержимое буфера как заметку, это save_note, source.type=clipboard, target.type=list, target.name="заметки".
+Если пользователь хочет сохранить произнесённый текст как заметку — add_note, source.type=spoken_text.
+Если пользователь хочет задать вопрос, получить совет, объяснение или справку, выбери ai_chat и kind=respond; question должен содержать полный вопрос.
+Если пользователь хочет выполнить действие, выбери kind=execute и подходящее действие из каталога.
+Если действие потенциально опасное (перезагрузка, очистка корзины и т.п.), не меняй его смысл и не инициируй дополнительных действий.
+Если данных недостаточно для безопасного выполнения, выбери kind=clarify и сформулируй один конкретный вопрос.
+Каталог действий: """ + json.dumps(ACTIONS, ensure_ascii=False)
 
 def _is_natural_information_question(text: str) -> bool:
     """Route conversational questions to AI without requiring an AI keyword."""
@@ -94,30 +107,14 @@ def _file_search_query(user_text: str) -> str:
     return query.strip()
 
 
-def understand_command(user_text: str) -> dict:
+def _understand_command_legacy(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
 
     # Вопросы о текущем экране направляем в модуль снимка и анализа, а не в обычный текстовый ИИ.
     if re.search(r"\b(что|что сейчас|посмотри|посмотреть|прочитай|прочитать|опиши|увидь|видишь)\b.*\b(на экране|экран|монитор)", normalized) or normalized in ("что у меня на экране", "что видно на экране", "посмотри на экран"):
         return {"action": "inspect_screen", "confidence": 1.0, "arguments": {}}
 
-    # Команды с буфером обрабатываем до классификатора: ASR может превратить
-    # «вставь» в «оставь», а «вставь туда» — не назвать приложение явно.
-    clipboard_context = bool(re.search(r"\b(буфер\w*|скопированн\w*|clipboard)\b", normalized))
-    app_match = re.search(
-        r"\b(блокнот|notepad|word|ворд|ворт|microsoft\s+word)\b",
-        normalized,
-    )
-    paste_verb = bool(re.search(r"\b(встав\w*|остав\w*|помест\w*|перенес\w*)\b", normalized))
-    save_to_named_app = bool(app_match and re.search(r"\b(сохран\w*|запиш\w*)\b", normalized))
-    if clipboard_context and (paste_verb or save_to_named_app):
-        app_token = app_match.group(1) if app_match else ""
-        # Если пользователь говорит «вставь туда», без названия приложения,
-        # используем Word как целевое приложение по умолчанию.
-        app = "Блокнот" if app_token in ("блокнот", "notepad") else "Word"
-        return {"action": "paste_clipboard_to_application", "confidence": 1.0, "arguments": {"app_name": app}}
-
-    # Разделяем настройки Windows и настройки самого помощника.
+    # Смысловые команды с буфером определяет общий классификатор по всей фразе;\n    # не перехватываем их отдельными regex-эвристиками.\n\n    # Разделяем настройки Windows и настройки самого помощника.
     if re.search(r"\b(настройки windows|параметры windows|системные настройки|параметры системы)\b", normalized):
         return {"action": "open_settings", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|зайди в|перейди в)\b.*\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
@@ -321,3 +318,102 @@ def understand_command(user_text: str) -> dict:
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
     safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","recipient_name","reminder_text","note_text","item_text","query","question","app","app_name","folder","export_format") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}
+
+def understand_command(user_text: str) -> dict:
+    """Return a versioned intent envelope for the execution receiver.
+
+    The ASR transcript, semantic interpretation, and local execution are separate
+    stages. Legacy fast paths are adapted to the same contract so the receiver
+    never has to guess where an action applies or which data it consumes.
+    """
+    raw = _understand_command_legacy(user_text)
+    if not isinstance(raw, dict):
+        raw = {"action": "unknown", "confidence": 0.0, "arguments": {}}
+
+    action = str(raw.get("action") or "unknown")
+    args = raw.get("arguments") if isinstance(raw.get("arguments"), dict) else {}
+    params = raw.get("parameters") if isinstance(raw.get("parameters"), dict) else args
+    target = raw.get("target") if isinstance(raw.get("target"), dict) else {}
+    source = raw.get("source") if isinstance(raw.get("source"), dict) else {}
+
+    # Keep only known, primitive execution parameters; no model-generated code
+    # or arbitrary function names can reach the Windows action layer.
+    allowed = {
+        "attach_copied_files", "recipient_name", "reminder_text", "note_text",
+        "item_text", "query", "question", "app", "app_name", "folder",
+        "export_format",
+    }
+    safe = {
+        key: value for key, value in params.items()
+        if key in allowed and isinstance(value, (str, bool))
+    }
+
+    if action == "paste_clipboard_to_application":
+        source.setdefault("type", "clipboard")
+        target.setdefault("type", "application")
+        target.setdefault("name", safe.get("app_name", ""))
+        target.setdefault("location", "")
+        raw.setdefault("goal", "Перенести содержимое буфера обмена в приложение")
+        raw.setdefault("method", "Открыть целевое приложение и вставить содержимое буфера")
+    elif action == "save_note":
+        source.setdefault("type", "clipboard")
+        target.setdefault("type", "list")
+        target.setdefault("name", "заметки")
+        target.setdefault("location", "")
+    elif action == "add_note":
+        source.setdefault("type", "spoken_text")
+        target.setdefault("type", "list")
+        target.setdefault("name", "заметки и дела")
+        target.setdefault("location", "")
+    elif action in ("open_application", "open_installed_application"):
+        target.setdefault("type", "application")
+        target.setdefault("name", safe.get("app_name") or safe.get("app", ""))
+        target.setdefault("location", "")
+    elif action in ("search_files", "search_web"):
+        target.setdefault("type", "filesystem" if action == "search_files" else "website")
+        target.setdefault("name", safe.get("query", ""))
+        target.setdefault("location", "")
+
+    kind = raw.get("kind")
+    if kind not in ("execute", "respond", "clarify"):
+        kind = "respond" if action in ("ai_chat", "camera_question") else (
+            "clarify" if action == "unknown" else "execute"
+        )
+    try:
+        confidence = max(0.0, min(1.0, float(raw.get("confidence", 0.0))))
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    goal = str(raw.get("goal") or ACTIONS.get(action, ""))
+    method = str(raw.get("method") or "")
+    clarification = str(raw.get("clarification") or "")
+    response = str(raw.get("response") or "")
+    if kind == "clarify" and not clarification:
+        clarification = response or "Уточни, пожалуйста, что именно нужно сделать и где."
+    if kind == "respond" and not safe.get("question"):
+        safe["question"] = user_text.strip()
+
+    return {
+        "schema_version": 1,
+        "kind": kind,
+        "action": action,
+        "goal": goal,
+        "target": {
+            "type": target.get("type", "other"),
+            "name": str(target.get("name") or ""),
+            "location": str(target.get("location") or ""),
+        },
+        "source": {
+            "type": source.get("type", "none"),
+            "name": str(source.get("name") or ""),
+        },
+        "method": method,
+        "parameters": safe,
+        "confidence": confidence,
+        "clarification": clarification,
+        "response": response,
+        # Compatibility adapter for the current receiver while it migrates
+        # to the versioned contract.
+        "arguments": safe,
+    }
+
