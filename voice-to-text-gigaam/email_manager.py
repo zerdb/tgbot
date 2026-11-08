@@ -68,7 +68,7 @@ def send_email(recipient: str, subject: str, body: str = "", attachments: list[s
     """Send an email with optional local-file attachments. Raises on failure."""
     from agent_core import load_settings
     login = os.getenv("ZERO_CONTROL_MAIL_LOGIN", os.getenv("GIGAAM_MAIL_LOGIN", load_settings()["mail_login"]))
-    password = os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("ZERO_CONTROL_MAIL_PASSWORD"))
+    password = os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("GIGAAM_MAIL_PASSWORD", ""))
     if not password:
         raise RuntimeError(
             "Не задан пароль приложения. Установите переменную ZERO_CONTROL_MAIL_PASSWORD "
