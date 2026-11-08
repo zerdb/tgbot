@@ -10,6 +10,7 @@ from agent_core import (
     get_camera_password, set_camera_password, delete_camera_password,
     get_moondream_api_key, set_moondream_api_key, delete_moondream_api_key,
     get_groq_api_key, set_groq_api_key, delete_groq_api_key,
+    get_mail_password, set_mail_password,
 )
 from dialog_utils import activate_modal
 
@@ -89,6 +90,8 @@ def open_settings_window(parent):
         add_secret_row("Groq:", get_groq_api_key)
         add_secret_row("Камера:", get_camera_password)
         add_secret_row("Moondream:", get_moondream_api_key)
+        add_secret_row("Пароль почты:", get_mail_password)
+        secret_setters["Пароль почты:"] = set_mail_password
         ttk.Label(
             keys_box,
             text="Новые ключи сохраняются только кнопкой «Сохранить» внизу.",
@@ -102,7 +105,7 @@ def open_settings_window(parent):
         status = (
             "Ключ Groq: сохранён" if (os.getenv("GROQ_API_KEY", "").strip() or get_groq_api_key())
             else "Ключ Groq: не задан"
-        ) + " · " + ("Пароль почты: настроен" if os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("GIGAAM_MAIL_PASSWORD")) else "Пароль почты: не настроен")
+        ) + " · " + ("Пароль почты: настроен" if (os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("GIGAAM_MAIL_PASSWORD")) or get_mail_password()) else "Пароль почты: не настроен")
         ttk.Label(frame, text=status, wraplength=570).pack(anchor="w", pady=(2, 6))
 
         def save():
