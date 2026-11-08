@@ -1,26 +1,37 @@
 # Zero Control — голосовой помощник для Windows
 
-Offline push-to-talk voice typing and voice commands for Windows. Hold **Right Alt + Right Shift** together to dictate text; hold **Right Ctrl** to issue a voice command. Release the key to process the recording with a locally stored GigaAM-v3 model.
+Zero Control — настольный голосовой помощник для Windows. Распознавание речи выполняется локальной моделью GigaAM-v3; понимание голосовых команд, чат и часть визуального анализа используют подключённые облачные модели.
 
-**No Vosk. No API. No network access at inference time.** The model is loaded from a local directory using `local_files_only=True`.
+## Возможности
 
-## 1. Download the model
+- Голосовая диктовка в активное приложение.
+- Голосовые команды на естественном русском языке через семантическую классификацию.
+- Запуск установленных приложений и стандартные действия Windows.
+- Поиск файлов и папок **только по именам и путям** через индекс MFT и SQLite/FTS5. Поиск внутри содержимого документов в проекте отключён.
+- Почтовый клиент: создание и отправка писем, работа с вложениями и локальной адресной книгой; чтение непрочитанных писем с отдельным подтверждением передачи текста подключённой модели.
+- Заметки, задачи и напоминания.
+- Организация файлов в выбранной папке с предварительным просмотром и подтверждением перемещения.
+- Просмотр камеры и отдельный ИИ-анализ кадра.
+- Снимок и анализ экрана.
+- ИИ-чат и голосовые уведомления через локальный Piper TTS.
 
-Download the official GigaAM-v3 end-to-end RNNT model from Hugging Face:
+## Горячие клавиши
 
-- [GigaAM-v3 — e2e_rnnt model files](https://huggingface.co/ai-sage/GigaAM-v3/tree/e2e_rnnt)
-- [Official GigaAM project and documentation](https://github.com/salute-developers/GigaAM)
+- **Right Ctrl** — удерживать для голосовой команды.
+- **Right Ctrl + Right Shift** — удерживать вместе для диктовки.
+- Отпустить клавиши — завершить запись и обработать аудио.
+- Закрыть главное окно — завершить приложение.
 
-The model snapshot is about 449 MB. Download **all files** from the `e2e_rnnt` revision (including `config.json`, `modeling_gigaam.py`, `pytorch_model.bin`, and `tokenizer.model`).
+Горячие клавиши используют именно правые Ctrl и Shift. Левые клавиши не запускают эти режимы.
 
-The easiest way is with the Hugging Face CLI:
+## Локальная модель распознавания речи
 
-```powershell
-py -m pip install -U huggingface_hub
-hf download ai-sage/GigaAM-v3 --revision e2e_rnnt --local-dir GigaAM-v3
-```
+Скачайте официальную модель GigaAM-v3, revision `e2e_rnnt`:
 
-Place the resulting `GigaAM-v3` folder **next to** `zero-control`, like this:
+- [Файлы GigaAM-v3 на Hugging Face](https://huggingface.co/ai-sage/GigaAM-v3/tree/e2e_rnnt)
+- [Официальный проект GigaAM](https://github.com/salute-developers/GigaAM)
+
+Поместите папку `GigaAM-v3` рядом с `zero-control`:
 
 ```text
 tgbot/
@@ -35,89 +46,69 @@ tgbot/
     └── README.md
 ```
 
-Do not put the model weights into GitHub; the model is downloaded separately.
+Весы модели не хранятся в GitHub и не скачиваются приложением при обычном запуске. По умолчанию модель ищется в `../GigaAM-v3`. Другой путь можно указать через `ZERO_CONTROL_MODEL_DIR`.
 
-## 2. Install dependencies
+## Установка
 
-Use Python 3.10 or newer. Install FFmpeg and add it to PATH if required by your audio environment.
+Требуется Python 3.10 или новее. Установите FFmpeg и настройте его в PATH, если этого требует аудиосреда.
 
-From the `zero-control` folder:
+В PowerShell из каталога `zero-control`:
 
 ```powershell
 py -m venv .venv
 .venv\Scripts\activate
 py -m pip install --upgrade pip
 py -m pip install -r requirements.txt
-```
-
-PyTorch installation can differ by hardware. If you need a CUDA-enabled build, install the matching PyTorch/torchaudio wheels from the [official PyTorch selector](https://pytorch.org/get-started/locally/) instead of the CPU/default wheels.
-
-## Local neural speech synthesis
-
-Voice announcements use the local Piper TTS engine and the Russian **Denis (medium)** voice, not Windows SAPI voices. On the first spoken announcement, Zero Control installs the Piper Python package if needed and downloads the voice model (about 63 MB) into `models/piper`. This first setup requires an internet connection. After the model is downloaded, speech synthesis runs locally without internet access.
-
-The model is downloaded from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/ru/ru_RU/denis/medium); the voice repository is marked MIT. Piper itself is distributed under GPL-3.0-or-later; review that license before redistributing an application bundle containing Piper.
-
-The voice model is not stored in GitHub. It is downloaded to the local project folder and verified with a checksum before use.
-
-## 3. Run
-
-```powershell
 py main.py
 ```
 
-1. Wait for the model to load.
-2. Hold **Left Ctrl + Left Shift** together and speak to dictate text, or hold **Right Ctrl** and speak a command.
-3. Release the key to process the recording.
-4. Press **Esc** to exit.
+Сборка PyTorch зависит от оборудования. Для CUDA установите подходящие версии PyTorch и torchaudio с помощью [официального селектора PyTorch](https://pytorch.org/get-started/locally/).
 
-The default model path is `../GigaAM-v3` relative to this project folder. To use another location, set `ZERO_CONTROL_MODEL_DIR`:
+## Сеть и приватность
 
-```powershell
-$env:ZERO_CONTROL_MODEL_DIR="D:\\AI\\GigaAM-v3"
-py main.py
-```
+- Аудио для распознавания обрабатывается локально моделью GigaAM-v3.
+- После распознавания текст голосовой команды передаётся в Groq для семантической классификации, если доступен настроенный ключ и сеть.
+- ИИ-чат и некоторые сценарии анализа камеры/экрана отправляют соответствующий текст или изображение подключённому облачному провайдеру.
+- Для чтения непрочитанных писем приложение отдельно спрашивает подтверждение перед передачей текста писем модели.
+- Индекс имён и путей файлов хранится локально. Имена найденных файлов не отправляются в облачную модель для повторного ранжирования.
+- API-ключи Groq и Moondream хранятся через Windows Credential Manager, если настроено соответствующее хранилище; также поддерживаются предусмотренные приложением переменные окружения.
+- Piper TTS работает локально после первоначальной загрузки пакета и русской голосовой модели. Первоначальная установка голоса требует интернет-соединения.
 
-Dictation hotkey: `right alt+right shift`. Voice-command hotkey: `right ctrl`.
+## Данные приложения
 
-## Notes
+Настройки, локальные индексы, заметки, адресная книга и другие данные приложения хранятся вне Git-репозитория в каталоге данных пользователя, который задаётся модулем `agent_core.py`. Не удаляйте этот каталог при обновлении приложения.
 
-- GigaAM's short-audio `.transcribe()` method supports clips up to 25 seconds; longer recordings are skipped with a message.
-- The model files and custom model code are loaded locally. The application does not fetch model weights from Hugging Face when it starts.
-- The model repository contains custom Python code. `trust_remote_code=True` is required by GigaAM; only use model files obtained from the official publisher.
-- The model weights are not included in this GitHub repository.
+Список задач и напоминаний хранится модулем `reminders.py`. Заметки с мультимедийными вложениями хранятся отдельным модулем `notes_store.py`. Эти два хранилища пока не объединены; обновление кода не переносит и не удаляет пользовательские записи.
 
+## Основные модули
 
-## Project modules
+| Модуль | Назначение |
+|---|---|
+| `main.py` | Запуск, аудиозапись, системные клавиши, распознавание речи, очередь GUI и маршрутизация действий |
+| `intent_router.py` | Семантическое понимание команд и единый versioned intent envelope |
+| `groq_client.py`, `moondream_client.py` | Клиенты подключённых моделей |
+| `ai_chat.py` | Диалог с ИИ и контекст сохранённой памяти |
+| `assistant_window.py`, `settings_window.py` | Главное окно и настройки |
+| `file_search.py`, `file_indexer.py` | Поиск по именам/путям и локальный индекс MFT/SQLite |
+| `mail_client.py`, `email_manager.py`, `mail_reader.py` | Почтовый интерфейс, отправка, контакты и чтение писем |
+| `email_form.py`, `contact_form.py` | Компоненты создания письма и управления контактами |
+| `reminders.py`, `reminders_window.py` | Задачи, напоминания и их интерфейс |
+| `notes_store.py`, `notes_window.py` | Заметки с вложениями и их интерфейс |
+| `camera_inspector.py`, `camera_window.py`, `screen_inspector.py` | Камера, просмотр и анализ изображений, анализ экрана |
+| `windows_actions.py`, `installed_apps.py` | Действия Windows и запуск установленных приложений |
+| `folder_organizer.py` | Предварительный просмотр и безопасная сортировка файлов |
+| `notifications.py` | Системные уведомления и локальная озвучка Piper |
 
-The application is split by responsibility so features can be maintained independently:
+## Семантические команды
 
-- `main.py` — startup, microphone hotkeys, speech recognition and command routing.
-- `groq_client.py` — shared direct connection to Groq for chat and vision requests.
-- `assistant_window.py` — Tkinter command guide and live microphone/listening status.
-- `windows_actions.py` — Windows actions: lock, reboot, settings, Downloads, Recycle Bin and screenshots.
-- `reminders.py` — unified notes, tasks and reminders storage, date parsing, scheduling and background notifications.\n- `reminders_window.py` — shared manager for notes, tasks, due dates and completed items.
-- `notifications.py` — Windows toast notifications and local Piper neural speech synthesis.
-- `email_manager.py` — Mail.ru SMTP sending and local address-book storage.
-- `contact_form.py` — desktop form for manually adding contacts.
-- `file_search.py` — web search, MFT search orchestration and results window.
-- `folder_organizer.py` — preview-first folder organizer with confirmation before moving files.
-- `file_indexer.py` — NTFS MFT indexing and SQLite/FTS search database.
+GigaAM-v3 распознаёт речь локально. Затем `intent_router.py` передаёт текст в Groq для определения смысла фразы и возвращает единый контракт с типом намерения, действием, целью, источником, параметрами и уверенностью. Python выполняет только действия из разрешённого каталога; модель не выбирает произвольные функции или код.
 
-The address book, file index and unified notes/tasks store are kept under `%LOCALAPPDATA%\\ZeroControl`, not in the repository. On first launch, existing files from `%LOCALAPPDATA%\\GigaAMVoiceAssistant` are copied into the new folder; the old files are kept as a backup. Notes, tasks and reminders use one record format: text, creation time, optional reminder time and completion state. Existing reminder data, clipboard notes and saved AI-memory notes are imported automatically the first time the unified store is opened; original files are left untouched. Voice examples: **«запомни купить фильтр»**, **«напомни завтра в 9 позвонить»**, **«отметь фильтр выполненным»**, **«открой напоминания»**. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
+Основная модель Groq задаётся настройками приложения. Ключ можно сохранить в настройках Zero Control. Поддерживаются `GROQ_API_KEY` и `GROQ_MODEL`.
 
-## Tkinter interface
+## Поиск файлов
 
-After the local model loads, the main Tkinter window displays the command reference, usage steps, microphone availability and current recording/recognition status. Hold Left Ctrl + Left Shift for dictation or Right Ctrl for a voice command; release the keys to process the audio. Close the window to exit.
-\n\nTo organize a folder, say **«разбери папку»** while holding Right Ctrl. Choose a folder to preview how its top-level files will be grouped. Nothing moves until you click **«Разложить файлы»** and confirm. Existing files are never overwritten; nested folders are left untouched.\n
+Поиск предназначен для нахождения файлов и папок по названиям и путям. Индекс строится локально на основе MFT и SQLite/FTS5. ИИ может преобразовать разговорный запрос в поисковые понятия и варианты написания; фактические результаты обрабатываются локально. Содержимое PDF, Word, Excel и других документов не индексируется и не анализируется.
 
-## Семантические команды и чат через Groq
+## Безопасная сортировка папок
 
-GigaAM-v3 по-прежнему распознаёт речь локально. Модуль `intent_router.py` передаёт распознанный текст в Groq, чтобы определить намерение по смыслу, а выполнение остаётся в Python и ограничено списком разрешённых действий. Основная модель по умолчанию — `openai/gpt-oss-20b`; её можно изменить в настройках Zero Control. API-ключ Groq вводится в настройках и хранится в Windows Credential Manager, а не в файлах проекта. Переменные окружения `GROQ_API_KEY` и `GROQ_MODEL` также поддерживаются. Установка локального приложения и скачивание весов не требуются: запросы идут напрямую на `https://api.groq.com/openai/v1/chat/completions`. В окне есть кнопка «Умная команда…» для ввода задачи своими словами.
-
-Moondream остаётся резервной моделью для текстового помощника и отдельным вариантом анализа камеры. Для вопросов о кадре камера сначала использует Moondream, если его ключ настроен, а при отсутствии ключа или ошибке переключается на Groq. Анализ экрана выполняется через Groq с моделью, поддерживающей изображения.
-
-
-## Вопросы подключённому ИИ
-
-Скажи «спроси ИИ» и произнеси вопрос либо нажми кнопку «Спросить ИИ…» в главном окне. Запрос отправляется в Groq; ответ появляется в отдельном окне. Распознавание голоса остаётся локальным, но текст вопроса и ответ обрабатываются выбранной облачной моделью Groq.
+Команда **«разбери папку»** открывает выбор папки и предварительный просмотр распределения файлов по категориям. Перемещение выполняется только после подтверждения пользователя. Существующие файлы не должны перезаписываться; вложенные папки не обрабатываются как содержимое верхнего уровня.
