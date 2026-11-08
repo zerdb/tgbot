@@ -237,7 +237,7 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
         # Equivalent to *query*: find the text anywhere in the file name
         # or full path. casefold() makes matching case-insensitive for Cyrillic too.
         needle = "".join(
-            char for char in unicodedata.normalize("NFKC", query).casefold()
+            char for char in unicodedata.normalize("NFKC", query).casefold().replace("ё", "е")
             if char.isalnum()
         )
         if query.startswith("__EXT__:"):
