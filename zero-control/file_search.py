@@ -170,7 +170,17 @@ def _parse_search_request(raw_query: str) -> dict:
     # Служебные слова не должны становиться частью имени.
     text = re.sub(r"\b(?:найди|поищи|найти|поискать|мне|все|всех|файл\w*|документ\w*|документы|за|на|больше|свыше|крупнее|меньше|до|мегабайт\w*|гигабайт\w*|мб|гб|байт\w*|созданн\w*|измененн\w*|изменен\w*|последние|новые|недавние|самые|большие|маленькие|старые)\b", " ", text)
     stop_words = {"по", "для", "при", "это", "как", "или", "его", "ее", "их", "копию", "копия", "названию", "название", "имя", "имени"}
-    terms = [part for part in re.findall(r"[a-zа-яё0-9_.-]+", text) if (len(part) > 1 or part.isdigit()) and part not in stop_words]
+    raw_terms = [part for part in re.findall(r"[a-zа-яё0-9_.-]+", text) if (len(part) > 1 or part.isdigit()) and part not in stop_words]
+    suffixes = ("иями", "ями", "ами", "ого", "ему", "ому", "ыми", "ими", "ую", "юю", "ая", "яя", "ое", "ее", "ые", "ие", "ый", "ий", "ой", "ым", "им", "ом", "ем", "ах", "ях", "ов", "ев", "ей", "ам", "ям", "ую", "ию", "ия", "ья", "ью", "а", "я", "ы", "и", "у", "ю", "е", "о")
+    terms = []
+    for term in raw_terms:
+        stem = term
+        if re.search(r"[а-яё]", stem):
+            for suffix in suffixes:
+                if stem.endswith(suffix) and len(stem) - len(suffix) >= 3:
+                    stem = stem[:-len(suffix)]
+                    break
+        terms.append(stem)
     return {"terms": terms, "filters": filters}
 
 
@@ -191,8 +201,15 @@ def _search_worker(query: str, parent):
             result_sets = [set(refresh_and_search(term, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))) for term in terms]
             matches = list(set.intersection(*result_sets)) if result_sets else []
         else:
-            empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else ""
-            matches = refresh_and_search(empty_query, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
+            if filters["extensions"]:
+                result_sets = [
+                    set(refresh_and_search("__EXT__:" + ext, report=lambda message: print(f"[Поиск файлов] {message}", flush=True)))
+                    for ext in sorted(filters["extensions"])
+                ]
+                matches = list(set.union(*result_sets)) if result_sets else []
+            else:
+                empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else ""
+                matches = refresh_and_search(empty_query, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
 
         filtered = []
         for path in matches:
