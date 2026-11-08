@@ -26,6 +26,11 @@ def normalize_command(text: str) -> str:
 
 def parse_reminder(text: str):
     source = normalize_command(text)
+    # В разговорной речи «помни» часто используется вместо «напомни».
+    # Это нормализация команды на уровне парсера напоминаний, а не
+    # дополнительное правило семантической классификации.
+    if re.match(r"^(?:помни|напомнить)\\b", source):
+        source = re.sub(r"^(?:помни|напомнить)\\b", "напомни", source, count=1)
     if not source.startswith("напомни "):
         if source.startswith("через ") and " напомни " in source:
             source = "напомни " + source
