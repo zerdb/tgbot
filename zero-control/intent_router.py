@@ -201,6 +201,7 @@ def _understand_command(user_text: str) -> dict:
         "organize_folder",
         "open_reminders",
         "open_mail_client",
+        "email_compose",
         "open_application",
         "open_installed_application",
         "open_downloads",
