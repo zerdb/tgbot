@@ -428,7 +428,10 @@ def handle_command(text: str):
         # с пустой карточкой; «открой контакты» показывает список.
         _ui_actions.put(("add_contact", action == "add_contact"))
     elif action == "email_compose":
-        _ui_actions.put(("email_compose", bool(args.get("attach_copied_files", False))))
+        _ui_actions.put(("email_compose", {
+            "attach_copied_files": bool(args.get("attach_copied_files", False)),
+            "recipient_name": str(args.get("recipient_name") or "").strip(),
+        }))
     elif action == "inspect_camera_image":
         _ui_actions.put(("inspect_camera_image", None))
     elif action == "camera_question":
@@ -620,7 +623,11 @@ def main():
                     print("[GUI] Вызов адресной книги завершён.", flush=True)
                 elif ui_action == "email_compose":
                     print("[GUI] Открываю окно нового письма.", flush=True)
-                    open_email_form(parent=_ui.root, add_files_on_open=value)
+                    open_email_form(
+                        parent=_ui.root,
+                        add_files_on_open=bool(value.get("attach_copied_files", False)) if isinstance(value, dict) else bool(value),
+                        recipient_name=str(value.get("recipient_name") or "") if isinstance(value, dict) else "",
+                    )
                     print("[GUI] Вызов формы письма завершён.", flush=True)
                 elif ui_action == "camera_question":
                     _ui.set_busy_overlay("Получаю кадр и анализирую вопрос…")
