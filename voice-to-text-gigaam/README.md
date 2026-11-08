@@ -104,7 +104,7 @@ The application is split by responsibility so features can be maintained indepen
 - `folder_organizer.py` — preview-first folder organizer with confirmation before moving files.
 - `file_indexer.py` — NTFS MFT indexing and SQLite/FTS search database.
 
-The address book, file index and unified notes/tasks store are kept under `%LOCALAPPDATA%\\ZeroControl`, not in the repository. Notes, tasks and reminders use one record format: text, creation time, optional reminder time and completion state. Existing reminder data, clipboard notes and saved AI-memory notes are imported automatically the first time the unified store is opened; original files are left untouched. Voice examples: **«запомни купить фильтр»**, **«напомни завтра в 9 позвонить»**, **«отметь фильтр выполненным»**, **«открой напоминания»**. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
+The address book, file index and unified notes/tasks store are kept under `%LOCALAPPDATA%\\ZeroControl`, not in the repository. On first launch, existing files from `%LOCALAPPDATA%\\GigaAMVoiceAssistant` are copied into the new folder; the old files are kept as a backup. Notes, tasks and reminders use one record format: text, creation time, optional reminder time and completion state. Existing reminder data, clipboard notes and saved AI-memory notes are imported automatically the first time the unified store is opened; original files are left untouched. Voice examples: **«запомни купить фильтр»**, **«напомни завтра в 9 позвонить»**, **«отметь фильтр выполненным»**, **«открой напоминания»**. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
 
 ## Tkinter interface
 
