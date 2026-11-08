@@ -22,6 +22,8 @@ ACTIONS = {
  "open_settings": "Открыть настройки Windows.",
  "empty_recycle_bin": "Очистить корзину.",
  "screenshot": "Сделать скриншот.",
+ "inspect_screen": "Сделать свежий снимок экрана и открыть модуль его анализа.",
+ "paste_clipboard_to_application": "Открыть указанную программу и вставить в неё текст из буфера обмена; app_name — название приложения.",
  "reminder": "Создать напоминание; reminder_text сохранить равным исходной фразе.",
  "organize_folder": "Открыть мастер сортировки файлов.",
  "open_reminders": "Открыть общий список заметок, дел и напоминаний.",
@@ -43,6 +45,8 @@ SYSTEM_PROMPT = """Ты — классификатор намерений рус
 Для напоминания передай исходную фразу в reminder_text. Если пользователь говорит «запомни», «сохрани заметку» с произнесённым текстом или «добавь запись», выбери add_note и передай текст в note_text. Если просит отметить запись выполненной, выбери complete_item и передай название или фрагмент в item_text.
 Если просят открыть корзину/мусорное ведро — open_recycle_bin, НЕ open_downloads и НЕ empty_recycle_bin.
 Если просят очистить/опустошить корзину — empty_recycle_bin.
+Если пользователь спрашивает «что на экране», «посмотри экран», «прочитай экран» или просит увидеть содержимое текущего экрана — выбери inspect_screen, не ai_chat.
+Если пользователь просит открыть конкретную программу и вставить текст/содержимое из буфера обмена, выбери paste_clipboard_to_application и передай app_name (например, Блокнот или Word).
 Блокнот — open_application app="notepad"; калькулятор — app="calculator"; браузер — app="browser"; Word — app="word"; Excel — app="excel"; папка Изображения/Картинки/Фото — app="images".
 Не путай корзину с загрузками. Неясная задача => unknown. Не придумывай действия и параметры.
 Доступные действия: """ + json.dumps(ACTIONS, ensure_ascii=False)
@@ -92,6 +96,24 @@ def _file_search_query(user_text: str) -> str:
 
 def understand_command(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
+
+    # Вопросы о текущем экране направляем в модуль снимка и анализа, а не в обычный текстовый ИИ.
+    if re.search(r"\\b(что|что сейчас|посмотри|посмотреть|прочитай|прочитать|опиши|увидь|видишь)\\b.*\\b(на экране|экран|монитор)", normalized) or normalized in ("что у меня на экране", "что видно на экране", "посмотри на экран"):
+        return {"action": "inspect_screen", "confidence": 1.0, "arguments": {}}
+
+    # Открытие программы и вставка текста из буфера — единая локальная команда.
+    paste_match = re.search(
+        r"\\b(блокнот|notepad|word|ворд|microsoft word)\\b.*\\b(вставь|вставить|вставить текст|вставить содержимое)\\b.*\\b(буфер|скопированн|clipboard)",
+        normalized,
+    ) or re.search(
+        r"\\b(вставь|вставить)\\b.*\\b(текст|содержимое)\\b.*\\b(из буфера|из буфера обмена|скопированн)",
+        normalized,
+    )
+    if paste_match:
+        app_match = re.search(r"\\b(блокнот|notepad|word|ворд|microsoft word)\\b", normalized)
+        if app_match:
+            app = "Блокнот" if app_match.group(1) in ("блокнот", "notepad") else "Word"
+            return {"action": "paste_clipboard_to_application", "confidence": 1.0, "arguments": {"app_name": app}}
 
     # Разделяем настройки Windows и настройки самого помощника.
     if re.search(r"\b(настройки windows|параметры windows|системные настройки|параметры системы)\b", normalized):
