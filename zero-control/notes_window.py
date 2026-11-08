@@ -10,15 +10,12 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote
 
-from PIL import Image, ImageGrab, ImageTk
+from PIL import Image, ImageGrab
 
 from agent_core import get_camera_password
 from camera_window import DEFAULT_CAMERA
 from dialog_utils import apply_modern_style, center_window
 import notes_store
-
-
-IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"}
 
 
 def open_notes_window(parent):
@@ -79,6 +76,8 @@ def open_notes_window(parent):
     caption_entry.pack(side="left", fill="x", expand=True)
     ttk.Button(caption_row, text="Сохранить комментарий",
                command=lambda: save_caption()).pack(side="left", padx=(6, 0))
+    ttk.Button(caption_row, text="Удалить вложение",
+               command=lambda: remove_attachment()).pack(side="left", padx=(6, 0))
 
     actions = ttk.Frame(editor)
     actions.pack(fill="x", pady=(5, 0))
@@ -194,12 +193,11 @@ def open_notes_window(parent):
                     load_note(note_id)
                     refresh_notes(note_id)
                     return "break"
-            messagebox.showinfo("Буфер обмена",
-                                "В буфере нет изображения. Скопируй картинку или скриншот и повтори Ctrl+V.",
-                                parent=win)
+            # Не перехватываем обычный текст: Ctrl+V в полях редактора остаётся стандартной вставкой.
+            return None
         except Exception as exc:
             messagebox.showerror("Буфер обмена", str(exc), parent=win)
-        return "break"
+            return "break"
 
     def camera_snapshot():
         try:
@@ -276,6 +274,22 @@ def open_notes_window(parent):
         index = next((i for i, x in enumerate(state["attachments"]) if x["id"] == item["id"]), None)
         if index is not None:
             attachment_list.selection_set(index)
+
+    def remove_attachment():
+        item = selected_attachment()
+        if not item:
+            messagebox.showinfo("Вложение", "Сначала выбери вложение.", parent=win)
+            return
+        if not messagebox.askyesno(
+            "Удалить вложение",
+            f"Удалить файл «{item['filename']}» из этой заметки?",
+            parent=win,
+        ):
+            return
+        notes_store.delete_attachment(item["id"])
+        note_id = state["note_id"]
+        load_note(note_id)
+        refresh_notes(note_id)
 
     def remove_note():
         note_id = state["note_id"]
