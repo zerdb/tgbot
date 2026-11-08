@@ -90,8 +90,8 @@ py main.py
 | `ai_chat.py` | Диалог с ИИ и контекст сохранённой памяти |
 | `assistant_window.py`, `settings_window.py` | Главное окно и настройки |
 | `file_search.py`, `file_indexer.py` | Поиск по именам/путям и локальный индекс MFT/SQLite |
-| `mail_client.py`, `email_manager.py`, `mail_reader.py` | Почтовый интерфейс, отправка, контакты и чтение писем |
-| `email_form.py`, `contact_form.py` | Компоненты создания письма и управления контактами |
+| `mail_client.py`, `email_manager.py`, `mail_reader.py` | Единый почтовый интерфейс, отправка, контакты и чтение писем |
+| `clipboard_files.py` | Получение списка файлов, скопированных в Windows Explorer, для почтовых вложений |
 | `reminders.py`, `reminders_window.py` | Задачи, напоминания и их интерфейс |
 | `notes_store.py`, `notes_window.py` | Заметки с вложениями и их интерфейс |
 | `camera_inspector.py`, `camera_window.py`, `screen_inspector.py` | Камера, просмотр и анализ изображений, анализ экрана |
