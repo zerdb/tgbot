@@ -431,7 +431,12 @@ def export_file_results(results, query: str, export_format: str) -> Path:
             created_text = datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M:%S")
         except (OSError, OverflowError, ValueError):
             created_text = "—"
-        rows.append((path.name, str(path), created_text, int(size), _format_export_size(int(size))))
+        created_value = None
+        try:
+            created_value = datetime.fromtimestamp(created_at)
+        except (OSError, OverflowError, ValueError):
+            pass
+        rows.append((path.name, str(path), created_value, int(size), _format_export_size(int(size))))
 
     if export_format == "excel":
         from openpyxl import Workbook
@@ -443,7 +448,7 @@ def export_file_results(results, query: str, export_format: str) -> Path:
         sheet.title = "Результаты поиска"
         sheet.append(["Название файла", "Полный путь", "Дата создания", "Размер (байт)", "Размер"])
         for row in rows:
-            sheet.append(list(row))
+            sheet.append([row[0], row[1], row[2] or "—", row[3], row[4]])
             sheet.cell(sheet.max_row, 3).number_format = "DD.MM.YYYY HH:MM:SS"
         for cell in sheet[1]:
             cell.font = Font(bold=True, color="FFFFFF")
@@ -493,7 +498,9 @@ def export_file_results(results, query: str, export_format: str) -> Path:
                 run.font.size = Pt(8)
         for row in rows:
             cells = table.add_row().cells
-            for cell, value in zip(cells, row):
+            display_row = list(row)
+            display_row[2] = display_row[2].strftime("%d.%m.%Y %H:%M:%S") if display_row[2] else "—"
+            for cell, value in zip(cells, display_row):
                 cell.text = str(value)
                 for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
@@ -504,7 +511,9 @@ def export_file_results(results, query: str, export_format: str) -> Path:
         with output_path.open("w", encoding="utf-8-sig", newline="") as file:
             file.write("Название файла\tПолный путь\tДата создания\tРазмер (байт)\tРазмер\n")
             for row in rows:
-                safe_values = [str(value).replace("\\t", " ").replace("\\r", " ").replace("\\n", " ") for value in row]
+                display_row = list(row)
+                display_row[2] = display_row[2].strftime("%d.%m.%Y %H:%M:%S") if display_row[2] else "—"
+                safe_values = [str(value).replace("\\t", " ").replace("\\r", " ").replace("\\n", " ") for value in display_row]
                 file.write("\\t".join(safe_values) + "\\n")
 
     if export_format == "text":
