@@ -7,7 +7,7 @@ ACTIONS = {
  "open_assistant_settings": "Открыть настройки Zero Control.",
  "read_unread_mail": "Прочитать и кратко пересказать непрочитанные письма через IMAP и ИИ.",
  "ai_chat": "Ответить на вопрос пользователя через подключённую языковую модель; question — полный вопрос.",
- "email_compose": "Подготовить письмо; если просят отправить/прикрепить файлы, attach_copied_files=true. Если назван получатель, передай его имя в recipient_name.",
+ "email_compose": "Подготовить письмо; если просят отправить/прикрепить файлы, attach_copied_files=true. Если назван получатель, передай его имя в recipient_name. Не выбирай clarify только из-за отсутствия темы или текста письма: открой редактор. Например, «Отправь на почту Мазарову» — email_compose с recipient_name=«Мазарову»; «Отправь на почту файлы Шамилю» — email_compose с recipient_name=«Шамилю» и attach_copied_files=true.",
  "camera_question": "Получить свежий кадр камеры и ответить на вопрос пользователя по изображению; question — вопрос.",
  "save_note": "Сохранить буфер обмена как заметку.",
  "add_note": "Сохранить произнесённый текст как заметку без срока; note_text — текст записи.",
@@ -171,6 +171,28 @@ def _understand_command(user_text: str) -> dict:
     try:
         semantic = _classify_semantically(user_text)
         if semantic.get("kind") == "clarify":
+            # Если модель уже извлекла адресата-человека, а сама фраза явно
+            # относится к отправке почты, это не повод терять распознанное
+            # намерение: открываем редактор и оставляем подтверждение отправки
+            # пользователю в интерфейсе.
+            target = semantic.get("target") if isinstance(semantic.get("target"), dict) else {}
+            source = semantic.get("source") if isinstance(semantic.get("source"), dict) else {}
+            normalized = re.sub(r"\\s+", " ", (user_text or "").lower().replace("ё", "е")).strip()
+            email_request = bool(re.search(r"\\b(почт\\w*|email|емейл)\\b", normalized) and re.search(r"\\b(отправ\\w*|перешл\\w*|пошл\\w*)\\b", normalized))
+            recipient = str(target.get("name") or "").strip()
+            if email_request and target.get("type") == "person" and recipient:
+                semantic["kind"] = "execute"
+                semantic["action"] = "email_compose"
+                semantic["parameters"] = {
+                    "recipient_name": recipient,
+                    "attach_copied_files": (
+                        source.get("type") == "clipboard"
+                        or bool(re.search(r"\\b(файл\\w*|вложен\\w*|буфер\\w*)\\b", normalized))
+                    ),
+                }
+                semantic["clarification"] = ""
+                semantic["confidence"] = max(float(semantic.get("confidence", 0.0) or 0.0), 0.75)
+                return semantic
             return semantic
         if semantic.get("action") != "unknown" and float(semantic.get("confidence", 0)) >= 0.55:
             return semantic
