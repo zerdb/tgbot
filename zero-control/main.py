@@ -672,8 +672,9 @@ def main():
                         initial_attachment_paths=options.get("attachment_paths") or [],
                     )
                 elif ui_action == "inspect_screen":
-                    print("[Экран] Открываю анализ свежего снимка экрана.", flush=True)
-                    open_screen_inspector(_ui.root, auto_capture=True)
+                    print("[Экран] Делаю снимок монитора и открываю изображение.", flush=True)
+                    from screen_inspector import show_screen_snapshot
+                    show_screen_snapshot(_ui.root)
                 elif ui_action == "camera_question":
                     _ui.set_busy_overlay("Получаю кадр и анализирую вопрос…")
                     threading.Thread(target=_camera_question_worker, args=(str(value or ""),), daemon=True, name="camera-question").start()
