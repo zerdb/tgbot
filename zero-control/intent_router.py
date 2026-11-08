@@ -282,6 +282,12 @@ def _understand_command(user_text: str) -> dict:
             return semantic
         if semantic.get("action") != "unknown" and float(semantic.get("confidence", 0)) >= 0.55:
             return semantic
+        # Даже неуверенный результат ИИ сохраняем для ручного разбора в настройках.
+        try:
+            from local_intents import record_intent
+            record_intent(user_text, semantic, str(semantic.get("_semantic_provider") or "ai"))
+        except Exception as log_error:
+            print("[Намерения] Не удалось сохранить результат классификации: %s" % log_error, flush=True)
         print("[Команды] Модель не определила намерение уверенно; применяю локальный fallback.", flush=True)
     except Exception as exc:
         print("[Команды] Семантический слой недоступен; применяю локальный fallback: %s" % exc, flush=True)
