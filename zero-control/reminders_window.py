@@ -132,8 +132,11 @@ def open_reminders(parent):
         dialog.geometry("620x410")
         dialog.minsize(440, 300)
 
+        # Закрепляем нижнюю панель до размещения растягиваемой области.
+        row = ttk.Frame(dialog, padding=(14, 8, 14, 14))
+        row.pack(side="bottom", fill="x")
         body = ttk.Frame(dialog, padding=14)
-        body.pack(fill="both", expand=True)
+        body.pack(side="top", fill="both", expand=True)
         ttk.Label(body, text="Текст заметки или дела").pack(anchor="w")
         text_box = tk.Text(
             body, height=9, wrap="word", font=("Segoe UI", 10),
@@ -156,9 +159,6 @@ def open_reminders(parent):
             text="Примеры: «через 20 минут», «завтра в 9». Пустое поле — обычная заметка.",
             wraplength=560,
         ).pack(anchor="w")
-
-        row = ttk.Frame(body)
-        row.pack(fill="x", pady=(12, 0))
 
         def save():
             value = text_box.get("1.0", "end").strip()
