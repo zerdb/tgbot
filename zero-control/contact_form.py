@@ -27,8 +27,11 @@ def open_contact_form(parent=None, start_new=False):
         root.minsize(680, 440)
         root.attributes("-topmost", True)
 
+        # Панель действий закреплена отдельно от растягиваемой таблицы.
+        footer = ttk.Frame(root, padding=(14, 8, 14, 12))
+        footer.pack(side="bottom", fill="x")
         outer = ttk.Frame(root, padding=14)
-        outer.pack(fill="both", expand=True)
+        outer.pack(side="top", fill="both", expand=True)
         ttk.Label(outer, text="Мои контакты", font=("Segoe UI", 16, "bold")).pack(anchor="w")
         ttk.Label(outer, text="Общий справочник для писем и голосовых команд").pack(anchor="w", pady=(2, 10))
 
@@ -141,18 +144,21 @@ def open_contact_form(parent=None, start_new=False):
             dialog.minsize(560, 440)
             dialog.transient(root)
             dialog.attributes("-topmost", True)
+            # Кнопки импорта остаются видимыми даже при уменьшении окна.
+            import_footer = ttk.Frame(dialog, padding=(14, 8, 14, 12))
+            import_footer.pack(side="bottom", fill="x")
             frame = ttk.Frame(dialog, padding=14)
-            frame.pack(fill="both", expand=True)
+            frame.pack(side="top", fill="both", expand=True)
             ttk.Label(frame, text="Вставь текст с контактами", font=("Segoe UI", 13, "bold")).pack(anchor="w")
             ttk.Label(
                 frame,
                 text="Можно вставить список, подпись из письма или несколько строк с именами и email.",
                 wraplength=650,
             ).pack(anchor="w", pady=(3, 8))
-            source = tk.Text(frame, height=10, wrap="word", font=("Segoe UI", 10))
+            source = tk.Text(frame, height=7, wrap="word", font=("Segoe UI", 10))
             source.pack(fill="both", expand=True)
             ttk.Label(frame, text="Результат распознавания").pack(anchor="w", pady=(10, 4))
-            preview = ttk.Treeview(frame, columns=("name", "email", "phone", "notes"), show="headings", height=7)
+            preview = ttk.Treeview(frame, columns=("name", "email", "phone", "notes"), show="headings", height=5)
             for key, title, width in (
                 ("name", "Имя", 180), ("email", "Почта", 220),
                 ("phone", "Телефон", 120), ("notes", "Заметка", 130),
@@ -276,8 +282,8 @@ def open_contact_form(parent=None, start_new=False):
                 )
                 dialog.destroy()
 
-            buttons = ttk.Frame(frame)
-            buttons.pack(fill="x", pady=(8, 0))
+            buttons = ttk.Frame(import_footer)
+            buttons.pack(fill="x")
             parse_button = ttk.Button(buttons, text="Разобрать с помощью ИИ", command=parse_with_ai)
             parse_button.pack(side="left")
             import_button = ttk.Button(buttons, text="Добавить в адресную книгу", command=import_contacts, state="disabled")
@@ -286,8 +292,8 @@ def open_contact_form(parent=None, start_new=False):
             activate_modal(dialog, root)
 
         table.bind("<<TreeviewSelect>>", selected)
-        controls = ttk.Frame(outer)
-        controls.pack(fill="x", pady=(8, 0))
+        controls = ttk.Frame(footer)
+        controls.pack(fill="x")
         ttk.Button(controls, text="Новый контакт", command=clear_editor).pack(side="left")
         ttk.Button(controls, text="Умный импорт", command=open_smart_import).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Сохранить / изменить", command=save).pack(side="left", padx=8)
