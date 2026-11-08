@@ -71,6 +71,12 @@ def _is_natural_information_question(text: str) -> bool:
 def _file_search_query(user_text: str) -> str:
     """Extract a flexible local file-search request without discarding filters."""
     query = re.sub(r"^.*?\b(?:найди|поищи|найти|поискать|где)\b", "", user_text, flags=re.IGNORECASE).strip()
+    query = re.sub(
+        r"\s+(?:и\s+)?(?:добавь|выгрузи|экспортируй|сохрани|запиши)\b.*$",
+        "",
+        query,
+        flags=re.IGNORECASE,
+    )
     query = re.sub(r"\b(?:мне)\b", " ", query, flags=re.IGNORECASE)
     query = re.sub(r"\b(?:пдф|пфд|pdf)\b", ".pdf", query, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip(" .,!?:;")
@@ -173,6 +179,26 @@ def understand_command(user_text: str) -> dict:
     folder_query = re.search(r"\b(?:найди|поищи|найти|поискать)\b.*\bпапк\w*\s+(?:с\s+названи\w*\s+)?(.+)$", user_text, re.IGNORECASE)
     if folder_query and folder_query.group(1).strip():
         return {"action": "open_folder", "confidence": 1.0, "arguments": {"folder": folder_query.group(1).strip().strip("«»")}}
+    # Поиск с экспортом: сначала ищем локально, затем создаём новый документ и открываем его.
+    if re.search(r"\b(?:найди|поищи|найти|поискать)\b", normalized) and not re.search(
+        r"\b(в интернете|в интернет|в сети|в google)\b", normalized
+    ):
+        export_format = None
+        if re.search(r"\b(?:excel|эксель|эксел|таблиц\w*)\b", normalized):
+            export_format = "excel"
+        elif re.search(r"\b(?:word|ворд|docx?)\b", normalized):
+            export_format = "word"
+        elif re.search(r"\b(?:блокнот|notepad|текстов\w*\s+документ\w*|текстов\w*\s+файл\w*|txt)\b", normalized):
+            export_format = "text"
+        if export_format:
+            query = _file_search_query(user_text)
+            if query:
+                return {
+                    "action": "search_files",
+                    "confidence": 1.0,
+                    "arguments": {"query": query, "export_format": export_format},
+                }
+
     # Вопросы о расположении файлов с критериями — локальный MFT-поиск,
     # а не общий вопрос к ИИ (например: «Где файлы больше 10 ГБ?»).
     file_subject = re.search(r"\b(файл\w*|документ\w*|пдф|pdf|фотографи\w*|архив\w*)\b", normalized)
@@ -238,5 +264,5 @@ def understand_command(user_text: str) -> dict:
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","note_text","item_text","query","question","app","folder") and isinstance(v,(str,bool))}
+    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","reminder_text","note_text","item_text","query","question","app","folder","export_format") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}
