@@ -434,10 +434,11 @@ def _parse_search_request(raw_query: str) -> dict:
     ))
     if local_parsed.get("term_groups") and not has_local_filters:
         print(
-            "[Поиск файлов] Обычный поиск по имени: пропускаю повторный запрос Groq; "
-            "использую распознанные слова и локальный индекс.",
+            "[Поиск файлов] Сначала проверяю точные слова по локальному индексу; "
+            "семантический Groq-разбор понадобится только если совпадений не будет.",
             flush=True,
         )
+        local_parsed["_semantic_fallback"] = True
         return local_parsed
 
     ai_started = time.perf_counter()
@@ -633,6 +634,41 @@ def _search_worker(query: str, parent, export_format=None):
                 for group in term_groups
             ]
             matches = list(set.intersection(*group_results)) if group_results else []
+            if not matches and parsed.get("_semantic_fallback"):
+                # Avoid paying for a second LLM call on common exact matches.
+                # If literal search misses, ask Groq for synonyms/ASR variants,
+                # then retry locally without ever uploading filenames.
+                semantic_started = time.perf_counter()
+                try:
+                    semantic = _parse_search_request_ai(query)
+                    semantic_groups = semantic.get("term_groups") or [
+                        [term] for term in semantic.get("terms", [])
+                    ]
+                    if semantic_groups:
+                        term_groups = semantic_groups
+                        filters = semantic["filters"]
+                        semantic_terms = list(dict.fromkeys(
+                            term for group in term_groups for term in group
+                        ))
+                        semantic_results = refresh_and_search(
+                            semantic_terms,
+                            report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+                        )
+                        group_results = [
+                            set().union(*(set(semantic_results.get(term, [])) for term in group))
+                            for group in term_groups
+                        ]
+                        matches = list(set.intersection(*group_results)) if group_results else []
+                        print(
+                            f"[Поиск файлов][Тайминг] Семантический повтор после точного промаха: "
+                            f"{time.perf_counter() - semantic_started:.3f} сек.",
+                            flush=True,
+                        )
+                except Exception as semantic_exc:
+                    print(
+                        f"[Поиск файлов] Семантическое расширение не удалось: {semantic_exc}",
+                        flush=True,
+                    )
             if not matches and len(group_results) > 1:
                 # If no path satisfies every concept, keep the best partial
                 # candidates instead of reporting a false absolute "not found".
