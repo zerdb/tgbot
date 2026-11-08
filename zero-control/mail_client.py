@@ -300,9 +300,13 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
     editor = ttk.LabelFrame(contacts_tab, text="Карточка контакта", padding=10)
     editor.pack(fill="x", pady=(9, 7))
     contact_vars = {key: tk.StringVar(master=win) for key in contact_columns}
+    name_entry = None
     for index, (key, label) in enumerate((("name", "Имя"), ("phone", "Телефон"), ("email", "Почта"), ("notes", "Заметка"))):
         ttk.Label(editor, text=label).grid(row=0, column=index, sticky="w", padx=(0, 8))
-        ttk.Entry(editor, textvariable=contact_vars[key], width=25).grid(row=1, column=index, sticky="ew", padx=(0, 8))
+        field = ttk.Entry(editor, textvariable=contact_vars[key], width=25)
+        field.grid(row=1, column=index, sticky="ew", padx=(0, 8))
+        if key == "name":
+            name_entry = field
         editor.columnconfigure(index, weight=1)
     contacts_status = tk.StringVar(master=win)
     ttk.Label(contacts_tab, textvariable=contacts_status).pack(anchor="w")
@@ -327,7 +331,12 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
     def clear_contact():
         for variable in contact_vars.values():
             variable.set("")
-        contact_table.selection_remove(contact_table.selection())
+        selection = contact_table.selection()
+        if selection:
+            contact_table.selection_remove(*selection)
+        contacts_status.set("Новый контакт: заполни имя и нужные поля, затем нажми «Сохранить».")
+        contact_vars["name"].set("")
+        name_entry.focus_set()
 
     def select_contact(_event=None):
         selection = contact_table.selection()
@@ -360,8 +369,8 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
         }
         try:
             save_address_book(book)
-        except OSError as exc:
-            messagebox.showerror("Ошибка сохранения", str(exc), parent=win)
+        except Exception as exc:
+            messagebox.showerror("Ошибка сохранения", f"Не удалось сохранить контакт: {exc}", parent=win)
             return
         refresh_contacts(name)
         contacts_status.set(f"Контакт «{name}» сохранён")
