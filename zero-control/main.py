@@ -8,14 +8,7 @@ import traceback
 import tkinter as tk
 
 from keyboard_listener import KeyboardListener
-from command_handler import CommandHandler
 from audio_engine import AudioEngine
-from background_workers import (
-    ask_ai_worker,
-    camera_inspection_worker,
-    camera_question_worker,
-    mail_reader_worker,
-)
 
 # Показываем заставку до импорта модулей приложения.
 _splash = tk.Tk()
@@ -35,6 +28,15 @@ _splash.geometry(f"+{_splash_x}+{_splash_y}")
 _splash.update_idletasks()
 _splash.update()
 
+# Импортируем прикладные модули после показа заставки.
+from command_handler import CommandHandler
+from background_workers import (
+    ask_ai_worker,
+    camera_inspection_worker,
+    camera_question_worker,
+    mail_reader_worker,
+)
+
 # Все стандартные уведомления приложения озвучиваются голосом Denis.
 from notifications import install_messagebox_voice
 install_messagebox_voice()
@@ -53,6 +55,7 @@ from notes_window import open_notes_window
 _ui = None  # GUI создаётся позже, после загрузки модулей
 _command_handler = None
 _audio_engine = None
+_keyboard_listener = None
 
 
 _ui_actions = queue.SimpleQueue()
