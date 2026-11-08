@@ -4,8 +4,9 @@ import json, os, queue, re, threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from notifications import show_notification, speak_text
+from agent_core import APP_DATA
 
-_APP_DATA = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant"
+_APP_DATA = APP_DATA
 _ITEMS_PATH = _APP_DATA / "notes_and_tasks.json"
 _LEGACY_REMINDERS_PATH = _APP_DATA / "reminders.json"
 _LEGACY_NOTES_PATH = Path(__file__).resolve().parent / "Заметки" / "Мои заметки.txt"
