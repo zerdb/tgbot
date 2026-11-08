@@ -219,7 +219,7 @@ def _parse_search_request_local(raw_query: str) -> dict:
                     stem = stem[:-len(suffix)]
                     break
         terms.append(stem)
-    return {"terms": terms, "filters": filters}
+    return {"terms": terms, "term_groups": [[term] for term in terms], "filters": filters}
 
 
 def _parse_search_request_ai(raw_query: str) -> dict:
@@ -229,7 +229,7 @@ def _parse_search_request_ai(raw_query: str) -> dict:
     prompt = """Разбери запрос пользователя для локального поиска файлов Windows.
 Верни ТОЛЬКО один JSON-объект без Markdown и пояснений со строго такой структурой:
 {
-  "terms": ["фрагмент имени или пути"],
+  "term_groups": [["договор", "контракт"], ["аренда"]],
   "extensions": [".doc", ".docx"],
   "size": {
     "min_exclusive_bytes": null,
@@ -242,10 +242,11 @@ def _parse_search_request_ai(raw_query: str) -> dict:
   "sort": "relevance"
 }
 Правила:
-- terms — только значимые слова/части имени или пути, которые реально нужно искать. Сохраняй частичные слова, не добавляй слова-фильтры.
+- term_groups — группы обязательных понятий. Для каждого понятия перечисли 1–4 варианта написания или точных синонима; совпасть должен хотя бы один вариант внутри каждой группы. Разные группы должны совпасть все. Не добавляй широкие или предположительные ассоциации.
+- Сохраняй исходные значимые слова и частичные формы. Не добавляй слова-фильтры. Для запроса «тёмный экран» допустимы группы [["тёмный"], ["экран", "дисплей"]], но не добавляй несвязанные слова.
 - Распознавай синонимы и ошибки распознавания: Word/ворд/Ворд/«в формате W» => расширения .doc и .docx; PDF/пдф/пфд => .pdf; Excel/эксель => .xls и .xlsx; PowerPoint => .ppt и .pptx.
 - «договор ПФД» означает terms ["договор"] и extensions [".pdf"]. «договор в формате ворд» — terms ["договор"] и extensions [".doc", ".docx"].
-- Не превращай тип файла в terms. Разные слова в terms означают, что все фрагменты должны совпасть.
+- Не превращай тип файла в term_groups. Каждая группа — отдельное обязательное понятие; варианты внутри группы — взаимозаменяемые формулировки.
 - Размеры используй в байтах, двоичные единицы: 1 КБ=1024, 1 МБ=1024^2, 1 ГБ=1024^3.
 - «больше 7 ГБ» => min_exclusive_bytes=7*1024^3; «меньше/до 7 ГБ» => max_exclusive_bytes=7*1024^3.
 - «7 ГБ», «равны 7 ГБ» => диапазон [7*1024^3, 8*1024^3): equal_bucket_min_bytes и equal_bucket_max_bytes. Не считай это точным равенством.
@@ -279,20 +280,44 @@ def _parse_search_request_ai(raw_query: str) -> dict:
         ".avi", ".mov", ".wmv", ".webm", ".mp3", ".wav", ".flac",
         ".m4a", ".aac",
     }
-    raw_terms = data.get("terms", [])
-    if not isinstance(raw_terms, list):
-        raise ValueError("Поле terms должно быть списком.")
-    terms = []
-    for value in raw_terms[:8]:
-        if isinstance(value, str):
-            term = re.sub(r"[^a-zа-яё0-9_.-]", "", value.casefold().replace("ё", "е"))
-            ignored_terms = {
-                "все", "всех", "файл", "файлы", "файлов", "документ", "документы",
-                "документов", "word", "ворд", "excel", "эксель", "pdf", "пдф", "пфд",
-                "формат", "формата", "формате", "найди", "поищи", "найти", "поискать",
-            }
-            if len(term) > 1 and term not in ignored_terms and term not in terms:
-                terms.append(term)
+    ignored_terms = {
+        "все", "всех", "файл", "файлы", "файлов", "документ", "документы",
+        "документов", "word", "ворд", "excel", "эксель", "pdf", "пдф", "пфд",
+        "формат", "формата", "формате", "найди", "поищи", "найти", "поискать",
+    }
+
+    def clean_term(value):
+        if not isinstance(value, str):
+            return ""
+        term = re.sub(r"[^a-zа-яё0-9_.-]", "", value.casefold().replace("ё", "е"))
+        return term if len(term) > 1 and term not in ignored_terms else ""
+
+    raw_groups = data.get("term_groups")
+    term_groups = []
+    if isinstance(raw_groups, list):
+        for raw_group in raw_groups[:8]:
+            if not isinstance(raw_group, list):
+                continue
+            group = []
+            for value in raw_group[:4]:
+                term = clean_term(value)
+                if term and term not in group:
+                    group.append(term)
+            if group:
+                term_groups.append(group)
+
+    # Backward compatibility with a model response using the previous terms field.
+    if not term_groups:
+        raw_terms = data.get("terms", [])
+        if not isinstance(raw_terms, list):
+            raise ValueError("Поле terms должно быть списком.")
+        legacy_terms = []
+        for value in raw_terms[:8]:
+            term = clean_term(value)
+            if term and term not in legacy_terms:
+                legacy_terms.append(term)
+        term_groups = [[term] for term in legacy_terms]
+    terms = [group[0] for group in term_groups]
 
     raw_extensions = data.get("extensions", [])
     if not isinstance(raw_extensions, list):
@@ -389,7 +414,7 @@ def _parse_search_request_ai(raw_query: str) -> dict:
         }}, ensure_ascii=False),
         flush=True,
     )
-    return {"terms": terms, "filters": filters}
+    return {"terms": terms, "term_groups": term_groups, "filters": filters}
 
 
 def _parse_search_request(raw_query: str) -> dict:
@@ -403,7 +428,7 @@ def _parse_search_request(raw_query: str) -> dict:
             filters["start"] is not None, filters["end"] is not None,
             filters["drive"], filters["folder"], filters["sort"],
         ))
-        if parsed["terms"] or has_filters:
+        if parsed.get("term_groups") or parsed["terms"] or has_filters:
             return parsed
         raise ValueError("ИИ не выделил ни поисковых слов, ни фильтров.")
     except Exception as exc:
@@ -542,14 +567,14 @@ def _search_worker(query: str, parent, export_format=None):
     from datetime import datetime
     parsed = _parse_search_request(query)
     filters = parsed["filters"]
-    terms = parsed["terms"]
+    term_groups = parsed.get("term_groups") or [[term] for term in parsed["terms"]]
     has_filters = any((
         filters["extensions"], filters["min_size"] is not None,
         filters["max_size"] is not None, filters["exact_size"] is not None,
         filters["start"] is not None, filters["end"] is not None,
         filters["drive"], filters["folder"], filters["sort"],
     ))
-    if not terms and not has_filters:
+    if not term_groups and not has_filters:
         print(f"Файлы по запросу «{query}» не найдены: не удалось распознать поисковые условия.", flush=True)
         _search_results.put(("success", parent, (query, [], export_format)))
         return
@@ -558,12 +583,23 @@ def _search_worker(query: str, parent, export_format=None):
     if extension and not terms:
         display_query = "*" + extension
     elif extension:
-        display_query = "*" + " ".join(terms) + "*" + extension
+        display_query = "*" + " ".join(group[0] for group in term_groups) + "*" + extension
     print(f"Ищу «{display_query}» по MFT и SQLite. Первое индексирование может занять некоторое время...", flush=True)
     try:
-        if terms:
-            result_sets = [set(refresh_and_search(term, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))) for term in terms]
-            matches = list(set.intersection(*result_sets)) if result_sets else []
+        if term_groups:
+            # Внутри смысловой группы ищем любой вариант (OR), между
+            # обязательными понятиями требуем совпадение всех групп (AND).
+            group_results = []
+            for group in term_groups:
+                alternatives = [
+                    set(refresh_and_search(
+                        term,
+                        report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+                    ))
+                    for term in group
+                ]
+                group_results.append(set.union(*alternatives) if alternatives else set())
+            matches = list(set.intersection(*group_results)) if group_results else []
         else:
             if filters["exact_size"] is not None:
                 matches = refresh_and_search(
