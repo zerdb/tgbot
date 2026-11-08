@@ -151,7 +151,7 @@ def _connect() -> sqlite3.Connection:
     return connection
 
 
-def refresh_and_search(query: str, report: Callable[[str], None] | None = None) -> list[Path]:
+def refresh_and_search(query: str | list[str], report: Callable[[str], None] | None = None) -> list[Path] | dict[str, list[Path]]:
     """Refresh available NTFS volumes and return matching file paths."""
     report = report or (lambda message: print(message, flush=True))
     if not is_admin():
@@ -169,7 +169,10 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
     if not volumes:
         raise OSError("Не найдены доступные диски.")
 
+    db_open_started = time.perf_counter()
     connection = _connect()
+    report(f"[Тайминг] Открытие SQLite и подготовка индексов: {time.perf_counter() - db_open_started:.3f} сек.")
+    refresh_started = time.perf_counter()
     try:
         for drive in volumes:
             cached_count = connection.execute(
@@ -233,6 +236,44 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
                 except sqlite3.OperationalError:
                     pass
             report(f"{drive}: индексировано {count:,} файлов за {time.perf_counter() - started:.1f} сек.")
+
+        if isinstance(query, (list, tuple)):
+            # Пакетный режим: все варианты обслуживаются одним соединением SQLite.
+            total = connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+            report(
+                f"[Тайминг] Проверка сохранённого индекса: {time.perf_counter() - refresh_started:.3f} сек.; "
+                f"всего записей: {total:,}."
+            )
+            batch_started = time.perf_counter()
+            results: dict[str, list[Path]] = {}
+            for raw_query in dict.fromkeys(str(item) for item in query if str(item).strip()):
+                needle = "".join(
+                    char for char in unicodedata.normalize("NFKC", raw_query).casefold().replace("ё", "е")
+                    if char.isalnum()
+                )
+                rows = []
+                fts_query_failed = False
+                if len(needle) >= 3:
+                    try:
+                        fts_query = '"' + needle.replace('"', '""') + '"'
+                        rows = connection.execute(
+                            "SELECT full_path FROM files_fts WHERE files_fts MATCH ? LIMIT ?",
+                            (fts_query, MAX_RESULTS),
+                        ).fetchall()
+                    except sqlite3.OperationalError:
+                        fts_query_failed = True
+                if not rows and (len(needle) < 3 or fts_query_failed):
+                    rows = connection.execute(
+                        "SELECT full_path FROM files WHERE instr(SEARCHKEY(name), ?) > 0 "
+                        "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
+                        (needle, needle, MAX_RESULTS),
+                    ).fetchall()
+                results[raw_query] = [Path(row[0]) for row in rows]
+            report(
+                f"[Тайминг] Выполнение {len(results)} поисковых вариантов: "
+                f"{time.perf_counter() - batch_started:.3f} сек."
+            )
+            return results
 
         # Equivalent to *query*: find the text anywhere in the file name
         # or full path. casefold() makes matching case-insensitive for Cyrillic too.
