@@ -23,11 +23,32 @@ def open_settings_window(parent):
             return
         window = tk.Toplevel(parent)
         window.title("Настройки Zero Control")
-        window.geometry("640x740")
-        window.minsize(540, 600)
-        frame = ttk.Frame(window, padding=10)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Единые настройки помощника", font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        window.geometry("600x620")
+        window.minsize(480, 420)
+        shell = ttk.Frame(window, padding=4)
+        shell.pack(fill="both", expand=True)
+        footer = ttk.Frame(shell)
+        footer.pack(side="bottom", fill="x", pady=(5, 0))
+        ttk.Separator(shell, orient="horizontal").pack(side="bottom", fill="x", pady=(4, 0))
+        content_area = ttk.Frame(shell)
+        content_area.pack(side="top", fill="both", expand=True)
+        canvas = tk.Canvas(content_area, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(content_area, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        frame = ttk.Frame(canvas, padding=(4, 2, 4, 6))
+        frame_window = canvas.create_window((0, 0), window=frame, anchor="nw")
+        def update_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfigure(frame_window, width=canvas.winfo_width())
+        frame.bind("<Configure>", update_scroll_region)
+        canvas.bind("<Configure>", update_scroll_region)
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-event.delta / 120), "units")
+        canvas.bind_all("<MouseWheel>", on_mousewheel)
+        window.bind("<Destroy>", lambda event: canvas.unbind_all("<MouseWheel>") if event.widget is window else None, add="+")
+        ttk.Label(frame, text="Единые настройки помощника", font=("Segoe UI", 13, "bold")).pack(anchor="w")
         ttk.Label(frame, text="Ключ Groq и доступ к камере хранятся в защищённом хранилище Windows.", wraplength=570).pack(anchor="w", pady=(2, 6))
         values = load_settings()
         fields = [
@@ -40,18 +61,18 @@ def open_settings_window(parent):
         for key, label in fields:
             ttk.Label(frame, text=label).pack(anchor="w")
             var = tk.StringVar(master=window, value=str(values.get(key, "")))
-            ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(1, 4))
+            ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(0, 2))
             vars_[key] = var
 
         groq_box = ttk.LabelFrame(frame, text="Groq — основная ИИ-модель", padding=6)
         groq_box.pack(fill="x", pady=(1, 4))
         groq_var = tk.StringVar(master=window)
-        ttk.Entry(groq_box, textvariable=groq_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ttk.Entry(groq_box, textvariable=groq_var, show="*").pack(fill="x", pady=(0, 3))
         groq_status = tk.StringVar(
             master=window,
             value="Ключ сохранён" if (os.getenv("GROQ_API_KEY", "").strip() or get_groq_api_key()) else "Ключ не задан",
         )
-        ttk.Label(groq_box, textvariable=groq_status).pack(anchor="w", pady=(6, 0))
+        ttk.Label(groq_box, textvariable=groq_status).pack(anchor="w", pady=(0, 2))
         def save_groq_secret():
             try:
                 set_groq_api_key(groq_var.get())
@@ -67,15 +88,17 @@ def open_settings_window(parent):
                 groq_status.set("Ключ не задан — облачная модель недоступна")
             except Exception as exc:
                 messagebox.showerror("Groq", str(exc), parent=window)
-        ttk.Button(groq_box, text="Сохранить ключ", command=save_groq_secret).pack(side="left")
-        ttk.Button(groq_box, text="Очистить", command=clear_groq_secret).pack(side="left", padx=6)
+        groq_box_buttons = ttk.Frame(groq_box)
+        groq_box_buttons.pack(fill="x", pady=(1, 0))
+        ttk.Button(groq_box_buttons, text="Сохранить ключ", command=save_groq_secret).pack(side="left")
+        ttk.Button(groq_box_buttons, text="Очистить", command=clear_groq_secret).pack(side="left", padx=(6, 0))
 
         camera_box = ttk.LabelFrame(frame, text="Доступ к камере", padding=6)
         camera_box.pack(fill="x", pady=(1, 4))
         camera_var = tk.StringVar(master=window)
-        ttk.Entry(camera_box, textvariable=camera_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ttk.Entry(camera_box, textvariable=camera_var, show="*").pack(fill="x", pady=(0, 3))
         camera_status = tk.StringVar(master=window, value="Сохранено" if get_camera_password() else "Не сохранено")
-        ttk.Label(camera_box, textvariable=camera_status).pack(anchor="w", pady=(6, 0))
+        ttk.Label(camera_box, textvariable=camera_status).pack(anchor="w", pady=(0, 2))
         def save_camera_secret():
             try:
                 set_camera_password(camera_var.get())
@@ -91,15 +114,17 @@ def open_settings_window(parent):
                 camera_status.set("Не сохранено")
             except Exception as exc:
                 messagebox.showerror("Камера", str(exc), parent=window)
-        ttk.Button(camera_box, text="Сохранить", command=save_camera_secret).pack(side="left")
-        ttk.Button(camera_box, text="Очистить", command=clear_camera_secret).pack(side="left", padx=6)
+        camera_box_buttons = ttk.Frame(camera_box)
+        camera_box_buttons.pack(fill="x", pady=(1, 0))
+        ttk.Button(camera_box_buttons, text="Сохранить", command=save_camera_secret).pack(side="left")
+        ttk.Button(camera_box_buttons, text="Очистить", command=clear_camera_secret).pack(side="left", padx=(6, 0))
 
         moondream_box = ttk.LabelFrame(frame, text="Moondream — резервная ИИ-модель помощника и камеры", padding=6)
         moondream_box.pack(fill="x", pady=(1, 4))
         moondream_var = tk.StringVar(master=window)
-        ttk.Entry(moondream_box, textvariable=moondream_var, show="*").pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ttk.Entry(moondream_box, textvariable=moondream_var, show="*").pack(fill="x", pady=(0, 3))
         moondream_status = tk.StringVar(master=window, value="Ключ сохранён" if get_moondream_api_key() else "Ключ не задан")
-        ttk.Label(moondream_box, textvariable=moondream_status).pack(anchor="w", pady=(6, 0))
+        ttk.Label(moondream_box, textvariable=moondream_status).pack(anchor="w", pady=(0, 2))
         def save_moondream_secret():
             try:
                 set_moondream_api_key(moondream_var.get())
@@ -115,8 +140,10 @@ def open_settings_window(parent):
                 moondream_status.set("Ключ не задан — резервная модель недоступна")
             except Exception as exc:
                 messagebox.showerror("Moondream", str(exc), parent=window)
-        ttk.Button(moondream_box, text="Сохранить ключ", command=save_moondream_secret).pack(side="left")
-        ttk.Button(moondream_box, text="Очистить", command=clear_moondream_secret).pack(side="left", padx=6)
+        moondream_box_buttons = ttk.Frame(moondream_box)
+        moondream_box_buttons.pack(fill="x", pady=(1, 0))
+        ttk.Button(moondream_box_buttons, text="Сохранить ключ", command=save_moondream_secret).pack(side="left")
+        ttk.Button(moondream_box_buttons, text="Очистить", command=clear_moondream_secret).pack(side="left", padx=(6, 0))
 
         remember = tk.BooleanVar(master=window, value=bool(values.get("remember_chat_history", True)))
         ttk.Checkbutton(frame, text="Сохранять историю диалога ИИ на этом компьютере", variable=remember).pack(anchor="w", pady=(1, 4))
@@ -164,8 +191,8 @@ def open_settings_window(parent):
                 clear_chat_history()
                 messagebox.showinfo("История", "История диалога очищена.", parent=window)
         ttk.Button(memory_buttons, text="Очистить историю", command=clear_history).pack(side="left", padx=8)
-        buttons = ttk.Frame(frame)
-        buttons.pack(fill="x", side="bottom")
+        buttons = footer
+        buttons.pack(fill="x")
         ttk.Button(buttons, text="Сохранить", command=save).pack(side="left")
         ttk.Button(buttons, text="Закрыть", command=window.destroy).pack(side="right")
         activate_modal(window, parent)
