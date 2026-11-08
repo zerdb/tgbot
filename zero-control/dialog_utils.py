@@ -21,6 +21,11 @@ def activate_modal(window: tk.Toplevel, parent=None):
         window.attributes("-topmost",True); window.lift(); window.focus_force(); window.grab_set()
         window.bind("<Escape>",lambda _event:window.destroy(),add="+")
         style = __import__("tkinter.ttk", fromlist=["Style"]).Style(window)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        
         style.configure("Primary.TButton", background="#2474D2", foreground="#FFFFFF",
                         bordercolor="#1D63B5", padding=(10, 6),
                         font=("Segoe UI", 9, "bold"))
