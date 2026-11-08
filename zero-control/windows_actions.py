@@ -98,8 +98,9 @@ def _bring_window_to_front(title_parts: tuple[str, ...], timeout: float = 3.0):
                     user32.AttachThreadInput(current_thread, foreground_thread, False)
                 if attached_target:
                     user32.AttachThreadInput(current_thread, target_thread, False)
-            return
+            return True
         time.sleep(0.15)
+    return False
 
 
 def open_downloads():
@@ -217,6 +218,38 @@ def paste_clipboard_to_excel():
     except Exception as exc:
         print(f"Не удалось создать таблицу Excel: {exc}")
         raise
+
+
+def paste_clipboard_to_application(app_name: str):
+    """Launch a supported text editor, focus its window and paste clipboard text."""
+    windows_only()
+    content = pyperclip.paste()
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("В буфере обмена нет текста. Сначала скопируйте нужный текст.")
+
+    normalized = str(app_name or "").casefold().replace("ё", "е").strip()
+    if normalized in ("блокнот", "notepad"):
+        subprocess.Popen(["notepad.exe"])
+        title_parts = ("блокнот", "notepad")
+        display_name = "Блокнот"
+    elif normalized in ("word", "ворд", "microsoft word"):
+        subprocess.Popen(["cmd", "/c", "start", "", "winword"], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        title_parts = ("word", "документ")
+        display_name = "Word"
+    else:
+        from installed_apps import open_installed_application
+        display_name = open_installed_application(app_name)
+        title_parts = (display_name.casefold(),)
+
+    # Даём приложению время запуститься; затем явно активируем его окно.
+    time.sleep(2.5)
+    if not _bring_window_to_front(title_parts, timeout=5.0):
+        raise RuntimeError(
+            f"Программа «{display_name}» запущена, но её окно не удалось вывести на передний план. "
+            "Текст не вставлен, чтобы случайно не отправить его в другое окно."
+        )
+    keyboard.press_and_release("ctrl+v")
+    print(f"Текст из буфера вставлен в «{display_name}» ({len(content)} символов).", flush=True)
 
 
 def save_clipboard_as_note():
