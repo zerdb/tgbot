@@ -171,7 +171,21 @@ def _classify_semantically(user_text: str) -> dict:
 
 
 def _understand_command(user_text: str) -> dict:
-    """Use semantic understanding first; keep deterministic rules as fallback."""
+    """Use a deterministic fast path for trivial local app launches before AI."""
+    # Запуск встроенных приложений Windows не требует семантической модели:
+    # точная короткая команда сразу передаётся локальному диспетчеру.
+    normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
+    quick_app_match = re.fullmatch(
+        r"(?:пожалуйста\s+)?(?:открой|открыть|запусти|запустить|включи|включить)\s+(?:мне\s+)?(блокнот|notepad|калькулятор|calculator)(?:\s+пожалуйста)?",
+        normalized,
+    )
+    if quick_app_match:
+        app_name = quick_app_match.group(1)
+        app = "notepad" if app_name in ("блокнот", "notepad") else "calculator"
+        print("[Команды] Локальный быстрый запуск приложения: %s." % app, flush=True)
+        return {"action": "open_application", "confidence": 1.0, "parameters": {"app": app}}
+
+    """Semantic classification handles requests that need contextual interpretation."""
     try:
         semantic = _classify_semantically(user_text)
         if semantic.get("kind") == "clarify":
