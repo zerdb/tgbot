@@ -440,7 +440,7 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
             add_attachment_paths(initial_attachment_paths or [])
             if not attachment_paths:
                 try:
-                    from email_form import copied_file_paths
+                    from clipboard_files import copied_file_paths
                     add_attachment_paths(copied_file_paths())
                 except Exception as exc:
                     compose_status.set("Не удалось прочитать буфер обмена: " + str(exc))
@@ -450,7 +450,7 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
                     if attachment_paths or attempt >= 10 or not win.winfo_exists():
                         return
                     try:
-                        from email_form import copied_file_paths
+                        from clipboard_files import copied_file_paths
                         add_attachment_paths(copied_file_paths())
                     except Exception as exc:
                         compose_status.set("Не удалось прочитать буфер обмена: " + str(exc))
