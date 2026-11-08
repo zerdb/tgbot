@@ -17,7 +17,7 @@ class AssistantWindow:
     RED = "#D9485F"
     GREY = "#98A2B3"
 
-    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None):
+    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None):
         self.root = tk.Tk()
         self.root.title("Zero Control")
         self.root.geometry("760x600")
@@ -31,6 +31,7 @@ class AssistantWindow:
         self.on_open_reminders = on_open_reminders or (lambda: None)
         self.on_open_screen = on_open_screen or (lambda: None)
         self.on_open_other = on_open_other or (lambda: None)
+        self.on_open_notes = on_open_notes or (lambda: None)
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
@@ -132,12 +133,14 @@ class AssistantWindow:
             ("▤", "Заметки и дела", "Заметки, задачи и сроки", self.on_open_reminders),
             ("▣", "Экран", "Снимок и анализ экрана", self.on_open_screen),
             ("◉", "Камера", "Просмотр видеопотока", self.on_open_other),
+            ("▧", "Фото-заметки", "Текст, фото и файлы", self.on_open_notes),
         ]
         for col, (symbol, title, hint, callback) in enumerate(cards):
             card = tk.Frame(actions, bg=self.SURFACE, highlightthickness=1,
                             highlightbackground=self.BORDER, bd=0, cursor="hand2")
-            card.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 5, 0 if col == 4 else 5))
-            actions.columnconfigure(col, weight=1, uniform="action")
+            grid_row, grid_col = divmod(col, 3)
+            card.grid(row=grid_row, column=grid_col, sticky="nsew", padx=(0 if grid_col == 0 else 5, 0 if grid_col == 2 else 5), pady=(0, 6))
+            actions.columnconfigure(grid_col, weight=1, uniform="action")
             icon = tk.Label(card, text=symbol, bg=self.SURFACE, fg=self.ACCENT,
                             font=("Segoe UI Symbol", 16, "bold"))
             icon.pack(anchor="w", padx=8, pady=(7, 1))
