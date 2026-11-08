@@ -213,6 +213,12 @@ def _understand_command(user_text: str) -> dict:
         "search_files",
         "search_web",
         "camera_question",
+        "reminder",
+        "add_note",
+        "complete_item",
+        "save_note",
+        "clipboard_to_excel",
+        "read_unread_mail",
     }
     if local_action in local_first_actions:
         print("[Команды] Локальная маршрутизация: %s." % local_action, flush=True)
@@ -286,6 +292,57 @@ def _understand_command_rules(user_text: str) -> dict:
         or normalized in ("что у меня на экране", "что видно на экране", "посмотри на экран", "покажи экран", "покажи монитор")
     )
     if screenshot_request or screen_inspection_request:
+        return {"action": "inspect_screen", "confidence": 1.0, "parameters": {}}
+
+    # Дополнительные разговорные варианты уже поддерживаемых действий.
+    # Это небольшой словарь правил, не отдельная ML-модель и не тяжёлая зависимость.
+    action_verbs = r"\b(открой\w*|открыть|покажи\w*|показать|зайди\w*|перейди\w*|запусти\w*|запустить|включи\w*|включить)\b"
+    if re.search(r"\b(параметр\w*|настройк\w*)\b", normalized) and re.search(action_verbs, normalized):
+        if re.search(r"\b(windows|систем\w*|компьютер\w*)\b", normalized):
+            return {"action": "open_settings", "confidence": 1.0, "parameters": {}}
+        return {"action": "open_assistant_settings", "confidence": 1.0, "parameters": {}}
+
+    # Частые варианты открытия стандартных разделов Windows.
+    if re.search(action_verbs, normalized) and re.search(r"\b(загрузк\w*|скачанн\w* файл\w*|downloads)\b", normalized):
+        return {"action": "open_downloads", "confidence": 1.0, "parameters": {}}
+    if re.search(action_verbs, normalized) and re.search(r"\b(корзин\w*|recycle bin)\b", normalized):
+        return {"action": "open_recycle_bin", "confidence": 1.0, "parameters": {}}
+    if re.search(r"\b(очист\w*|опустош\w*|освобод\w*)\b", normalized) and re.search(r"\b(корзин\w*|recycle bin)\b", normalized):
+        return {"action": "empty_recycle_bin", "confidence": 1.0, "parameters": {}}
+
+    # Управление сеансом Windows — только при явном упоминании компьютера/системы.
+    if re.search(r"\b(заблокир\w*|блокир\w*)\b", normalized) and re.search(r"\b(компьютер\w*|ноутбук\w*|пк|windows|сеанс)\b", normalized):
+        return {"action": "lock_computer", "confidence": 1.0, "parameters": {}}
+    if re.search(r"\b(перезагруз\w*|перезапуст\w*|рестарт\w*)\b", normalized) and re.search(r"\b(компьютер\w*|ноутбук\w*|пк|windows|систем\w*)\b", normalized):
+        return {"action": "reboot_computer", "confidence": 1.0, "parameters": {}}
+
+    # Просмотр почты и подготовка письма.
+    if re.search(r"\b(прочитай\w*|проверь\w*|покажи\w*|перечисли\w*|озвучь\w*|перескажи\w*)\b", normalized) and re.search(r"\b(непрочитанн\w*|нов\w* письм\w*|входящ\w*)\b", normalized):
+        return {"action": "read_unread_mail", "confidence": 1.0, "parameters": {}}
+    if re.search(r"\b(открой\w*|покажи\w*|зайди\w*|перейди\w*)\b", normalized) and re.search(r"\b(почт\w*|почтов\w* клиент\w*|входящ\w*|ящик\w*)\b", normalized):
+        return {"action": "open_mail_client", "confidence": 1.0, "parameters": {}}
+
+    # Адресная книга: различаем открыть список и добавить новую карточку.
+    if re.search(r"\b(открой\w*|покажи\w*|выведи\w*|просмотр\w*)\b", normalized) and re.search(r"\b(контакт\w*|адресн\w* книг\w*|телефонн\w* книг\w*)\b", normalized):
+        return {"action": "open_contacts", "confidence": 1.0, "parameters": {}}
+    if re.search(r"\b(добав\w*|создай\w*|запиш\w*|внес\w*)\b", normalized) and re.search(r"\b(контакт\w*|адресн\w* книг\w*)\b", normalized):
+        return {"action": "add_contact", "confidence": 1.0, "parameters": {}}
+
+    # Управление списком дел: формулировки «поставь/создай/добавь напоминание».
+    if re.search(r"\b(напомн\w*|создай\w*|добавь\w*|поставь\w*|установи\w*)\b", normalized) and re.search(r"\b(напоминан\w*|напомни\w*)\b", normalized):
+        return {"action": "reminder", "confidence": 1.0, "parameters": {"reminder_text": user_text.strip()}}
+    if re.search(r"\b(открой\w*|покажи\w*|выведи\w*|отобрази\w*)\b", normalized) and re.search(r"\b(список дел|напоминан\w*|заметк\w*|задач\w*)\b", normalized):
+        return {"action": "open_reminders", "confidence": 1.0, "parameters": {}}
+
+    # Заметки из произнесённого текста. Буфер обмена обрабатывается отдельным действием.
+    spoken_note = re.search(r"\b(запомни|запиши|сохрани|добавь|создай)\b\s+(.+?)\s+(?:как заметку|в заметки|в виде заметки)$", normalized)
+    if spoken_note:
+        return {"action": "add_note", "confidence": 1.0, "parameters": {"note_text": spoken_note.group(2).strip()}}
+    if re.search(r"\b(сохрани|сохранить|запиши|записать)\b", normalized) and re.search(r"\b(буфер обмена|содержимое буфера)\b", normalized) and re.search(r"\b(заметк\w*)\b", normalized):
+        return {"action": "save_note", "confidence": 1.0, "parameters": {}}
+
+    # Снимок/скриншот без обязательного упоминания слова «экран».
+    if re.search(r"\b(сделай|сделать|создай|создать|сними|снять|получи|получить|нужен|нужна|нужно)\b", normalized) and re.search(r"\b(скриншот\w*|скрин\w*|снепшот\w*|snapshot\w*|снимок экрана)\b", normalized):
         return {"action": "inspect_screen", "confidence": 1.0, "parameters": {}}
 
     # Смысловые команды с буфером определяет общий классификатор по всей фразе;\n    # не перехватываем их отдельными regex-эвристиками.\n\n    # Разделяем настройки Windows и настройки самого помощника.
