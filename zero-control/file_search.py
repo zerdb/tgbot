@@ -263,7 +263,7 @@ def _parse_search_request_ai(raw_query: str) -> dict:
         [{"role": "system", "content": prompt},
          {"role": "user", "content": "Верни JSON для поискового запроса."}],
         temperature=0,
-        max_tokens=500,
+        max_tokens=700,
         timeout=45,
     )
     match = re.search(r"\{.*\}", answer, flags=re.S)
@@ -403,7 +403,7 @@ def _parse_search_request_ai(raw_query: str) -> dict:
 
     print(
         "[Поиск файлов][ИИ] JSON разобран: " +
-        json.dumps({"terms": terms, "filters": {
+        json.dumps({"term_groups": term_groups, "filters": {
             "extensions": sorted(extensions), "min_size": filters["min_size"],
             "max_size": filters["max_size"],
             "equal_bucket": [filters["exact_size"], filters["exact_size_upper"]]
@@ -653,6 +653,25 @@ def _search_worker(query: str, parent, export_format=None):
                 continue
 
         sort_mode = filters["sort"]
+        if sort_mode is None and term_groups and not (filters["start"] or filters["end"]):
+            # Relevance is ranked locally: prefer matches in the filename over
+            # matches only in a parent directory. No local filenames are sent
+            # back to the cloud model for ranking.
+            def relevance_key(item):
+                path = item[0]
+                name_key = "".join(
+                    char for char in path.name.casefold().replace("ё", "е")
+                    if char.isalnum()
+                )
+                path_key = "".join(
+                    char for char in str(path).casefold().replace("ё", "е")
+                    if char.isalnum()
+                )
+                name_hits = sum(any(term in name_key for term in group) for group in term_groups)
+                path_hits = sum(any(term in path_key for term in group) for group in term_groups)
+                return (-name_hits, -path_hits, len(path.name), str(path).casefold())
+
+            filtered.sort(key=relevance_key)
         if sort_mode == "size_desc":
             filtered.sort(key=lambda item: item[1], reverse=True)
         elif sort_mode == "size_asc":
