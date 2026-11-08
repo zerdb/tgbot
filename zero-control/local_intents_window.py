@@ -101,9 +101,13 @@ def open_recognized_intents_window(parent):
         params_box.delete("1.0", "end")
         params_box.insert("1.0", json.dumps(intent.get("parameters") or {}, ensure_ascii=False, indent=2))
         confidence = intent.get("confidence", 0)
+        target = intent.get("target") or {}
+        source = intent.get("source") or {}
         meta_var.set(
             f"Источник: {item.get('provider', 'ИИ')} · Уверенность: {confidence:.2f} · "
-            f"Тип: {intent.get('kind', '—')} · "
+            f"Тип: {intent.get('kind', '—')}\n"
+            f"Цель: {intent.get('goal', '')} · Объект: {target.get('type', '')} {target.get('name', '')}\n"
+            f"Источник данных: {source.get('type', '')} {source.get('name', '')} · "
             f"{'Уже добавлено в локальные правила' if item.get('promoted') else 'Ещё не добавлено'}"
         )
 
@@ -145,7 +149,7 @@ def open_recognized_intents_window(parent):
     controls = ttk.Frame(right)
     controls.pack(fill="x")
     ttk.Button(controls, text="Сделать локальным", command=promote).pack(side="left")
-    ttk.Button(controls, text="Удалить запись", command=remove).pack(side="left", padx=(8, 0))
+    ttk.Button(controls, text="Удалить из журнала", command=remove).pack(side="left", padx=(8, 0))
     ttk.Button(controls, text="Обновить", command=refresh).pack(side="right")
     ttk.Button(shell, text="Закрыть", command=window.destroy).pack(anchor="e", pady=(9, 0))
     refresh()
