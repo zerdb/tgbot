@@ -200,8 +200,8 @@ def _canonical_app_query(query: str) -> tuple[str, set[str]]:
     normalized = _normalize(query)
     aliases = {
         "торрент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge", "torrent", "mediaget"},
-        "torrent": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
-        "торрент клиент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
+        "torrent": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge", "torrent", "mediaget"},
+        "торрент клиент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge", "torrent", "mediaget"},
     }
     return normalized, aliases.get(normalized, set())
 
