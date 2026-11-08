@@ -85,7 +85,7 @@ _keyboard_hook = None
 _keyboard_hook_proc = None
 
 PROJECT_DIR = Path(__file__).resolve().parent
-MODEL_DIR = Path(os.getenv("GIGAAM_MODEL_DIR", str(PROJECT_DIR.parent / "GigaAM-v3"))).expanduser().resolve()
+MODEL_DIR = Path(os.getenv("ZERO_CONTROL_MODEL_DIR", os.getenv("GIGAAM_MODEL_DIR", str(PROJECT_DIR.parent / "GigaAM-v3")))).expanduser().resolve()
 SCREENSHOT_DIR = PROJECT_DIR / "Скриншоты"
 
 _model = None
@@ -108,7 +108,7 @@ def update_ui_status(listening=None, recording=None):
 
 def configure_ffmpeg():
     source = Path(imageio_ffmpeg.get_ffmpeg_exe()).resolve()
-    target_dir = Path(tempfile.gettempdir()) / "gigaam_ffmpeg"
+    target_dir = Path(tempfile.gettempdir()) / "zero_control_ffmpeg"
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / "ffmpeg.exe"
     if not target.exists() or target.stat().st_size != source.stat().st_size:
@@ -136,7 +136,7 @@ def load_model():
         raise FileNotFoundError(
             f"Локальная модель GigaAM не найдена: {MODEL_DIR}\n"
             "Поместите модель ai-sage/GigaAM-v3 (revision e2e_rnnt) "
-            "в папку GigaAM-v3 рядом с voice-to-text-gigaam."
+            "в папку GigaAM-v3 рядом с папкой приложения."
         )
 
     _model = AutoModel.from_pretrained(str(MODEL_DIR), trust_remote_code=True, local_files_only=True)
