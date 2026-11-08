@@ -101,22 +101,20 @@ def understand_command(user_text: str) -> dict:
     if re.search(r"\b(что|что сейчас|посмотри|посмотреть|прочитай|прочитать|опиши|увидь|видишь)\b.*\b(на экране|экран|монитор)", normalized) or normalized in ("что у меня на экране", "что видно на экране", "посмотри на экран"):
         return {"action": "inspect_screen", "confidence": 1.0, "arguments": {}}
 
-    # Открытие программы и вставка текста из буфера — единая локальная команда.
-    # ASR иногда распознаёт Word как «ворт»; допускаем и разговорные формулировки
-    # вроде «вставь то, что в буфере» / «вставь скопированное».
-    paste_intent = (
-        re.search(r"\b(вставь|вставить|вставка)\b", normalized)
-        and re.search(r"\b(буфер|скопированн|clipboard)\b", normalized)
-    )
-    if paste_intent:
+    # Команды с буфером обрабатываем до классификатора: ASR может превратить
+    # «вставь» в «оставь», а «вставь туда» — не назвать приложение явно.
+    clipboard_context = bool(re.search(r"\b(буфер\w*|скопированн\w*|clipboard)\b", normalized))
+    paste_verb = bool(re.search(r"\b(встав\w*|остав\w*|сохран\w*|помест\w*|перенес\w*)\b", normalized))
+    if clipboard_context and paste_verb:
         app_match = re.search(
-            r"\b(блокнот|notepad|word|ворд|ворт|microsoft\s+word)\b",
+            r"\b(блокнот|notepad|word|ворд|ворт|мicrosoft\s+word)\b",
             normalized,
         )
-        if app_match:
-            app_token = app_match.group(1)
-            app = "Блокнот" if app_token in ("блокнот", "notepad") else "Word"
-            return {"action": "paste_clipboard_to_application", "confidence": 1.0, "arguments": {"app_name": app}}
+        app_token = app_match.group(1) if app_match else ""
+        # Если пользователь говорит «вставь туда», без названия приложения,
+        # используем Word как целевое приложение по умолчанию.
+        app = "Блокнот" if app_token in ("блокнот", "notepad") else "Word"
+        return {"action": "paste_clipboard_to_application", "confidence": 1.0, "arguments": {"app_name": app}}
 
     # Разделяем настройки Windows и настройки самого помощника.
     if re.search(r"\b(настройки windows|параметры windows|системные настройки|параметры системы)\b", normalized):
@@ -184,7 +182,7 @@ def understand_command(user_text: str) -> dict:
         (r"\b(блокнот|notepad)\b", "notepad"),
         (r"\b(калькулятор|calculator)\b", "calculator"),
         (r"\b(браузер|интернет|google|хром|chrome)\b", "browser"),
-        (r"\b(word|ворд|микрософт ворд)\b", "word"),
+        (r"\b(word|ворд|ворт|микрософт ворд)\b", "word"),
         (r"\b(excel|эксель)\b", "excel"),
         (r"\b(изображения|картинки|фото)\b", "images"),
     )
