@@ -182,7 +182,9 @@ def _parse_search_request(raw_query: str) -> dict:
         unit = (size_re.group(3) or "мб").casefold()
         multiplier = 1 if unit.startswith(("б", "байт")) else 1024 if unit.startswith("к") else 1024**3 if unit.startswith(("г", "гига")) else 1024**2
         size = int(amount * multiplier)
-        if size_re.group(1) in ("больше", "свыше", "крупнее"):
+        if size_re.group(1).startswith(("равн", "ровно")):
+            filters["exact_size"] = size
+        elif size_re.group(1) in ("больше", "свыше", "крупнее"):
             filters["min_size"] = size
         else:
             filters["max_size"] = size
@@ -265,6 +267,8 @@ def _search_worker(query: str, parent):
                 if filters["min_size"] is not None and size <= filters["min_size"]:
                     continue
                 if filters["max_size"] is not None and size >= filters["max_size"]:
+                    continue
+                if filters["exact_size"] is not None and size != filters["exact_size"]:
                     continue
                 if filters["start"] and datetime.fromtimestamp(timestamp) < filters["start"]:
                     continue
