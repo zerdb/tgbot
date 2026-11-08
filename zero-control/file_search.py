@@ -7,6 +7,7 @@ import queue
 import re
 import threading
 import traceback
+import time
 import webbrowser
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -420,8 +421,10 @@ def _parse_search_request_ai(raw_query: str) -> dict:
 
 def _parse_search_request(raw_query: str) -> dict:
     """Prefer Groq's structured interpretation; fall back if it drops the search intent."""
+    ai_started = time.perf_counter()
     try:
         parsed = _parse_search_request_ai(raw_query)
+        print(f"[Поиск файлов][Тайминг] ИИ-разбор: {time.perf_counter() - ai_started:.3f} сек.", flush=True)
         filters = parsed["filters"]
         has_filters = any((
             filters["extensions"], filters["min_size"] is not None,
@@ -433,6 +436,7 @@ def _parse_search_request(raw_query: str) -> dict:
             return parsed
         raise ValueError("ИИ не выделил ни поисковых слов, ни фильтров.")
     except Exception as exc:
+        print(f"[Поиск файлов][Тайминг] ИИ-разбор завершился ошибкой за {time.perf_counter() - ai_started:.3f} сек.", flush=True)
         print(
             f"[Поиск файлов] ИИ-разбор не дал условий поиска ({exc}); "
             "использую локальный разбор исходной фразы.",
@@ -566,7 +570,10 @@ def export_file_results(results, query: str, export_format: str) -> Path:
 
 def _search_worker(query: str, parent, export_format=None):
     from datetime import datetime
+    search_started = time.perf_counter()
     parsed = _parse_search_request(query)
+    parse_finished = time.perf_counter()
+    print(f"[Поиск файлов][Тайминг] Подготовка запроса: {parse_finished - search_started:.3f} сек.", flush=True)
     filters = parsed["filters"]
     term_groups = parsed.get("term_groups") or [[term] for term in parsed["terms"]]
     has_filters = any((
@@ -590,16 +597,22 @@ def _search_worker(query: str, parent, export_format=None):
         if term_groups:
             # Внутри смысловой группы ищем любой вариант (OR), между
             # обязательными понятиями требуем совпадение всех групп (AND).
-            group_results = []
-            for group in term_groups:
-                alternatives = [
-                    set(refresh_and_search(
-                        term,
-                        report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
-                    ))
-                    for term in group
-                ]
-                group_results.append(set.union(*alternatives) if alternatives else set())
+            # Все варианты ищем одним пакетом: одно соединение SQLite и одна проверка индекса.
+            unique_terms = list(dict.fromkeys(term for group in term_groups for term in group))
+            db_started = time.perf_counter()
+            term_results = refresh_and_search(
+                unique_terms,
+                report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+            )
+            print(
+                f"[Поиск файлов][Тайминг] Пакетный поиск {len(unique_terms)} вариантов: "
+                f"{time.perf_counter() - db_started:.3f} сек.",
+                flush=True,
+            )
+            group_results = [
+                set().union(*(set(term_results.get(term, [])) for term in group))
+                for group in term_groups
+            ]
             matches = list(set.intersection(*group_results)) if group_results else []
             if not matches and len(group_results) > 1:
                 # If no path satisfies every concept, keep the best partial
@@ -639,6 +652,7 @@ def _search_worker(query: str, parent, export_format=None):
                 empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else "__ALL_FILTERED__" if any((filters["start"], filters["end"], filters["drive"], filters["folder"], filters["min_size"], filters["max_size"], filters["exact_size"])) else ""
                 matches = refresh_and_search(empty_query, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
 
+        filter_started = time.perf_counter()
         filtered = []
         for path in matches:
             try:
@@ -704,6 +718,16 @@ def _search_worker(query: str, parent, export_format=None):
         elif sort_mode == "date_desc" or filters["start"] or filters["end"]:
             filtered.sort(key=lambda item: item[2], reverse=True)
         matches = [(item[0], item[3], item[1]) for item in filtered]
+        print(
+            f"[Поиск файлов][Тайминг] Фильтры и сортировка: {time.perf_counter() - filter_started:.3f} сек.; "
+            f"кандидатов: {len(filtered)}.",
+            flush=True,
+        )
+        print(
+            f"[Поиск файлов][Тайминг] Полный поиск: {time.perf_counter() - search_started:.3f} сек.; "
+            f"результатов: {len(matches)}.",
+            flush=True,
+        )
         _search_results.put(("success", parent, (display_query, matches, export_format)))
     except Exception as exc:
         error_text = str(exc)
