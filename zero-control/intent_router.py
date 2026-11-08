@@ -18,6 +18,7 @@ ACTIONS = {
  "open_downloads": "Открыть папку Загрузки.",
  "open_recycle_bin": "Открыть Корзину Windows для просмотра; не очищать её.",
  "open_application": "Открыть приложение из разрешённого списка; app — notepad, calculator, browser, word, excel или images.",
+ "open_installed_application": "Найти и запустить установленное приложение Windows по его названию; app_name — название из команды пользователя.",
  "open_settings": "Открыть настройки Windows.",
  "empty_recycle_bin": "Очистить корзину.",
  "screenshot": "Сделать скриншот.",
@@ -33,7 +34,7 @@ ACTIONS = {
 SYSTEM_PROMPT = """Ты — классификатор намерений русскоязычного Windows-помощника.
 Понимай смысл фразы, не требуй точных шаблонов. Выбери ровно одно действие из списка.
 Верни только JSON: action, confidence (0..1), arguments.
-Допустимые аргументы: attach_copied_files (boolean), recipient_name (string), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), folder (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
+Допустимые аргументы: attach_copied_files (boolean), recipient_name (string), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), app_name (string), folder (string).\nЕсли пользователь хочет задать вопрос ИИ, получить объяснение, совет или справку, а не выполнить действие на компьютере — выбери ai_chat и передай полный вопрос в question. Формулировки «спроси ИИ» и «задай вопрос нейросети» явно означают ai_chat.
 Если пользователь хочет добавить/сохранить человека в контакты или адресную книгу — выбери add_contact.
 Если пользователь просит показать, открыть или посмотреть список контактов — выбери open_contacts.
 Фразы «добавь в контакты», «добавь контакт», «сохрани в адресную книгу», «запиши контакт» означают add_contact.
@@ -185,6 +186,26 @@ def understand_command(user_text: str) -> dict:
         return {"action": "save_note", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(создай|сделай)\b.*\b(excel|эксель|таблицу из буфера)", normalized):
         return {"action": "clipboard_to_excel", "confidence": 1.0, "arguments": {}}
+    # Любое другое название приложения ищем локально в меню «Пуск», на рабочем столе
+    # и среди зарегистрированных приложений Windows — без обращения к языковой модели.
+    open_match = re.match(
+        r"^\\s*(?:пожалуйста\\s+)?(?:открой|открыть|запусти|запустить|включи|включить)\\s+(.+?)\\s*$",
+        user_text.strip(),
+        flags=re.IGNORECASE,
+    )
+    if open_match:
+        app_name = open_match.group(1).strip().strip('"«»')
+        app_name = re.sub(r"\\s+(?:на компьютере|на пк|пожалуйста)$", "", app_name, flags=re.IGNORECASE).strip()
+        if app_name and not re.search(
+            r"\\b(папк|директор|каталог|файл|документ|загрузк|корзин|настройк|контакт|почт|напоминан|заметк|дела|задач)\\w*\\b",
+            app_name.lower().replace("ё", "е"),
+        ):
+            return {
+                "action": "open_installed_application",
+                "confidence": 1.0,
+                "arguments": {"app_name": app_name},
+            }
+
     # Явный поиск папки по названию — используем индекс каталогов, а не файлов.
     folder_query = re.search(r"\b(?:найди|поищи|найти|поискать)\b.*\bпапк\w*\s+(?:с\s+названи\w*\s+)?(.+)$", user_text, re.IGNORECASE)
     if folder_query and folder_query.group(1).strip():
@@ -274,5 +295,5 @@ def understand_command(user_text: str) -> dict:
     try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError): confidence = 0.0
     raw = parsed.get("arguments") if isinstance(parsed.get("arguments"), dict) else {}
-    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","recipient_name","reminder_text","note_text","item_text","query","question","app","folder","export_format") and isinstance(v,(str,bool))}
+    safe = {k:v for k,v in raw.items() if k in ("attach_copied_files","recipient_name","reminder_text","note_text","item_text","query","question","app","app_name","folder","export_format") and isinstance(v,(str,bool))}
     return {"action":action,"confidence":confidence,"arguments":safe}
