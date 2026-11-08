@@ -199,7 +199,7 @@ def _get_installed_apps(force_refresh: bool = False) -> list[dict]:
 def _canonical_app_query(query: str) -> tuple[str, set[str]]:
     normalized = _normalize(query)
     aliases = {
-        "торрент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
+        "торрент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge", "torrent", "mediaget"},
         "torrent": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
         "торрент клиент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
     }
