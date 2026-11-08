@@ -64,8 +64,16 @@ def _connect():
     from agent_core import load_settings
     settings=load_settings()
     login=os.getenv("ZERO_CONTROL_MAIL_LOGIN", os.getenv("GIGAAM_MAIL_LOGIN", settings["mail_login"])).strip()
-    password=os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("GIGAAM_MAIL_PASSWORD", "")).strip()
-    if not password: raise RuntimeError("Для чтения почты задай переменную ZERO_CONTROL_MAIL_PASSWORD.")
+    password=(
+        os.getenv("ZERO_CONTROL_MAIL_PASSWORD")
+        or os.getenv("GIGAAM_MAIL_PASSWORD")
+        or __import__("agent_core").get_mail_password()
+    ).strip()
+    if not password:
+        raise RuntimeError(
+            "Не задан пароль приложения Mail.ru. Открой настройки Zero Control → "
+            "«Пароль почты», вставь пароль приложения и нажми «Сохранить»."
+        )
     connection=imaplib.IMAP4_SSL(settings.get("imap_host","imap.mail.ru"),int(settings.get("imap_port",993)),timeout=30)
     connection.login(login,password)
     status,_=connection.select("INBOX",readonly=True)
