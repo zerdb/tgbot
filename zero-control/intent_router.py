@@ -102,17 +102,20 @@ def understand_command(user_text: str) -> dict:
         return {"action": "inspect_screen", "confidence": 1.0, "arguments": {}}
 
     # Открытие программы и вставка текста из буфера — единая локальная команда.
-    paste_match = re.search(
-        r"\b(блокнот|notepad|word|ворд|microsoft word)\b.*\b(вставь|вставить|вставить текст|вставить содержимое)\b.*\b(буфер|скопированн|clipboard)",
-        normalized,
-    ) or re.search(
-        r"\b(вставь|вставить)\b.*\b(текст|содержимое)\b.*\b(из буфера|из буфера обмена|скопированн)",
-        normalized,
+    # ASR иногда распознаёт Word как «ворт»; допускаем и разговорные формулировки
+    # вроде «вставь то, что в буфере» / «вставь скопированное».
+    paste_intent = (
+        re.search(r"\b(вставь|вставить|вставка)\b", normalized)
+        and re.search(r"\b(буфер|скопированн|clipboard)\b", normalized)
     )
-    if paste_match:
-        app_match = re.search(r"\b(блокнот|notepad|word|ворд|microsoft word)\b", normalized)
+    if paste_intent:
+        app_match = re.search(
+            r"\b(блокнот|notepad|word|ворд|ворт|microsoft\s+word)\b",
+            normalized,
+        )
         if app_match:
-            app = "Блокнот" if app_match.group(1) in ("блокнот", "notepad") else "Word"
+            app_token = app_match.group(1)
+            app = "Блокнот" if app_token in ("блокнот", "notepad") else "Word"
             return {"action": "paste_clipboard_to_application", "confidence": 1.0, "arguments": {"app_name": app}}
 
     # Разделяем настройки Windows и настройки самого помощника.
