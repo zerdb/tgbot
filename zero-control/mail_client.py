@@ -33,22 +33,21 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
     ttk.Label(header, text="✉  Почта", font=("Segoe UI", 19, "bold")).pack(side="left")
     ttk.Label(header, text="Входящие · письма · контакты").pack(side="left", padx=(14, 0), pady=(7, 0))
 
-    # Основная навигация всегда сверху и доступна из любого раздела.
-    nav = ttk.Frame(outer)
-    nav.pack(fill="x", pady=(0, 10))
-    ttk.Button(nav, text="📥  Входящие", command=lambda: notebook.select(inbox_tab) if "notebook" in locals() else None).pack(side="left", padx=(0, 6))
-    ttk.Button(nav, text="✍  Новое письмо", command=lambda: notebook.select(compose_tab) if "notebook" in locals() else None).pack(side="left", padx=6)
-    ttk.Button(nav, text="👥  Контакты", command=lambda: notebook.select(contacts_tab) if "notebook" in locals() else None).pack(side="left", padx=6)
-
     notebook = ttk.Notebook(outer)
-    notebook.pack(fill="both", expand=True)
-
     inbox_tab = ttk.Frame(notebook, padding=10)
     compose_tab = ttk.Frame(notebook, padding=14)
     contacts_tab = ttk.Frame(notebook, padding=10)
     notebook.add(inbox_tab, text="📥  Входящие")
     notebook.add(compose_tab, text="✍  Написать")
     notebook.add(contacts_tab, text="👥  Контакты")
+
+    # Основная навигация всегда сверху и доступна из любого раздела.
+    nav = ttk.Frame(outer)
+    nav.pack(fill="x", pady=(0, 10))
+    ttk.Button(nav, text="📥  Входящие", command=lambda: notebook.select(inbox_tab)).pack(side="left", padx=(0, 6))
+    ttk.Button(nav, text="✍  Новое письмо", command=lambda: notebook.select(compose_tab)).pack(side="left", padx=6)
+    ttk.Button(nav, text="👥  Контакты", command=lambda: notebook.select(contacts_tab)).pack(side="left", padx=6)
+    notebook.pack(fill="both", expand=True)
 
     # -------------------- ВХОДЯЩИЕ --------------------
     inbox_toolbar = ttk.Frame(inbox_tab)
