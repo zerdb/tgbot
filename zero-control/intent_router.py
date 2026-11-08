@@ -107,7 +107,81 @@ def _file_search_query(user_text: str) -> str:
     return query.strip()
 
 
+
+
+def _classify_semantically(user_text: str) -> dict:
+    """Interpret the complete ASR transcript using the structured intent contract."""
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_text[:4000]},
+    ]
+    try:
+        from groq_client import chat
+        content = chat(messages, temperature=0, max_tokens=800)
+        print("[Команды] Семантическая классификация через Groq.", flush=True)
+    except Exception as primary_error:
+        print("[Команды] Groq недоступна (%s). Пробую Moondream." % primary_error, flush=True)
+        try:
+            from moondream_client import chat as moondream_chat
+            content = moondream_chat(messages, temperature=0, max_tokens=800)
+            print("[Команды] Семантическая классификация через Moondream.", flush=True)
+        except Exception as fallback_error:
+            raise RuntimeError("Groq: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
+
+    match = re.search(r"\\{.*\\}", str(content or ""), flags=re.S)
+    if not match:
+        raise RuntimeError("Модель вернула некорректный JSON намерения.")
+    parsed = json.loads(match.group(0))
+    action = parsed.get("action", "unknown")
+    if action not in ACTIONS:
+        action = "unknown"
+    try:
+        confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    raw = parsed.get("parameters") if isinstance(parsed.get("parameters"), dict) else parsed.get("arguments")
+    if not isinstance(raw, dict):
+        raw = {}
+    allowed = {
+        "attach_copied_files", "recipient_name", "reminder_text", "note_text",
+        "item_text", "query", "question", "app", "app_name", "folder",
+        "export_format",
+    }
+    safe = {
+        key: value for key, value in raw.items()
+        if key in allowed and isinstance(value, (str, bool))
+    }
+    return {
+        "schema_version": 1,
+        "kind": parsed.get("kind"),
+        "action": action,
+        "goal": parsed.get("goal", ""),
+        "target": parsed.get("target") if isinstance(parsed.get("target"), dict) else {},
+        "source": parsed.get("source") if isinstance(parsed.get("source"), dict) else {},
+        "method": parsed.get("method", ""),
+        "parameters": safe,
+        "confidence": confidence,
+        "clarification": parsed.get("clarification", ""),
+        "response": parsed.get("response", ""),
+        "arguments": safe,
+    }
+
+
 def _understand_command_legacy(user_text: str) -> dict:
+    """Use semantic understanding first; keep deterministic rules as fallback."""
+    try:
+        semantic = _classify_semantically(user_text)
+        if semantic.get("kind") == "clarify":
+            return semantic
+        if semantic.get("action") != "unknown" and float(semantic.get("confidence", 0)) >= 0.55:
+            return semantic
+        print("[Команды] Модель не определила намерение уверенно; применяю локальный fallback.", flush=True)
+    except Exception as exc:
+        print("[Команды] Семантический слой недоступен; применяю локальный fallback: %s" % exc, flush=True)
+    return _understand_command_rules(user_text)
+
+
+def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
 
     # Вопросы о текущем экране направляем в модуль снимка и анализа, а не в обычный текстовый ИИ.
@@ -290,56 +364,7 @@ def _understand_command_legacy(user_text: str) -> dict:
         return {"action": "search_documents", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
-    payload = {"messages": [{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":user_text[:4000]}]}
-    try:
-        from groq_client import chat
-        content = chat(payload["messages"], temperature=0, max_tokens=500)
-        match = re.search(r"\{.*\}", str(content or ""), flags=re.S)
-        if not match:
-            raise RuntimeError("Groq вернула некорректный JSON.")
-        parsed = json.loads(match.group(0))
-        print("[Команды] Классификация через Groq.", flush=True)
-    except Exception as primary_error:
-        print("[Команды] Groq недоступна (%s). Пробую Moondream." % primary_error, flush=True)
-        try:
-            from moondream_client import chat as moondream_chat
-            content = moondream_chat(payload["messages"], temperature=0, max_tokens=500)
-            match = re.search(r"\{.*\}", content, flags=re.S)
-            if not match:
-                raise RuntimeError("Moondream вернула некорректный JSON.")
-            parsed = json.loads(match.group(0))
-            print("[Команды] Классификация через резервную Moondream.", flush=True)
-        except Exception as fallback_error:
-            raise RuntimeError("Groq: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
-    action = parsed.get("action", "unknown")
-    if action not in ACTIONS: action = "unknown"
-    try: confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
-    except (TypeError, ValueError): confidence = 0.0
-    raw = parsed.get("parameters") if isinstance(parsed.get("parameters"), dict) else parsed.get("arguments")
-    if not isinstance(raw, dict):
-        raw = {}
-    safe = {
-        key: value for key, value in raw.items()
-        if key in (
-            "attach_copied_files", "recipient_name", "reminder_text", "note_text",
-            "item_text", "query", "question", "app", "app_name", "folder",
-            "export_format",
-        ) and isinstance(value, (str, bool))
-    }
-    return {
-        "schema_version": 1,
-        "kind": parsed.get("kind"),
-        "action": action,
-        "goal": parsed.get("goal", ""),
-        "target": parsed.get("target") if isinstance(parsed.get("target"), dict) else {},
-        "source": parsed.get("source") if isinstance(parsed.get("source"), dict) else {},
-        "method": parsed.get("method", ""),
-        "parameters": safe,
-        "confidence": confidence,
-        "clarification": parsed.get("clarification", ""),
-        "response": parsed.get("response", ""),
-        "arguments": safe,
-    }
+    return {"action": "unknown", "confidence": 0.0, "arguments": {}}\n
 
 def understand_command(user_text: str) -> dict:
     """Return a versioned intent envelope for the execution receiver.
