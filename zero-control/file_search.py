@@ -420,7 +420,26 @@ def _parse_search_request_ai(raw_query: str) -> dict:
 
 
 def _parse_search_request(raw_query: str) -> dict:
-    """Prefer Groq's structured interpretation; fall back if it drops the search intent."""
+    """Use the existing semantic intent layer for plain name searches; ask Groq for filters/complex plans."""
+    # A plain name query has no filter semantics to infer. The voice-command
+    # intent has already been classified by Groq upstream, so avoid a second
+    # cloud round-trip just to split the literal words into local FTS terms.
+    local_parsed = _parse_search_request_local(raw_query)
+    local_filters = local_parsed["filters"]
+    has_local_filters = any((
+        local_filters["extensions"], local_filters["min_size"] is not None,
+        local_filters["max_size"] is not None, local_filters["exact_size"] is not None,
+        local_filters["start"] is not None, local_filters["end"] is not None,
+        local_filters["drive"], local_filters["folder"], local_filters["sort"],
+    ))
+    if local_parsed.get("term_groups") and not has_local_filters:
+        print(
+            "[Поиск файлов] Обычный поиск по имени: пропускаю повторный запрос Groq; "
+            "использую распознанные слова и локальный индекс.",
+            flush=True,
+        )
+        return local_parsed
+
     ai_started = time.perf_counter()
     try:
         parsed = _parse_search_request_ai(raw_query)
