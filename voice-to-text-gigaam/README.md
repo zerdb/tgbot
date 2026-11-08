@@ -1,4 +1,4 @@
-# Voice to Text — Local GigaAM-v3
+# Zero Control — голосовой помощник для Windows
 
 Offline push-to-talk voice typing and voice commands for Windows. Hold **Right Alt + Right Shift** together to dictate text; hold **Right Ctrl** to issue a voice command. Release the key to process the recording with a locally stored GigaAM-v3 model.
 
@@ -71,10 +71,10 @@ py main.py
 3. Release the key to process the recording.
 4. Press **Esc** to exit.
 
-The default model path is `../GigaAM-v3` relative to this project folder. To use another location, set `GIGAAM_MODEL_DIR`:
+The default model path is `../GigaAM-v3` relative to this project folder. To use another location, set `ZERO_CONTROL_MODEL_DIR`:
 
 ```powershell
-$env:GIGAAM_MODEL_DIR="D:\\AI\\GigaAM-v3"
+$env:ZERO_CONTROL_MODEL_DIR="D:\\AI\\GigaAM-v3"
 py main.py
 ```
 
@@ -104,7 +104,7 @@ The application is split by responsibility so features can be maintained indepen
 - `folder_organizer.py` — preview-first folder organizer with confirmation before moving files.
 - `file_indexer.py` — NTFS MFT indexing and SQLite/FTS search database.
 
-The address book, file index and unified notes/tasks store are kept under `%LOCALAPPDATA%\\GigaAMVoiceAssistant`, not in the repository. Notes, tasks and reminders use one record format: text, creation time, optional reminder time and completion state. Existing reminder data, clipboard notes and saved AI-memory notes are imported automatically the first time the unified store is opened; original files are left untouched. Voice examples: **«запомни купить фильтр»**, **«напомни завтра в 9 позвонить»**, **«отметь фильтр выполненным»**, **«открой напоминания»**. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
+The address book, file index and unified notes/tasks store are kept under `%LOCALAPPDATA%\\ZeroControl`, not in the repository. Notes, tasks and reminders use one record format: text, creation time, optional reminder time and completion state. Existing reminder data, clipboard notes and saved AI-memory notes are imported automatically the first time the unified store is opened; original files are left untouched. Voice examples: **«запомни купить фильтр»**, **«напомни завтра в 9 позвонить»**, **«отметь фильтр выполненным»**, **«открой напоминания»**. To add a contact, say **«добавить контакт»** and fill in the name and email address in the form.
 
 ## Tkinter interface
 
