@@ -20,6 +20,33 @@ def activate_modal(window: tk.Toplevel, parent=None):
         center_window(window,parent)
         window.attributes("-topmost",True); window.lift(); window.focus_force(); window.grab_set()
         window.bind("<Escape>",lambda _event:window.destroy(),add="+")
+        style = __import__("tkinter.ttk", fromlist=["Style"]).Style(window)
+        style.configure("Primary.TButton", background="#2474D2", foreground="#FFFFFF",
+                        bordercolor="#1D63B5", padding=(10, 6),
+                        font=("Segoe UI", 9, "bold"))
+        style.map("Primary.TButton",
+                  background=[("active", "#155DB5"), ("pressed", "#124F99")],
+                  foreground=[("active", "#FFFFFF")])
+        style.configure("Danger.TButton", background="#D94A4A", foreground="#FFFFFF",
+                        bordercolor="#BD3838", padding=(10, 6),
+                        font=("Segoe UI", 9, "bold"))
+        style.map("Danger.TButton",
+                  background=[("active", "#BD3838"), ("pressed", "#A92F2F")],
+                  foreground=[("active", "#FFFFFF")])
+
+        def color_action_buttons(widget):
+            ttk = __import__("tkinter.ttk", fromlist=["Button"])
+            for child in widget.winfo_children():
+                if isinstance(child, ttk.Button):
+                    label = str(child.cget("text") or "").strip().lower()
+                    if any(word in label for word in ("отмена", "отменить", "выход", "закрыть")):
+                        child.configure(style="Danger.TButton")
+                    elif any(word in label for word in ("сохранить", "применить", "отправить",
+                                                        "добавить", "подтвердить", "готово", "ок")):
+                        child.configure(style="Primary.TButton")
+                color_action_buttons(child)
+
+        color_action_buttons(window)
         window.after(450,lambda:window.attributes("-topmost",False) if window.winfo_exists() else None)
     except tk.TclError:
         pass
