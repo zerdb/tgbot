@@ -55,8 +55,10 @@ class FolderOrganizer:
             activate_modal(self.window, parent)
 
     def _build(self):
+        footer = ttk.Frame(self.window, padding=(14, 8, 14, 12))
+        footer.pack(side="bottom", fill="x")
         outer = ttk.Frame(self.window, padding=14)
-        outer.pack(fill="both", expand=True)
+        outer.pack(side="top", fill="both", expand=True)
         ttk.Label(outer, text="Разбор папки", font=("Segoe UI", 16, "bold")).pack(anchor="w")
         ttk.Label(outer, text="Просмотрим файлы только в выбранной папке и предложим распределение по типам. "
                              "Ничего не перемещается без вашего подтверждения.",
@@ -74,8 +76,8 @@ class FolderOrganizer:
         self.tree.column("count", width=70, anchor="center")
         self.tree.column("examples", width=440)
         self.tree.pack(fill="both", expand=True)
-        footer = ttk.Frame(outer)
-        footer.pack(fill="x", pady=(10, 0))
+        footer = ttk.Frame(self.window, padding=(14, 8, 14, 12))
+        footer.pack(side="bottom", fill="x")
         self.status_var = tk.StringVar(value="Выберите папку для предварительного просмотра.")
         ttk.Label(footer, textvariable=self.status_var).pack(side="left", fill="x", expand=True)
         self.organize_button = ttk.Button(footer, text="Разложить файлы", command=self.organize, state="disabled")
