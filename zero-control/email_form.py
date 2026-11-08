@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import threading
 from pathlib import Path
 import tkinter as tk
