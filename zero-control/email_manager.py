@@ -66,13 +66,17 @@ def list_email_contacts():
 
 def send_email(recipient: str, subject: str, body: str = "", attachments: list[str] | None = None):
     """Send an email with optional local-file attachments. Raises on failure."""
-    from agent_core import load_settings
+    from agent_core import load_settings, get_mail_password
     login = os.getenv("ZERO_CONTROL_MAIL_LOGIN", os.getenv("GIGAAM_MAIL_LOGIN", load_settings()["mail_login"]))
-    password = os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("GIGAAM_MAIL_PASSWORD", ""))
+    password = (
+        os.getenv("ZERO_CONTROL_MAIL_PASSWORD")
+        or os.getenv("GIGAAM_MAIL_PASSWORD")
+        or get_mail_password()
+    )
     if not password:
         raise RuntimeError(
-            "Не задан пароль приложения. Установите переменную ZERO_CONTROL_MAIL_PASSWORD "
-            "и перезапустите помощника."
+            "Не задан пароль приложения почты. Открой настройки Zero Control → "
+            "«Пароль почты», укажи пароль приложения Mail.ru и нажми «Сохранить»."
         )
     if not re.fullmatch(r"[\w.+-]+@[\w.-]+\.[a-zа-я]{2,}", recipient.strip(), re.IGNORECASE):
         raise ValueError("Укажите корректный адрес электронной почты.")
