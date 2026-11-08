@@ -21,6 +21,15 @@ _ALLOWED_PARAMETERS = {
 # Действия, смысл которых состоит в свободном ответе/анализе ИИ, не превращаем
 # в локальные команды: они по определению требуют модель.
 _BLOCKED_ACTIONS = {"ai_chat", "camera_question", "inspect_camera_image", "unknown"}
+_ALLOWED_ACTIONS = {
+    "add_contact", "open_contacts", "open_assistant_settings", "read_unread_mail",
+    "email_compose", "save_note", "add_note", "complete_item", "clipboard_to_excel",
+    "lock_computer", "reboot_computer", "open_downloads", "open_recycle_bin",
+    "open_application", "open_installed_application", "open_settings",
+    "empty_recycle_bin", "screenshot", "inspect_screen", "paste_clipboard_to_application",
+    "reminder", "organize_folder", "open_reminders", "open_mail_client",
+    "search_web", "search_files", "open_folder",
+}
 
 
 def normalize_phrase(value: str) -> str:
@@ -108,14 +117,17 @@ def promote_record(record_id: str, phrase: str, action: str, parameters: dict) -
     action = str(action or "").strip()
     if not normalized:
         raise ValueError("Фраза для локального правила не может быть пустой.")
-    if not action or action in _BLOCKED_ACTIONS:
+    if action not in _ALLOWED_ACTIONS or action in _BLOCKED_ACTIONS:
         raise ValueError("Это намерение нельзя превратить в локальное действие.")
     if not isinstance(parameters, dict):
         raise ValueError("Параметры должны быть JSON-объектом.")
-    clean_params = {
-        key: value for key, value in parameters.items()
-        if key in _ALLOWED_PARAMETERS and isinstance(value, (str, bool))
-    }
+    invalid = [
+        key for key, value in parameters.items()
+        if key not in _ALLOWED_PARAMETERS or not isinstance(value, (str, bool))
+    ]
+    if invalid:
+        raise ValueError("Недопустимые параметры: " + ", ".join(map(str, invalid)))
+    clean_params = dict(parameters)
     with _LOCK:
         rules = _read(RULES_PATH, {"schema_version": 1, "rules": []})
         if not isinstance(rules, dict) or not isinstance(rules.get("rules"), list):
@@ -148,7 +160,7 @@ def match_local_intent(phrase: str):
     for rule in reversed(rules.get("rules", [])):
         if rule.get("normalized") == normalized:
             action = str(rule.get("action") or "unknown")
-            if action in _BLOCKED_ACTIONS:
+            if action not in _ALLOWED_ACTIONS or action in _BLOCKED_ACTIONS:
                 return None
             return {
                 "schema_version": 1,
