@@ -14,7 +14,7 @@ from email_manager import load_address_book, save_address_book, send_email
 
 
 def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
-                     add_files_on_open=False, recipient_name=""):
+                     add_files_on_open=False, recipient_name="", initial_attachment_paths=None):
     """Open one workspace for incoming mail, composing and the shared address book."""
     if parent is None or not parent.winfo_exists():
         return
@@ -435,11 +435,29 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
             elif len(matches) > 1:
                 contacts_status.set("Имя неоднозначно — выбери получателя вручную на вкладке «Написать».")
         if add_files_on_open:
-            try:
-                from email_form import copied_file_paths
-                add_attachment_paths(copied_file_paths())
-            except Exception as exc:
-                compose_status.set("Не удалось прочитать буфер обмена: " + str(exc))
+            # Сначала используем снимок списка файлов, полученный в момент
+            # голосовой команды, пока очередь GUI не изменила состояние буфера.
+            add_attachment_paths(initial_attachment_paths or [])
+            if not attachment_paths:
+                try:
+                    from email_form import copied_file_paths
+                    add_attachment_paths(copied_file_paths())
+                except Exception as exc:
+                    compose_status.set("Не удалось прочитать буфер обмена: " + str(exc))
+                # Explorer иногда кратковременно удерживает clipboard.
+                # Повторяем чтение в GUI-потоке, если первая попытка была пустой.
+                def retry_clipboard_import(attempt=0):
+                    if attachment_paths or attempt >= 10 or not win.winfo_exists():
+                        return
+                    try:
+                        from email_form import copied_file_paths
+                        add_attachment_paths(copied_file_paths())
+                    except Exception as exc:
+                        compose_status.set("Не удалось прочитать буфер обмена: " + str(exc))
+                    if not attachment_paths and attempt < 9:
+                        win.after(250, lambda: retry_clipboard_import(attempt + 1))
+                if not attachment_paths:
+                    win.after(250, retry_clipboard_import)
         notebook.select(compose_tab)
 
     refresh_contacts()
