@@ -54,7 +54,7 @@ SYSTEM_PROMPT = """Ты — слой понимания намерений ру�
   "response": "короткий ответ пользователю для kind=respond либо пояснение для clarify; иначе пустая строка"
 }
 Не добавляй Markdown, комментарии или текст вне JSON.
-Для совместимости дублируй параметры выполнения в объекте parameters. Допустимые ключи параметров: attach_copied_files (boolean), recipient_name (string), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), app_name (string), folder (string), export_format (string).
+Все параметры выполнения передавай только в объекте parameters. Допустимые ключи параметров: attach_copied_files (boolean), recipient_name (string), reminder_text (string), note_text (string), item_text (string), query (string), question (string), app (string), app_name (string), folder (string), export_format (string).
 Не выдумывай отсутствующие сведения. Если пользователь просит вставить/перенести/поместить содержимое буфера, source.type=clipboard; target должен указывать приложение или место назначения, а method описывает открытие цели и вставку. Не выбирай приложение по умолчанию, если из контекста его нельзя надёжно понять: задай уточняющий вопрос (kind=clarify). Если цель явно указана — используй её независимо от формулировки глагола.
 Если пользователь хочет сохранить содержимое буфера как заметку, это save_note, source.type=clipboard, target.type=list, target.name="заметки".
 Если пользователь хочет сохранить произнесённый текст как заметку — add_note, source.type=spoken_text.
@@ -139,7 +139,7 @@ def _classify_semantically(user_text: str) -> dict:
         confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0))))
     except (TypeError, ValueError):
         confidence = 0.0
-    raw = parsed.get("parameters") if isinstance(parsed.get("parameters"), dict) else parsed.get("arguments")
+    raw = parsed.get("parameters") if isinstance(parsed.get("parameters"), dict) else {}
     if not isinstance(raw, dict):
         raw = {}
     allowed = {
@@ -163,11 +163,10 @@ def _classify_semantically(user_text: str) -> dict:
         "confidence": confidence,
         "clarification": parsed.get("clarification", ""),
         "response": parsed.get("response", ""),
-        "arguments": safe,
     }
 
 
-def _understand_command_legacy(user_text: str) -> dict:
+def _understand_command(user_text: str) -> dict:
     """Use semantic understanding first; keep deterministic rules as fallback."""
     try:
         semantic = _classify_semantically(user_text)
@@ -186,13 +185,13 @@ def _understand_command_rules(user_text: str) -> dict:
 
     # Вопросы о текущем экране направляем в модуль снимка и анализа, а не в обычный текстовый ИИ.
     if re.search(r"\b(что|что сейчас|посмотри|посмотреть|прочитай|прочитать|опиши|увидь|видишь)\b.*\b(на экране|экран|монитор)", normalized) or normalized in ("что у меня на экране", "что видно на экране", "посмотри на экран"):
-        return {"action": "inspect_screen", "confidence": 1.0, "arguments": {}}
+        return {"action": "inspect_screen", "confidence": 1.0, "parameters": {}}
 
     # Смысловые команды с буфером определяет общий классификатор по всей фразе;\n    # не перехватываем их отдельными regex-эвристиками.\n\n    # Разделяем настройки Windows и настройки самого помощника.
     if re.search(r"\b(настройки windows|параметры windows|системные настройки|параметры системы)\b", normalized):
-        return {"action": "open_settings", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_settings", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|зайди в|перейди в)\b.*\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
-        return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_assistant_settings", "confidence": 1.0, "parameters": {}}
 
     # Открытие произвольной папки — локальное намерение, поиск пути выполняет Python/MFT.
     folder_match = re.search(
@@ -205,30 +204,30 @@ def _understand_command_rules(user_text: str) -> dict:
         folder_name = folder_match.group(1).strip().strip('"«»').rstrip(" .,!?:;")
         folder_name = re.sub(r"^(?:папку|директорию|каталог)\s+", "", folder_name, flags=re.IGNORECASE)
         if folder_name:
-            return {"action": "open_folder", "confidence": 1.0, "arguments": {"folder": folder_name}}
+            return {"action": "open_folder", "confidence": 1.0, "parameters": {"folder": folder_name}}
 
     # Простые команды адресной книги обрабатываем локально: они не должны
     # зависеть от доступности Groq или точности ответа классификатора.
     if re.search(r"\b(добавь|добавить|запиши|записать|сохрани|сохранить)\b.*\b(в контакты|контакт|адресную книгу)\b|\b(добавь|добавить)\s+в\s+контакты\b", normalized):
-        return {"action": "add_contact", "confidence": 1.0, "arguments": {}}
+        return {"action": "add_contact", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(открой|открыть|покажи|показать|посмотри|просмотреть)\b.*\b(контакты|адресную книгу)\b", normalized):
-        return {"action": "open_contacts", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_contacts", "confidence": 1.0, "parameters": {}}
     # Локальная маршрутизация поддерживаемых команд: обычные действия не зависят от квоты Groq.
     if re.search(r"\b(разбери|разобрать|рассортируй|отсортируй|организуй)\b.*\b(папк|файл|документ)", normalized):
-        return {"action": "organize_folder", "confidence": 1.0, "arguments": {}}
+        return {"action": "organize_folder", "confidence": 1.0, "parameters": {}}
 
     # Голосовое управление общей системой заметок и дел.
     done_match = re.search(r"\b(отметь|пометь|закрой)\b\s+(.+?)\s+(?:выполненным|выполненной|готовым|сделанным)$", normalized)
     if done_match:
-        return {"action": "complete_item", "confidence": 1.0, "arguments": {"item_text": done_match.group(2).strip()}}
+        return {"action": "complete_item", "confidence": 1.0, "parameters": {"item_text": done_match.group(2).strip()}}
     note_match = re.match(r"^(?:запомни|сохрани заметку|добавь заметку|добавь запись)\s+(.+)$", normalized)
     if note_match:
-        return {"action": "add_note", "confidence": 1.0, "arguments": {"note_text": note_match.group(1).strip()}}
+        return {"action": "add_note", "confidence": 1.0, "parameters": {"note_text": note_match.group(1).strip()}}
     # Открытие раздела напоминаний и создание нового напоминания — разные намерения.
     if re.search(r"\b(открой|покажи|открыть|посмотреть)\b.*\b(напоминан|заметк|дела|задач)", normalized):
-        return {"action": "open_reminders", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_reminders", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(напомни|напомнить|создай напоминание|добавь напоминание)\b", normalized):
-        return {"action": "reminder", "confidence": 1.0, "arguments": {"reminder_text": user_text.strip()}}
+        return {"action": "reminder", "confidence": 1.0, "parameters": {"reminder_text": user_text.strip()}}
 
     # Почта: создание/отправка письма открывает форму; само отправление только после кнопки пользователя.
     if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт|письм|email|емейл)", normalized):
@@ -243,11 +242,11 @@ def _understand_command_rules(user_text: str) -> dict:
         candidate = re.sub(r"\s+", " ", candidate).strip()
         if candidate and not re.search(r"\b(?:файл|файлы|документ|документы|вложение|вложения|письмо|письма)\b", candidate, re.IGNORECASE):
             recipient_name = candidate
-        return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": attach, "recipient_name": recipient_name}}
+        return {"action": "email_compose", "confidence": 1.0, "parameters": {"attach_copied_files": attach, "recipient_name": recipient_name}}
     if re.search(r"\b(создай|создать|напиши|написать|составь|составить)\b.*\b(письмо|письмецо|email)", normalized):
-        return {"action": "email_compose", "confidence": 1.0, "arguments": {"attach_copied_files": False}}
+        return {"action": "email_compose", "confidence": 1.0, "parameters": {"attach_copied_files": False}}
     if re.search(r"\b(открой|открыть|покажи)\b.*\b(почту|почтовый клиент|входящие)", normalized):
-        return {"action": "open_mail_client", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_mail_client", "confidence": 1.0, "parameters": {}}
 
     # Частые приложения из разрешённого списка.
     app_patterns = (
@@ -261,26 +260,26 @@ def _understand_command_rules(user_text: str) -> dict:
     if re.search(r"\b(открой|открыть|запусти|запустить)\b", normalized):
         for pattern, app in app_patterns:
             if re.search(pattern, normalized):
-                return {"action": "open_application", "confidence": 1.0, "arguments": {"app": app}}
+                return {"action": "open_application", "confidence": 1.0, "parameters": {"app": app}}
 
     if re.search(r"\b(открой|открыть|покажи)\b.*\b(загрузки|загруженные файлы)", normalized):
-        return {"action": "open_downloads", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_downloads", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(открой|открыть|покажи)\b.*\b(корзину|корзина)", normalized):
-        return {"action": "open_recycle_bin", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_recycle_bin", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(очисти|очистить|опустоши|опустошить)\b.*\b(корзину|корзина)", normalized):
-        return {"action": "empty_recycle_bin", "confidence": 1.0, "arguments": {}}
+        return {"action": "empty_recycle_bin", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(заблокируй|заблокировать)\b.*\b(компьютер|ноутбук|пк)", normalized):
-        return {"action": "lock_computer", "confidence": 1.0, "arguments": {}}
+        return {"action": "lock_computer", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(перезагрузи|перезагрузить|перезапусти)\b.*\b(компьютер|ноутбук|пк|windows)", normalized):
-        return {"action": "reboot_computer", "confidence": 1.0, "arguments": {}}
+        return {"action": "reboot_computer", "confidence": 1.0, "parameters": {}}
     if normalized in ("скриншот", "скриншот экрана", "снимок экрана") or re.search(r"\b(сделай|сделать|сними|снять)\b.*\b(скриншот|снимок экрана)", normalized):
-        return {"action": "screenshot", "confidence": 1.0, "arguments": {}}
+        return {"action": "screenshot", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(открой|открыть)\b.*\b(настройки windows|параметры windows)", normalized):
-        return {"action": "open_settings", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_settings", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(сохрани|сохранить)\b.*\b(заметк)", normalized):
-        return {"action": "save_note", "confidence": 1.0, "arguments": {}}
+        return {"action": "save_note", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(создай|сделай)\b.*\b(excel|эксель|таблицу из буфера)", normalized):
-        return {"action": "clipboard_to_excel", "confidence": 1.0, "arguments": {}}
+        return {"action": "clipboard_to_excel", "confidence": 1.0, "parameters": {}}
     # Любое другое название приложения ищем локально в меню «Пуск», на рабочем столе
     # и среди зарегистрированных приложений Windows — без обращения к языковой модели.
     open_match = re.match(
@@ -298,13 +297,13 @@ def _understand_command_rules(user_text: str) -> dict:
             return {
                 "action": "open_installed_application",
                 "confidence": 1.0,
-                "arguments": {"app_name": app_name},
+                "parameters": {"app_name": app_name},
             }
 
     # Явный поиск папки по названию — используем индекс каталогов, а не файлов.
     folder_query = re.search(r"\b(?:найди|поищи|найти|поискать)\b.*\bпапк\w*\s+(?:с\s+названи\w*\s+)?(.+)$", user_text, re.IGNORECASE)
     if folder_query and folder_query.group(1).strip():
-        return {"action": "open_folder", "confidence": 1.0, "arguments": {"folder": folder_query.group(1).strip().strip("«»")}}
+        return {"action": "open_folder", "confidence": 1.0, "parameters": {"folder": folder_query.group(1).strip().strip("«»")}}
     # Поиск с экспортом: сначала ищем локально, затем создаём новый документ и открываем его.
     if re.search(r"\b(?:найди|поищи|найти|поискать)\b", normalized) and not re.search(
         r"\b(в интернете|в интернет|в сети|в google)\b", normalized
@@ -322,7 +321,7 @@ def _understand_command_rules(user_text: str) -> dict:
                 return {
                     "action": "search_files",
                     "confidence": 1.0,
-                    "arguments": {"query": query, "export_format": export_format},
+                    "parameters": {"query": query, "export_format": export_format},
                 }
 
     # Вопросы о расположении файлов с критериями — локальный MFT-поиск,
@@ -340,52 +339,50 @@ def _understand_command_rules(user_text: str) -> dict:
     ):
         query = _file_search_query(user_text)
         if query:
-            return {"action": "search_files", "confidence": 1.0, "arguments": {"query": query}}
+            return {"action": "search_files", "confidence": 1.0, "parameters": {"query": query}}
 
     if re.search(r"\b(найди|поищи|найти|поискать)\b", normalized) and not re.search(r"\b(в интернете|в интернет|в сети|в google)\b", normalized):
         query = _file_search_query(user_text)
         if query:
-            return {"action": "search_files", "confidence": 1.0, "arguments": {"query": query}}
+            return {"action": "search_files", "confidence": 1.0, "parameters": {"query": query}}
     if re.search(r"\b(поищи|найди|найти)\b", normalized) and re.search(r"\b(в интернете|в интернет|в сети|в google)\b", normalized):
         query = re.sub(r"^.*?\b(?:поищи|найди|найти)\b", "", normalized).strip()
         query = re.sub(r"\b(?:в интернете|в интернет|в сети|в google)\b", "", query).strip()
-        return {"action": "search_web", "confidence": 1.0, "arguments": {"query": query or user_text.strip()}}
+        return {"action": "search_web", "confidence": 1.0, "parameters": {"query": query or user_text.strip()}}
 
     # Вопросы о наблюдении отправляем на анализ свежего кадра.
     camera_context = re.search(r"\b(камера|камере|камеру|видеонаблюдени|на парковке|во дворе|у ворот|в кадре|на изображении|на видео|на записи|там|здесь|тут|картинк)\b", normalized)
     camera_question = re.search(r"\b(что|кто|сколько|есть|видно|видишь|опиши|день|ночь|машин|людей|человек|сейчас)\b", normalized)
     if camera_context and camera_question:
-        return {"action": "camera_question", "confidence": 1.0, "arguments": {"question": user_text.strip()}}
+        return {"action": "camera_question", "confidence": 1.0, "parameters": {"question": user_text.strip()}}
     if re.search(r"\b(настройки помощника|настройки zero control)\b", normalized):
-        return {"action": "open_assistant_settings", "confidence": 1.0, "arguments": {}}
+        return {"action": "open_assistant_settings", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
-        return {"action": "read_unread_mail", "confidence": 1.0, "arguments": {}}
+        return {"action": "read_unread_mail", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(найди|поищи|поиск)\b.*\b(в документах|в содержимом|в файлах)\b", normalized):
-        return {"action": "search_documents", "confidence": 1.0, "arguments": {}}
+        return {"action": "search_documents", "confidence": 1.0, "parameters": {}}
     if _is_natural_information_question(user_text):
-        return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
-    return {"action": "unknown", "confidence": 0.0, "arguments": {}}
+        return {"action": "ai_chat", "confidence": 0.99, "parameters": {"question": user_text.strip()}}
+    return {"action": "unknown", "confidence": 0.0, "parameters": {}}
 
 
 def understand_command(user_text: str) -> dict:
-    """Return a versioned intent envelope for the execution receiver.
+    """Return the single versioned intent contract used by every execution path.
 
-    The ASR transcript, semantic interpretation, and local execution are separate
-    stages. Legacy fast paths are adapted to the same contract so the receiver
-    never has to guess where an action applies or which data it consumes.
+    Model classification and deterministic fallbacks are normalized here;
+    neither may expose a second parameter format to the execution receiver.
     """
-    raw = _understand_command_legacy(user_text)
+    raw = _understand_command(user_text)
     if not isinstance(raw, dict):
         raw = {"action": "unknown", "confidence": 0.0, "arguments": {}}
 
     action = str(raw.get("action") or "unknown")
-    args = raw.get("arguments") if isinstance(raw.get("arguments"), dict) else {}
-    params = raw.get("parameters") if isinstance(raw.get("parameters"), dict) else args
+    params = raw.get("parameters") if isinstance(raw.get("parameters"), dict) else {}
     target = raw.get("target") if isinstance(raw.get("target"), dict) else {}
     source = raw.get("source") if isinstance(raw.get("source"), dict) else {}
 
-    # Keep only known, primitive execution parameters; no model-generated code
-    # or arbitrary function names can reach the Windows action layer.
+    # Keep only known primitive parameters; model output never selects Python
+    # functions or supplies executable code.
     allowed = {
         "attach_copied_files", "recipient_name", "reminder_text", "note_text",
         "item_text", "query", "question", "app", "app_name", "folder",
@@ -401,8 +398,8 @@ def understand_command(user_text: str) -> dict:
         target.setdefault("type", "application")
         target.setdefault("name", safe.get("app_name", ""))
         target.setdefault("location", "")
-        # The target is the semantic destination; mirror it into the legacy
-        # execution parameter consumed by the existing Windows adapter.
+        # The semantic destination is mapped to the canonical app_name parameter
+        # required by the existing Windows action implementation.
         if target.get("name") and not safe.get("app_name"):
             safe["app_name"] = str(target["name"])
         raw.setdefault("goal", "Перенести содержимое буфера обмена в приложение")
