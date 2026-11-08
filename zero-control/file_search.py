@@ -61,7 +61,7 @@ def _parse_search_request(raw_query: str) -> dict:
                "drive": None, "folder": None, "sort": None}
     ext_groups = [
         (r"\b(?:таблиц\w*\s+excel|excel|эксель)\b", {".xls", ".xlsx"}),
-        (r"\b(?:документ\w*|файл\w*)\b", {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt"}),
+        (r"\bдокумент\w*\b", {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt"}),
         (r"\b(?:документ\w*\s+word|word|ворд)\b", {".doc", ".docx"}),
         (r"\b(?:презентаци\w*)\b", {".ppt", ".pptx"}),
         (r"\b(?:фотографи\w*\s+jpg|картинк\w*\s+jpg|jpg|jpeg)\b", {".jpg", ".jpeg"}),
@@ -147,11 +147,11 @@ def _parse_search_request(raw_query: str) -> dict:
         text = text[:word_size.start()] + " " + text[word_size.end():]
 
     # Размер: поддерживаются байты, КБ, МБ и ГБ.
-    size_re = re.search(r"\b(больше|свыше|крупнее|меньше|до)\s+(\d+(?:[.,]\d+)?)\s*(байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|гб|гбайт\w*)?\b", text)
+    size_re = re.search(r"\b(больше|свыше|крупнее|меньше|до)\s+(\d+(?:[.,]\d+)?)\s*(байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|мегабайт\w*|гб|гбайт\w*|гигабайт\w*)?\b", text)
     if size_re:
         amount = float(size_re.group(2).replace(",", "."))
         unit = (size_re.group(3) or "мб").casefold()
-        multiplier = 1 if unit.startswith(("б", "байт")) else 1024 if unit.startswith("к") else 1024**3 if unit.startswith("г") else 1024**2
+        multiplier = 1 if unit.startswith(("б", "байт")) else 1024 if unit.startswith("к") else 1024**3 if unit.startswith(("г", "гига")) else 1024**2
         size = int(amount * multiplier)
         if size_re.group(1) in ("больше", "свыше", "крупнее"):
             filters["min_size"] = size
