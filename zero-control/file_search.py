@@ -580,7 +580,7 @@ def _search_worker(query: str, parent, export_format=None):
         return
     extension = next(iter(filters["extensions"])) if filters["extensions"] and len(filters["extensions"]) == 1 else None
     display_query = query
-    if extension and not terms:
+    if extension and not term_groups:
         display_query = "*" + extension
     elif extension:
         display_query = "*" + " ".join(group[0] for group in term_groups) + "*" + extension
