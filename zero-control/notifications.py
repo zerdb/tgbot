@@ -178,3 +178,46 @@ def speak_text(message: str):
         return
     initialize_speech_engine()
     _speech_queue.put(text)
+
+
+def install_messagebox_voice():
+    """Replace informational Tk message boxes with Denis speech; speak before confirmations."""
+    import tkinter.messagebox as messagebox
+
+    if getattr(messagebox, "_zero_control_voice_installed", False):
+        return
+
+    original_showinfo = messagebox.showinfo
+    original_showwarning = messagebox.showwarning
+    original_showerror = messagebox.showerror
+    original_askyesno = messagebox.askyesno
+    original_askokcancel = messagebox.askokcancel
+    original_askretrycancel = messagebox.askretrycancel
+
+    def _announcement(title, message):
+        parts = [str(part).strip() for part in (title, message) if str(part or "").strip()]
+        return ". ".join(parts)
+
+    def _speak_only(title, message, **kwargs):
+        speak_text(_announcement(title, message))
+        return "ok"
+
+    def _speak_then_confirm(original, title, message, **kwargs):
+        speak_text(_announcement(title, message))
+        # Confirmation windows stay available, but only appear after Denis finishes speaking.
+        _speech_queue.join()
+        return original(title, message, **kwargs)
+
+    messagebox.showinfo = _speak_only
+    messagebox.showwarning = _speak_only
+    messagebox.showerror = _speak_only
+    messagebox.askyesno = lambda title, message, **kwargs: _speak_then_confirm(
+        original_askyesno, title, message, **kwargs
+    )
+    messagebox.askokcancel = lambda title, message, **kwargs: _speak_then_confirm(
+        original_askokcancel, title, message, **kwargs
+    )
+    messagebox.askretrycancel = lambda title, message, **kwargs: _speak_then_confirm(
+        original_askretrycancel, title, message, **kwargs
+    )
+    messagebox._zero_control_voice_installed = True
