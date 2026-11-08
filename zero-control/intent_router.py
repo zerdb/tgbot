@@ -176,28 +176,28 @@ def _understand_command(user_text: str) -> dict:
             # передаём форме, которая сопоставит его с адресной книгой.
             target = semantic.get("target") if isinstance(semantic.get("target"), dict) else {}
             source = semantic.get("source") if isinstance(semantic.get("source"), dict) else {}
-            normalized = re.sub(r"\\s+", " ", (user_text or "").lower().replace("ё", "е")).strip()
+            normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip()
             email_request = bool(
-                re.search(r"\\b(почт\\w*|email|емейл)\\b", normalized)
-                and re.search(r"\\b(отправ\\w*|перешл\\w*|пошл\\w*)\\b", normalized)
+                re.search(r"\b(почт\w*|email|емейл)\b", normalized)
+                and re.search(r"\b(отправ\w*|перешл\w*|пошл\w*)\b", normalized)
             )
             recipient = str(target.get("name") or "").strip()
             if not recipient:
-                after_mail = re.search(r"\\b(?:почту|почте|email|емейл)\\s+(.+)$", user_text or "", re.IGNORECASE)
+                after_mail = re.search(r"\b(?:почту|почте|email|емейл)\s+(.+)$", user_text or "", re.IGNORECASE)
                 before_mail = re.search(
-                    r"\\b(?:отправь|отправить|перешли|переслать|пошли|послать)\\s+(.+?)\\s+(?:на\\s+)?(?:почту|почте|email|емейл)\\b",
+                    r"\b(?:отправь|отправить|перешли|переслать|пошли|послать)\s+(.+?)\s+(?:на\s+)?(?:почту|почте|email|емейл)\b",
                     user_text or "", re.IGNORECASE,
                 )
                 candidate = after_mail.group(1) if after_mail else before_mail.group(1) if before_mail else ""
                 candidate = re.sub(
-                    r"\\b(?:файл\\w*|документ\\w*|вложен\\w*|мне|пожалуйста|срочно)\\b",
+                    r"\b(?:файл\w*|документ\w*|вложен\w*|мне|пожалуйста|срочно)\b",
                     " ", candidate, flags=re.IGNORECASE,
                 )
-                recipient = re.sub(r"\\s+", " ", candidate).strip(" .,!?:;«»\\"")
+                recipient = re.sub(r"\s+", " ", candidate).strip(" .,!?:;«»\"")
             if email_request:
                 attach_files = (
                     source.get("type") == "clipboard"
-                    or bool(re.search(r"\\b(файл\\w*|вложен\\w*|буфер\\w*|документ\\w*)\\b", normalized))
+                    or bool(re.search(r"\b(файл\w*|вложен\w*|буфер\w*|документ\w*)\b", normalized))
                 )
                 semantic["kind"] = "execute"
                 semantic["action"] = "email_compose"
