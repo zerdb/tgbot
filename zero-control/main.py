@@ -368,8 +368,10 @@ def handle_command(text: str):
 
 
 def _handle_command_worker(text: str):
-    """Единая точка входа: определяет намерение без общей плашки занятости."""
+    """Единая точка входа: показывает ожидание только на время обработки команды."""
     print(f"Распознана команда: {text}")
+    if _ui is not None:
+        _ui_actions.put(("busy", "Понимаю команду…"))
     try:
         from intent_router import understand_command
         intent = understand_command(text)
@@ -424,6 +426,8 @@ def _handle_command_worker(text: str):
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
     parent = _ui.root if _ui is not None else None
     keep_busy = action in ("search_files", "open_folder", "ai_chat", "read_unread_mail", "inspect_camera_image", "camera_question")
+    if _ui is not None and not keep_busy:
+        _ui_actions.put(("busy", None))
     if action == "ai_chat":
         question = str(args.get("question") or text).strip()
         if _ui is not None:
