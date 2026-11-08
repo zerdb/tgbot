@@ -166,9 +166,9 @@ def _parse_search_request(raw_query: str) -> dict:
         "девять": "9", "девяти": "9",
         "десять": "10", "десяти": "10",
     }
-    number_pattern = r"\\b(больше|свыше|крупнее|меньше|до)\\s+(" + "|".join(
+    number_pattern = r"\b(больше|свыше|крупнее|меньше|до)\s+(" + "|".join(
         sorted(number_words, key=len, reverse=True)
-    ) + r")(?=\\s+(?:байт\\w*|б|кб|кбайт\\w*|мб|мбайт\\w*|мегабайт\\w*|гб|гбайт\\w*|гигабайт\\w*)\\b)"
+    ) + r")(?=\s+(?:байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|мегабайт\w*|гб|гбайт\w*|гигабайт\w*)\b)"
     text = re.sub(
         number_pattern,
         lambda match: match.group(1) + " " + number_words[match.group(2)],
