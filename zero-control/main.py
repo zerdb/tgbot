@@ -40,7 +40,7 @@ _splash.update()
 from notifications import install_messagebox_voice
 install_messagebox_voice()
 
-from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
+from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note, paste_clipboard_to_application
 from installed_apps import open_installed_application
 from reminders import start_reminder_service, stop_reminder_service, add_reminder, add_note, complete_item_by_text, deliver_due_reminders
 from file_search import search_web, search_files, open_folder_by_name, start_file_search_ui
@@ -459,6 +459,8 @@ def handle_command(text: str):
     elif action == "open_settings": open_settings()
     elif action == "empty_recycle_bin": empty_recycle_bin()
     elif action == "screenshot": take_screenshot()
+    elif action == "inspect_screen": _ui_actions.put(("inspect_screen", None))
+    elif action == "paste_clipboard_to_application": paste_clipboard_to_application(str(args.get("app_name") or ""))
     elif action == "reminder": add_reminder(str(args.get("reminder_text") or text))
     elif action == "add_note": add_note(str(args.get("note_text") or text))
     elif action == "complete_item":
@@ -635,6 +637,9 @@ def main():
                         add_files_on_open=bool(options.get("attach_copied_files", False)),
                         recipient_name=str(options.get("recipient_name") or ""),
                     )
+                elif ui_action == "inspect_screen":
+                    print("[Экран] Открываю анализ свежего снимка экрана.", flush=True)
+                    open_screen_inspector(_ui.root, auto_capture=True)
                 elif ui_action == "camera_question":
                     _ui.set_busy_overlay("Получаю кадр и анализирую вопрос…")
                     threading.Thread(target=_camera_question_worker, args=(str(value or ""),), daemon=True, name="camera-question").start()
