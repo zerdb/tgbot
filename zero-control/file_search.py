@@ -126,7 +126,8 @@ def _parse_search_request(raw_query: str) -> dict:
         months = {"январ": 1, "феврал": 2, "март": 3, "апрел": 4, "май": 5, "июн": 6,
                   "июл": 7, "август": 8, "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12}
         for stem, month in months.items():
-            m = re.search(r"\b" + stem + r"[а-я]*\b", text)
+            month_pattern = r"\b(?:май|мая)\b" if stem == "май" else r"\b" + stem + r"[а-я]*\b"
+            m = re.search(month_pattern, text)
             if m:
                 year_match = re.search(r"\b(20\d{2})\b", text)
                 year = int(year_match.group(1)) if year_match else now.year
