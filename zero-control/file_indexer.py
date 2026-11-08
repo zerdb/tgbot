@@ -239,6 +239,14 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
             ).fetchall()
             return [Path(row[0]) for row in rows]
 
+        if query.startswith("__SIZE_EQ__:"):
+            target_size = int(query.split(":", 1)[1])
+            rows = connection.execute(
+                "SELECT full_path FROM files WHERE size = ? LIMIT ?",
+                (target_size, MAX_RESULTS),
+            ).fetchall()
+            return [Path(row[0]) for row in rows]
+
         if query == "__ALL_FILTERED__":
             rows = connection.execute(
                 "SELECT full_path FROM files LIMIT 100000"
