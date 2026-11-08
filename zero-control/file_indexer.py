@@ -87,7 +87,7 @@ def _connect() -> sqlite3.Connection:
     connection.create_function(
         "SEARCHKEY", 1,
         lambda value: "".join(
-            char for char in unicodedata.normalize("NFKC", str(value or "")).casefold()
+            char for char in unicodedata.normalize("NFKC", str(value or "")).casefold().replace("ё", "е")
             if char.isalnum()
         ),
         deterministic=True,
@@ -114,7 +114,12 @@ def _connect() -> sqlite3.Connection:
             "drive UNINDEXED, full_path UNINDEXED, search_text, tokenize='trigram')"
         )
         fts_row = connection.execute("SELECT value FROM index_meta WHERE key = 'fts_populated'").fetchone()
-        if not fts_row:
+        normalization_row = connection.execute(
+            "SELECT value FROM index_meta WHERE key = 'fts_normalization_version'"
+        ).fetchone()
+        if not fts_row or not normalization_row or normalization_row[0] != "2":
+            # SEARCHKEY now folds ё to е. Rebuild only the derived FTS table;
+            # the existing MFT/SQLite file inventory remains untouched.
             with connection:
                 connection.execute("DELETE FROM files_fts")
                 connection.execute(
@@ -124,6 +129,10 @@ def _connect() -> sqlite3.Connection:
                 )
                 connection.execute(
                     "INSERT OR REPLACE INTO index_meta(key, value) VALUES ('fts_populated', '1')"
+                )
+                connection.execute(
+                    "INSERT OR REPLACE INTO index_meta(key, value) "
+                    "VALUES ('fts_normalization_version', '2')"
                 )
     except sqlite3.OperationalError:
         # Fallback below remains compatible with SQLite builds without FTS5/trigram.
