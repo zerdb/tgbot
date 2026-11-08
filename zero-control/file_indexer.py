@@ -231,6 +231,14 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
             char for char in unicodedata.normalize("NFKC", query).casefold()
             if char.isalnum()
         )
+        if query.startswith("__EXT__:"):
+            extension = query.split(":", 1)[1].casefold()
+            rows = connection.execute(
+                "SELECT full_path FROM files WHERE lower(full_path) LIKE ? LIMIT ?",
+                ("%" + extension, MAX_RESULTS),
+            ).fetchall()
+            return [Path(row[0]) for row in rows]
+
         if query in ("__SORT_SIZE_DESC__", "__SORT_SIZE_ASC__"):
             direction = "DESC" if query == "__SORT_SIZE_DESC__" else "ASC"
             rows = connection.execute(
