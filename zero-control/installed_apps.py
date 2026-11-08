@@ -111,6 +111,55 @@ def _read_registry_apps() -> list[dict]:
                         continue
         except OSError:
             continue
+    # Дополнительно читаем список установленных программ (32/64-bit и текущий пользователь).
+    uninstall_locations = (
+        (winreg.HKEY_CURRENT_USER, r"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
+    )
+    for hive, base in uninstall_locations:
+        try:
+            with winreg.OpenKey(hive, base) as root:
+                count = winreg.QueryInfoKey(root)[0]
+                for index in range(count):
+                    try:
+                        subkey_name = winreg.EnumKey(root, index)
+                        with winreg.OpenKey(root, subkey_name) as key:
+                            try:
+                                display_name = str(winreg.QueryValueEx(key, "DisplayName")[0]).strip()
+                            except OSError:
+                                continue
+                            try:
+                                display_icon = str(winreg.QueryValueEx(key, "DisplayIcon")[0]).strip()
+                            except OSError:
+                                display_icon = ""
+                            try:
+                                install_location = str(winreg.QueryValueEx(key, "InstallLocation")[0]).strip()
+                            except OSError:
+                                install_location = ""
+                        if not display_name:
+                            continue
+                        # DisplayIcon часто содержит путь к EXE и индекс иконки после запятой.
+                        icon_path = display_icon.strip('"')
+                        if icon_path.endswith(")") and ",-" in icon_path:
+                            icon_path = icon_path.rsplit(",", 1)[0].strip('"')
+                        elif "," in icon_path and Path(icon_path.split(",", 1)[0].strip('"')).is_file():
+                            icon_path = icon_path.split(",", 1)[0].strip('"')
+                        candidate = Path(icon_path) if icon_path else None
+                        if candidate and candidate.is_file() and candidate.suffix.casefold() == ".exe":
+                            apps.append({"name": display_name, "kind": "executable", "target": str(candidate)})
+                            continue
+                        # Если DisplayIcon не указан, ищем только EXE непосредственно в папке установки.
+                        folder = Path(install_location) if install_location else None
+                        if folder and folder.is_dir():
+                            executables = list(folder.glob("*.exe"))
+                            preferred = next((p for p in executables if _normalize(display_name).replace(" ", "") in _normalize(p.stem).replace(" ", "")), None)
+                            if preferred:
+                                apps.append({"name": display_name, "kind": "executable", "target": str(preferred)})
+                    except (OSError, ValueError):
+                        continue
+        except OSError:
+            continue
     return apps
 
 
@@ -145,6 +194,16 @@ def _get_installed_apps(force_refresh: bool = False) -> list[dict]:
         _APP_CACHE = _scan_installed_apps()
         _CACHE_TIME = now
     return list(_APP_CACHE)
+
+
+def _canonical_app_query(query: str) -> tuple[str, set[str]]:
+    normalized = _normalize(query)
+    aliases = {
+        "торрент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
+        "torrent": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
+        "торрент клиент": {"qbittorrent", "utorrent", "bittorrent", "transmission", "deluge"},
+    }
+    return normalized, aliases.get(normalized, set())
 
 
 def _match_score(query: str, name: str) -> float:
@@ -195,10 +254,14 @@ def open_installed_application(app_name: str) -> str:
     if not query:
         raise ValueError("Не удалось определить название приложения.")
 
+    normalized_query, aliases = _canonical_app_query(query)
     apps = _get_installed_apps()
     scored = []
     for app in apps:
         score = _match_score(query, app["name"])
+        normalized_name = _normalize(app["name"]).replace(" ", "")
+        if aliases and any(alias in normalized_name for alias in aliases):
+            score = max(score, 0.92)
         if score >= 0.58:
             scored.append((score, app))
     if not scored:
@@ -206,6 +269,9 @@ def open_installed_application(app_name: str) -> str:
         apps = _get_installed_apps(force_refresh=True)
         for app in apps:
             score = _match_score(query, app["name"])
+            normalized_name = _normalize(app["name"]).replace(" ", "")
+            if aliases and any(alias in normalized_name for alias in aliases):
+                score = max(score, 0.92)
             if score >= 0.58:
                 scored.append((score, app))
 
