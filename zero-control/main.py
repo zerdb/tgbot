@@ -474,7 +474,7 @@ def _handle_command_worker(text: str):
         attachment_paths = []
         if attach_files:
             try:
-                from email_form import copied_file_paths
+                from clipboard_files import copied_file_paths
                 attachment_paths = copied_file_paths()
                 print(f"[Почта] Файлов в буфере обмена: {len(attachment_paths)}", flush=True)
             except Exception as exc:
