@@ -1,19 +1,14 @@
-"""Zero Control — офлайн голосовой помощник для Windows."""
+"""Zero Control — голосовой помощник для Windows."""
 from __future__ import annotations
 
 import os
-import re
 import shutil
-import subprocess
 import tempfile
 import threading
 import queue
-import time
 import traceback
-import webbrowser
 import ctypes
 from ctypes import wintypes
-from datetime import datetime, timedelta
 from pathlib import Path
 
 import tkinter as tk
@@ -55,24 +50,6 @@ from camera_window import open_camera_viewer
 from notes_window import open_notes_window
 
 _ui = None  # GUI создаётся позже, после загрузки модулей
-_STARTUP_TIME = time.perf_counter()
-
-
-def progress(message: str):
-    """Обновляет фирменную плавающую плашку справа по центру экрана."""
-    global _ui
-    if _ui is None:
-        return
-    try:
-        _ui.set_busy_overlay(message)
-        # На старте тяжёлая загрузка модели временно занимает главный поток.
-        # Обрабатываем очередь Tk немедленно, чтобы плашка реально успела появиться.
-        _ui.root.update_idletasks()
-        _ui.root.update()
-    except Exception:
-        pass
-
-
 
 
 SAMPLE_RATE = 16000
@@ -375,13 +352,6 @@ def transcribe_and_paste(audio_data: np.ndarray):
     finally:
         _transcription_lock.release()
         update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
-
-
-def normalize_command(text: str) -> str:
-    normalized = text.lower().replace("ё", "е")
-    normalized = re.sub(r"[^а-яa-z0-9.:/ -]+", " ", normalized)
-    # ASR often adds a final period or comma; it must not break exact commands.
-    return " ".join(normalized.split()).strip(" .,:;!?")
 
 
 def handle_command(text: str):
