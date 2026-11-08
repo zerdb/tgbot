@@ -1,6 +1,7 @@
 """Thread-safe local file search and result window."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import re
@@ -50,8 +51,8 @@ def search_files(text: str, parent=None):
     _search_requests.put((query, parent))
 
 
-def _parse_search_request(raw_query: str) -> dict:
-    """Turn natural-language file-search modifiers into local filesystem filters."""
+def _parse_search_request_local(raw_query: str) -> dict:
+    """Fallback parser used when AI parsing is unavailable."""
     from datetime import datetime, timedelta
 
     text = str(raw_query or "").casefold().replace("ё", "е").strip()
@@ -215,6 +216,184 @@ def _parse_search_request(raw_query: str) -> dict:
                     break
         terms.append(stem)
     return {"terms": terms, "filters": filters}
+
+
+def _parse_search_request_ai(raw_query: str) -> dict:
+    """Convert a natural-language request into validated local search filters."""
+    from datetime import datetime, timedelta
+
+    prompt = """Разбери запрос пользователя для локального поиска файлов Windows.
+Верни ТОЛЬКО один JSON-объект без Markdown и пояснений со строго такой структурой:
+{
+  "terms": ["фрагмент имени или пути"],
+  "extensions": [".doc", ".docx"],
+  "size": {
+    "min_exclusive_bytes": null,
+    "max_exclusive_bytes": null,
+    "equal_bucket_min_bytes": null,
+    "equal_bucket_max_bytes": null
+  },
+  "date": {"period": null, "field": "modified"},
+  "location": {"drive": null, "folder": null},
+  "sort": "relevance"
+}
+Правила:
+- terms — только значимые слова/части имени или пути, которые реально нужно искать. Сохраняй частичные слова, не добавляй слова-фильтры.
+- Распознавай синонимы и ошибки распознавания: Word/ворд/Ворд/«в формате W» => расширения .doc и .docx; PDF/пдф/пфд => .pdf; Excel/эксель => .xls и .xlsx; PowerPoint => .ppt и .pptx.
+- «договор ПФД» означает terms ["договор"] и extensions [".pdf"]. «договор в формате ворд» — terms ["договор"] и extensions [".doc", ".docx"].
+- Не превращай тип файла в terms. Разные слова в terms означают, что все фрагменты должны совпасть.
+- Размеры используй в байтах, двоичные единицы: 1 КБ=1024, 1 МБ=1024^2, 1 ГБ=1024^3.
+- «больше 7 ГБ» => min_exclusive_bytes=7*1024^3; «меньше/до 7 ГБ» => max_exclusive_bytes=7*1024^3.
+- «7 ГБ», «равны 7 ГБ» => диапазон [7*1024^3, 8*1024^3): equal_bucket_min_bytes и equal_bucket_max_bytes. Не считай это точным равенством.
+- Если размер не упомянут, все поля размера null.
+- date.period допускает только null, "today", "yesterday", "last_7_days", "last_month", "this_month", "this_year" или "month:YYYY-MM".
+- date.field: "created" для «созданные», иначе "modified".
+- location.drive — только буква диска, например "C"; location.folder — одно из "downloads", "desktop", "documents", "pictures", иначе null.
+- sort: "relevance", "size_desc", "size_asc", "date_desc", "date_asc".
+- Не придумывай фильтры, если их нет. Не возвращай SQL, пути, команды или дополнительные поля.
+Запрос пользователя: """ + str(raw_query or "")[:2000]
+
+    from groq_client import chat
+    answer = chat(
+        [{"role": "system", "content": prompt},
+         {"role": "user", "content": "Верни JSON для поискового запроса."}],
+        temperature=0,
+        max_tokens=500,
+        timeout=45,
+    )
+    match = re.search(r"\\{.*\\}", answer, flags=re.S)
+    if not match:
+        raise ValueError("ИИ не вернул JSON поисковых условий.")
+    data = json.loads(match.group(0))
+    if not isinstance(data, dict):
+        raise ValueError("Ожидался JSON-объект.")
+
+    allowed_extensions = {
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".txt", ".rtf", ".odt", ".jpg", ".jpeg", ".png", ".gif",
+        ".webp", ".bmp", ".zip", ".rar", ".7z", ".mp4", ".mkv",
+        ".avi", ".mov", ".wmv", ".webm", ".mp3", ".wav", ".flac",
+        ".m4a", ".aac",
+    }
+    raw_terms = data.get("terms", [])
+    if not isinstance(raw_terms, list):
+        raise ValueError("Поле terms должно быть списком.")
+    terms = []
+    for value in raw_terms[:8]:
+        if isinstance(value, str):
+            term = re.sub(r"[^a-zа-яё0-9_.-]", "", value.casefold().replace("ё", "е"))
+            if len(term) > 1 and term not in terms:
+                terms.append(term)
+
+    raw_extensions = data.get("extensions", [])
+    if not isinstance(raw_extensions, list):
+        raise ValueError("Поле extensions должно быть списком.")
+    extensions = {
+        value.casefold() for value in raw_extensions
+        if isinstance(value, str) and value.casefold() in allowed_extensions
+    }
+
+    def safe_size(value):
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("Размер должен быть числом байтов.")
+        value = int(value)
+        if value < 0 or value > 1024 ** 5:
+            raise ValueError("Размер вне допустимого диапазона.")
+        return value
+
+    size = data.get("size") or {}
+    date = data.get("date") or {}
+    location = data.get("location") or {}
+    if not all(isinstance(item, dict) for item in (size, date, location)):
+        raise ValueError("Некорректная структура фильтров.")
+
+    filters = {
+        "extensions": extensions or None,
+        "min_size": safe_size(size.get("min_exclusive_bytes")),
+        "max_size": safe_size(size.get("max_exclusive_bytes")),
+        "exact_size": safe_size(size.get("equal_bucket_min_bytes")),
+        "exact_size_upper": safe_size(size.get("equal_bucket_max_bytes")),
+        "start": None, "end": None, "date_field": "ctime" if date.get("field") == "created" else "mtime",
+        "drive": None, "folder": None, "sort": None,
+    }
+
+    period = date.get("period")
+    now = datetime.now()
+    if period == "today":
+        filters["start"] = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        filters["end"] = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    elif period == "yesterday":
+        day = (now - timedelta(days=1)).date()
+        filters["start"] = datetime.combine(day, datetime.min.time())
+        filters["end"] = datetime.combine(day, datetime.max.time())
+    elif period == "last_7_days":
+        filters["start"], filters["end"] = now - timedelta(days=7), now
+    elif period == "last_month":
+        first_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        filters["end"] = first_this - timedelta(microseconds=1)
+        filters["start"] = filters["end"].replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "this_month":
+        filters["start"] = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        filters["end"] = now
+    elif period == "this_year":
+        filters["start"] = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        filters["end"] = now
+    elif isinstance(period, str) and re.fullmatch(r"month:20\\d{2}-(?:0[1-9]|1[0-2])", period):
+        year, month = map(int, period[6:].split("-"))
+        filters["start"] = datetime(year, month, 1)
+        next_month = datetime(year + (month == 12), month % 12 + 1, 1)
+        filters["end"] = next_month - timedelta(microseconds=1)
+    elif period is not None:
+        raise ValueError("Неизвестный период даты.")
+
+    drive = location.get("drive")
+    if isinstance(drive, str) and re.fullmatch(r"[a-zA-Z]:?", drive.strip()):
+        filters["drive"] = drive.strip().upper().rstrip(":") + ":"
+    folder = location.get("folder")
+    if folder in {"downloads", "desktop", "documents", "pictures"}:
+        filters["folder"] = folder
+
+    sort = data.get("sort")
+    if sort in {"size_desc", "size_asc", "date_desc", "date_asc"}:
+        filters["sort"] = sort
+
+    if filters["exact_size"] is not None:
+        if filters["exact_size_upper"] is None or filters["exact_size_upper"] <= filters["exact_size"]:
+            raise ValueError("Некорректный диапазон размера.")
+        filters["min_size"] = None
+        filters["max_size"] = None
+    elif filters["exact_size_upper"] is not None:
+        raise ValueError("Верхняя граница размера задана без нижней.")
+
+    print(
+        "[Поиск файлов][ИИ] JSON разобран: " +
+        json.dumps({"terms": terms, "filters": {
+            "extensions": sorted(extensions), "min_size": filters["min_size"],
+            "max_size": filters["max_size"],
+            "equal_bucket": [filters["exact_size"], filters["exact_size_upper"]]
+            if filters["exact_size"] is not None else None,
+            "date_field": filters["date_field"], "start": str(filters["start"]) if filters["start"] else None,
+            "end": str(filters["end"]) if filters["end"] else None,
+            "drive": filters["drive"], "folder": filters["folder"], "sort": filters["sort"],
+        }}, ensure_ascii=False),
+        flush=True,
+    )
+    return {"terms": terms, "filters": filters}
+
+
+def _parse_search_request(raw_query: str) -> dict:
+    """Prefer Groq's structured interpretation; retain the local parser as fallback."""
+    try:
+        return _parse_search_request_ai(raw_query)
+    except Exception as exc:
+        print(
+            f"[Поиск файлов] ИИ-разбор недоступен или некорректен ({exc}); "
+            "использую локальный разбор запроса.",
+            flush=True,
+        )
+        return _parse_search_request_local(raw_query)
 
 
 def _search_worker(query: str, parent):
