@@ -17,7 +17,7 @@ class AssistantWindow:
     RED = "#D9485F"
     GREY = "#98A2B3"
 
-    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None):
+    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None, on_open_settings=None):
         self.root = tk.Tk()
         self.root.title("Zero Control")
         self.root.geometry("760x600")
@@ -32,6 +32,7 @@ class AssistantWindow:
         self.on_open_screen = on_open_screen or (lambda: None)
         self.on_open_other = on_open_other or (lambda: None)
         self.on_open_notes = on_open_notes or (lambda: None)
+        self.on_open_settings = on_open_settings or (lambda: None)
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
@@ -92,7 +93,7 @@ class AssistantWindow:
         controls = ttk.Frame(header)
         controls.pack(side="right", anchor="n")
         ttk.Button(controls, text="🔧", style="Header.TButton",
-                   command=lambda: self.on_command("открой настройки помощника")).pack(side="left", padx=2)
+                   command=self.on_open_settings).pack(side="left", padx=2)
         ttk.Button(controls, text="—", style="Header.TButton",
                    command=self.root.iconify).pack(side="left", padx=2)
         ttk.Button(controls, text="✕", style="Header.TButton",
