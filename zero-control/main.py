@@ -41,6 +41,7 @@ from notifications import install_messagebox_voice
 install_messagebox_voice()
 
 from windows_actions import lock_computer, reboot_computer, open_downloads, open_recycle_bin, open_application, open_settings, empty_recycle_bin, take_screenshot, paste_clipboard_to_excel, save_clipboard_as_note
+from installed_apps import open_installed_application
 from reminders import start_reminder_service, stop_reminder_service, add_reminder, add_note, complete_item_by_text, deliver_due_reminders
 from file_search import search_web, search_files, open_folder_by_name, start_file_search_ui
 from email_form import open_email_form
@@ -454,6 +455,7 @@ def handle_command(text: str):
     elif action == "open_downloads": open_downloads()
     elif action == "open_recycle_bin": open_recycle_bin()
     elif action == "open_application": open_application(str(args.get("app") or ""))
+    elif action == "open_installed_application": open_installed_application(str(args.get("app_name") or ""))
     elif action == "open_settings": open_settings()
     elif action == "empty_recycle_bin": empty_recycle_bin()
     elif action == "screenshot": take_screenshot()
