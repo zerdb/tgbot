@@ -18,6 +18,93 @@ _ALLOWED_PARAMETERS = {
     "item_text", "query", "question", "app", "app_name", "folder",
     "export_format",
 }
+# Параметры проверяются не только по общему allowlist, но и по конкретному действию.
+# Это не позволяет сохранить, например, app_name для open_application вместо app.
+_ACTION_PARAMETER_TYPES = {
+    "add_contact": {},
+    "open_contacts": {},
+    "open_assistant_settings": {},
+    "read_unread_mail": {},
+    "email_compose": {"recipient_name": str, "attach_copied_files": bool},
+    "save_note": {},
+    "add_note": {"note_text": str},
+    "complete_item": {"item_text": str},
+    "clipboard_to_excel": {},
+    "lock_computer": {},
+    "reboot_computer": {},
+    "open_downloads": {},
+    "open_recycle_bin": {},
+    "open_application": {"app": str},
+    "open_installed_application": {"app_name": str},
+    "open_settings": {},
+    "empty_recycle_bin": {},
+    "screenshot": {},
+    "inspect_screen": {},
+    "paste_clipboard_to_application": {"app_name": str},
+    "reminder": {"reminder_text": str},
+    "organize_folder": {},
+    "open_reminders": {},
+    "open_mail_client": {},
+    "search_web": {"query": str},
+    "search_files": {"query": str, "export_format": str},
+    "open_folder": {"folder": str},
+}
+_REQUIRED_ACTION_PARAMETERS = {
+    "add_note": {"note_text"},
+    "complete_item": {"item_text"},
+    "open_application": {"app"},
+    "open_installed_application": {"app_name"},
+    "paste_clipboard_to_application": {"app_name"},
+    "reminder": {"reminder_text"},
+    "search_web": {"query"},
+    "search_files": {"query"},
+    "open_folder": {"folder"},
+}
+_PARAMETER_CHOICES = {
+    "app": {"notepad", "calculator", "browser", "word", "excel", "images"},
+    "export_format": {"excel", "word", "text"},
+}
+
+
+def _validate_action_parameters(action: str, parameters: dict) -> dict:
+    """Проверяет имена, типы, обязательность и допустимые значения параметров действия."""
+    schema = _ACTION_PARAMETER_TYPES.get(action)
+    if schema is None:
+        raise ValueError("Неизвестное локальное действие: " + str(action))
+    if not isinstance(parameters, dict):
+        raise ValueError("Параметры должны быть JSON-объектом.")
+
+    invalid = [key for key in parameters if key not in schema]
+    if invalid:
+        raise ValueError(
+            "Параметры не подходят для действия %s: %s"
+            % (action, ", ".join(map(str, invalid)))
+        )
+
+    clean = {}
+    for key, value in parameters.items():
+        expected_type = schema[key]
+        if type(value) is not expected_type:
+            raise ValueError(
+                "Параметр %s для действия %s должен иметь тип %s."
+                % (key, action, "boolean" if expected_type is bool else "string")
+            )
+        choices = _PARAMETER_CHOICES.get(key)
+        if choices is not None and value not in choices:
+            raise ValueError(
+                "Недопустимое значение параметра %s: %s." % (key, value)
+            )
+        clean[key] = value
+
+    missing = _REQUIRED_ACTION_PARAMETERS.get(action, set()) - clean.keys()
+    if missing:
+        raise ValueError(
+            "Для действия %s обязательны параметры: %s"
+            % (action, ", ".join(sorted(missing)))
+        )
+    return clean
+
+
 # Действия, смысл которых состоит в свободном ответе/анализе ИИ, не превращаем
 # в локальные команды: они по определению требуют модель.
 _BLOCKED_ACTIONS = {"ai_chat", "camera_question", "inspect_camera_image", "unknown"}
@@ -121,13 +208,7 @@ def promote_record(record_id: str, phrase: str, action: str, parameters: dict) -
         raise ValueError("Это намерение нельзя превратить в локальное действие.")
     if not isinstance(parameters, dict):
         raise ValueError("Параметры должны быть JSON-объектом.")
-    invalid = [
-        key for key, value in parameters.items()
-        if key not in _ALLOWED_PARAMETERS or not isinstance(value, (str, bool))
-    ]
-    if invalid:
-        raise ValueError("Недопустимые параметры: " + ", ".join(map(str, invalid)))
-    clean_params = dict(parameters)
+    clean_params = _validate_action_parameters(action, parameters)
     with _LOCK:
         rules = _read(RULES_PATH, {"schema_version": 1, "rules": []})
         if not isinstance(rules, dict) or not isinstance(rules.get("rules"), list):
@@ -162,6 +243,13 @@ def match_local_intent(phrase: str):
             action = str(rule.get("action") or "unknown")
             if action not in _ALLOWED_ACTIONS or action in _BLOCKED_ACTIONS:
                 return None
+            try:
+                clean_parameters = _validate_action_parameters(
+                    action, rule.get("parameters") or {}
+                )
+            except ValueError as exc:
+                print("[Намерения] Пропускаю несовместимое локальное правило: %s" % exc, flush=True)
+                continue
             return {
                 "schema_version": 1,
                 "kind": "execute",
@@ -170,10 +258,7 @@ def match_local_intent(phrase: str):
                 "target": {},
                 "source": {"type": "spoken_text", "name": ""},
                 "method": "Точное совпадение с подтверждённым пользователем правилом",
-                "parameters": {
-                    key: value for key, value in (rule.get("parameters") or {}).items()
-                    if key in _ALLOWED_PARAMETERS and isinstance(value, (str, bool))
-                },
+                "parameters": clean_parameters,
                 "confidence": 1.0,
                 "clarification": "",
                 "response": "",
