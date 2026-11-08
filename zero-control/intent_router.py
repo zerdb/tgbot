@@ -69,9 +69,9 @@ def _is_natural_information_question(text: str) -> bool:
 
 
 def _file_search_query(user_text: str) -> str:
-    """Extract a local filename search query and expand spoken repeated digits."""
+    """Extract a flexible local file-search request without discarding filters."""
     query = re.sub(r"^.*?\b(?:найди|поищи|найти|поискать)\b", "", user_text, flags=re.IGNORECASE).strip()
-    query = re.sub(r"\b(?:мне|файл|файлы|документ|документы|папку)\b", " ", query, flags=re.IGNORECASE)
+    query = re.sub(r"\b(?:мне)\b", " ", query, flags=re.IGNORECASE)
     query = re.sub(r"\b(?:пдф|пфд|pdf)\b", ".pdf", query, flags=re.IGNORECASE)
     query = re.sub(r"\s+", " ", query).strip(" .,!?:;")
     counts = {"один": 1, "одна": 1, "одно": 1, "два": 2, "две": 2, "три": 3, "четыре": 4, "пять": 5, "шесть": 6, "семь": 7, "восемь": 8, "девять": 9, "десять": 10}
@@ -168,6 +168,10 @@ def understand_command(user_text: str) -> dict:
         return {"action": "save_note", "confidence": 1.0, "arguments": {}}
     if re.search(r"\b(создай|сделай)\b.*\b(excel|эксель|таблицу из буфера)", normalized):
         return {"action": "clipboard_to_excel", "confidence": 1.0, "arguments": {}}
+    # Явный поиск папки по названию — используем индекс каталогов, а не файлов.
+    folder_query = re.search(r"\b(?:найди|поищи|найти|поискать)\b.*\bпапк\w*\s+(?:с\s+названи\w*\s+)?(.+)$", user_text, re.IGNORECASE)
+    if folder_query and folder_query.group(1).strip():
+        return {"action": "open_folder", "confidence": 1.0, "arguments": {"folder": folder_query.group(1).strip().strip("«»")}}
     if re.search(r"\b(найди|поищи|найти|поискать)\b", normalized) and not re.search(r"\b(в интернете|в интернет|в сети|в google)\b", normalized):
         query = _file_search_query(user_text)
         if query:
