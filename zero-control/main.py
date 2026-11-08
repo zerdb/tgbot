@@ -408,10 +408,9 @@ def handle_command(text: str):
         else:
             print("Проверьте подключение к интернету и доступность резервной модели Moondream.")
         return
-    # Приёмник работает с единым контрактом намерения, а не с догадками
-    # по исходной расшифровке. arguments оставлен как fallback для старых модулей.
+    # Все команды приходят к приёмнику в одном версионированном формате.
     action = intent.get("action", "unknown")
-    args = intent.get("parameters") or intent.get("arguments") or {}
+    args = intent.get("parameters") or {}
     kind = intent.get("kind", "execute")
     confidence = float(intent.get("confidence", 0) or 0)
     target = intent.get("target") or {}
