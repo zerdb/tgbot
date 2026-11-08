@@ -41,7 +41,7 @@ def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
     return _ask_moondream(image_data, key, prompt)
 
 
-def open_screen_inspector(parent):
+def open_screen_inspector(parent, auto_capture=False):
     win = tk.Toplevel(parent)
     apply_modern_style(win)
     win.title("Zero Control — анализ экрана")
@@ -157,3 +157,6 @@ def open_screen_inspector(parent):
         ("✨ Анализировать", analyze),
     ]:
         ttk.Button(row, text=label, command=command).pack(side="left", padx=(0, 6))
+
+    if auto_capture:
+        win.after(150, capture)
