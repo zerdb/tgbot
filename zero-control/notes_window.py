@@ -337,7 +337,8 @@ def open_notes_window(parent):
                 source = path.resolve().as_uri()
                 media = f'<img src="{source}" alt="{filename}">'
             else:
-                media = f'<p class="file">📎 {filename}</p>'
+                file_url = path.resolve().as_uri()
+                media = f'<p class="file">📎 <a href="{file_url}">{filename}</a></p>'
             blocks.append(f'<figure>{media}<figcaption>{caption}</figcaption></figure>')
         body_html = html.escape(note["body"]).replace("\n", "<br>") 
         document = f"""<!doctype html>
@@ -355,10 +356,19 @@ figcaption{{margin-top:10px;color:#536078}} .file{{overflow-wrap:anywhere}}
         destination.write_text(document, encoding="utf-8")
         webbrowser.open(destination.as_uri())
 
-    note_list.bind("<<ListboxSelect>>", lambda _event: (
-        load_note(state["notes"][note_list.curselection()[0]]["id"])
-        if note_list.curselection() else None
-    ))
+    def on_note_select(_event=None):
+        selection = note_list.curselection()
+        if not selection:
+            return
+        target_id = state["notes"][selection[0]]["id"]
+        if target_id == state["note_id"]:
+            return
+        if state["note_id"]:
+            save_current()
+        load_note(target_id)
+        refresh_notes(target_id)
+
+    note_list.bind("<<ListboxSelect>>", on_note_select)
     attachment_list.bind("<<ListboxSelect>>", on_attachment_select)
     win.bind_all("<Control-v>", paste_image)
     win.bind_all("<Control-V>", paste_image)
