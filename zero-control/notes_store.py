@@ -5,6 +5,7 @@ import mimetypes
 import shutil
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,7 @@ DB_PATH = APP_DATA / "multimedia_notes.db"
 ATTACHMENTS_DIR = APP_DATA / "note_attachments"
 
 
+@contextmanager
 def _connect():
     APP_DATA.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH, timeout=15)
@@ -40,7 +42,14 @@ def _connect():
         )
     """)
     connection.commit()
-    return connection
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def list_notes():
