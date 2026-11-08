@@ -239,11 +239,11 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
             ).fetchall()
             return [Path(row[0]) for row in rows]
 
-        if query.startswith("__SIZE_EQ__:"):
-            target_size = int(query.split(":", 1)[1])
+        if query.startswith("__SIZE_RANGE__:"):
+            _, lower_size, upper_size = query.split(":", 2)
             rows = connection.execute(
-                "SELECT full_path FROM files WHERE size = ? LIMIT ?",
-                (target_size, MAX_RESULTS),
+                "SELECT full_path FROM files WHERE size >= ? AND size < ? LIMIT ?",
+                (int(lower_size), int(upper_size), MAX_RESULTS),
             ).fetchall()
             return [Path(row[0]) for row in rows]
 
