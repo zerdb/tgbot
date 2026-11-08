@@ -35,10 +35,12 @@ class KeyboardListener:
         start_recording: Callable[[str], None],
         promote_to_dictation: Callable[[], None],
         stop_recording: Callable[[], None],
+        is_dictation_active: Callable[[], bool],
     ) -> None:
         self._start_recording = start_recording
         self._promote_to_dictation = promote_to_dictation
         self._stop_recording = stop_recording
+        self._is_dictation_active = is_dictation_active
         self._events: queue.SimpleQueue[tuple[int, int]] = queue.SimpleQueue()
         self._pressed: set[int] = set()
         self._hook = None
@@ -88,24 +90,18 @@ class KeyboardListener:
                     self._stop_recording()
 
     def _stop_dictation_if_active(self) -> None:
-        """Оставлено отдельным callback, чтобы не переносить состояние записи сюда."""
-        if self._is_dictation_active is not None and self._is_dictation_active():
+        """Останавливает запись при отпускании Shift только в режиме диктовки."""
+        if self._is_dictation_active():
             self._stop_recording()
-
-    def set_dictation_state_callback(
-        self, is_dictation_active: Callable[[], bool]
-    ) -> None:
-        self._is_dictation_active = is_dictation_active
-
-    _is_dictation_active: Callable[[], bool] | None = None
 
     def install(self) -> None:
         """Устанавливает Windows hook. Вызывается после инициализации GUI."""
         self._user32 = ctypes.WinDLL("user32", use_last_error=True)
+        hook_proc_type = ctypes.WINFUNCTYPE(
+            ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+        )
         self._user32.SetWindowsHookExW.argtypes = (
-            ctypes.c_int, ctypes.WINFUNCTYPE(
-                ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
-            ), wintypes.HINSTANCE, wintypes.DWORD
+            ctypes.c_int, hook_proc_type, wintypes.HINSTANCE, wintypes.DWORD
         )
         self._user32.SetWindowsHookExW.restype = wintypes.HHOOK
         self._user32.CallNextHookEx.argtypes = (
@@ -115,9 +111,6 @@ class KeyboardListener:
         self._user32.UnhookWindowsHookEx.argtypes = (wintypes.HHOOK,)
         self._user32.UnhookWindowsHookEx.restype = wintypes.BOOL
 
-        hook_proc_type = ctypes.WINFUNCTYPE(
-            ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
-        )
         self._hook_proc = hook_proc_type(self._native_keyboard_event)
         self._hook = self._user32.SetWindowsHookExW(
             WH_KEYBOARD_LL, self._hook_proc, None, 0
