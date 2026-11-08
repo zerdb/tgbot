@@ -68,7 +68,7 @@ def show_screen_snapshot(parent):
     screen_w = max(640, win.winfo_screenwidth() - 100)
     screen_h = max(420, win.winfo_screenheight() - 160)
     screenshot.thumbnail((screen_w, screen_h), Image.Resampling.LANCZOS)
-    photo = ImageTk.PhotoImage(screenshot)
+    photo = ImageTk.PhotoImage(screenshot, master=win)
 
     container = ttk.Frame(win, padding=8)
     container.pack(fill="both", expand=True)
