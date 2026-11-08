@@ -56,7 +56,7 @@ def _parse_search_request(raw_query: str) -> dict:
 
     text = str(raw_query or "").casefold().replace("ё", "е").strip()
     now = datetime.now()
-    filters = {"extensions": None, "min_size": None, "max_size": None,
+    filters = {"extensions": None, "min_size": None, "max_size": None, "exact_size": None,
                "start": None, "end": None, "date_field": "mtime",
                "drive": None, "folder": None, "sort": None}
     if re.search(r"\b(?:последние|новые|недавние)\s+(?:документ\w*|файл\w*)\b", text):
@@ -166,7 +166,7 @@ def _parse_search_request(raw_query: str) -> dict:
         "девять": "9", "девяти": "9",
         "десять": "10", "десяти": "10",
     }
-    number_pattern = r"\b(больше|свыше|крупнее|меньше|до)\s+(" + "|".join(
+    number_pattern = r"\b(больше|свыше|крупнее|меньше|до|равен|равна|равно|равны|ровно)\s+(" + "|".join(
         sorted(number_words, key=len, reverse=True)
     ) + r")(?=\s+(?:байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|мегабайт\w*|гб|гбайт\w*|гигабайт\w*)\b)"
     text = re.sub(
@@ -176,7 +176,7 @@ def _parse_search_request(raw_query: str) -> dict:
     )
 
     # Размер: поддерживаются байты, КБ, МБ и ГБ.
-    size_re = re.search(r"\b(больше|свыше|крупнее|меньше|до)\s+(\d+(?:[.,]\d+)?)\s*(байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|мегабайт\w*|гб|гбайт\w*|гигабайт\w*)?\b", text)
+    size_re = re.search(r"\b(больше|свыше|крупнее|меньше|до|равен\w*|равн\w*|ровно)\s+(\d+(?:[.,]\d+)?)\s*(байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|мегабайт\w*|гб|гбайт\w*|гигабайт\w*)?\b", text)
     if size_re:
         amount = float(size_re.group(2).replace(",", "."))
         unit = (size_re.group(3) or "мб").casefold()
@@ -197,8 +197,8 @@ def _parse_search_request(raw_query: str) -> dict:
         filters["sort"] = "date_asc"
 
     # Служебные слова не должны становиться частью имени.
-    text = re.sub(r"\b(?:найди|поищи|найти|поискать|мне|все|всех|файл\w*|документ\w*|документы|за|на|больше|свыше|крупнее|меньше|до|мегабайт\w*|гигабайт\w*|мб|гб|байт\w*|созданн\w*|измененн\w*|изменен\w*|последние|новые|недавние|самые|большие|маленькие|старые)\b", " ", text)
-    stop_words = {"по", "для", "при", "это", "как", "или", "его", "ее", "их", "копию", "копия", "названию", "название", "имя", "имени", "формат", "формата", "формате", "форматов", "форматах", "типе", "виде"}
+    text = re.sub(r"\b(?:найди|поищи|найти|поискать|мне|все|всех|файл\w*|документ\w*|документы|за|на|больше|свыше|крупнее|меньше|до|равен\\w*|равн\\w*|ровно|мегабайт\w*|гигабайт\w*|мб|гб|байт\w*|созданн\w*|измененн\w*|изменен\w*|последние|новые|недавние|самые|большие|маленькие|старые)\b", " ", text)
+    stop_words = {"по", "для", "при", "это", "как", "или", "его", "ее", "их", "те", "которые", "который", "которая", "которое", "которых", "копию", "копия", "названию", "название", "имя", "имени", "формат", "формата", "формате", "форматов", "форматах", "типе", "виде"}
     raw_terms = [part for part in re.findall(r"[a-zа-яё0-9_.-]+", text) if (len(part) > 1 or part.isdigit()) and part not in stop_words]
     suffixes = ("иями", "ями", "ами", "ого", "ему", "ому", "ыми", "ими", "ную", "ую", "юю", "ая", "яя", "ое", "ее", "ые", "ие", "ый", "ий", "ой", "ым", "им", "ом", "ем", "ах", "ях", "ов", "ев", "ей", "ам", "ям", "ую", "ию", "ия", "ья", "ью", "а", "я", "ы", "и", "у", "ю", "е", "о")
     terms = []
@@ -237,7 +237,7 @@ def _search_worker(query: str, parent):
                 ]
                 matches = list(set.union(*result_sets)) if result_sets else []
             else:
-                empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else "__ALL_FILTERED__" if any((filters["start"], filters["end"], filters["drive"], filters["folder"], filters["min_size"], filters["max_size"])) else ""
+                empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else "__ALL_FILTERED__" if any((filters["start"], filters["end"], filters["drive"], filters["folder"], filters["min_size"], filters["max_size"], filters["exact_size"])) else ""
                 matches = refresh_and_search(empty_query, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
 
         filtered = []
