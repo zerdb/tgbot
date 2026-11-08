@@ -10,7 +10,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote
 
-from PIL import Image, ImageGrab
+from PIL import Image, ImageGrab, ImageTk
 
 from agent_core import get_camera_password
 from camera_window import DEFAULT_CAMERA
@@ -64,6 +64,8 @@ def open_notes_window(parent):
     attachment_list = tk.Listbox(attach_area, height=7, activestyle="none",
                                  font=("Segoe UI", 9), exportselection=False)
     attachment_list.pack(side="left", fill="both", expand=True)
+    preview_label = ttk.Label(attach_area, text="Выбери изображение", anchor="center", width=34)
+    preview_label.pack(side="right", fill="both", padx=(8, 0))
     attach_scroll = ttk.Scrollbar(attach_area, orient="vertical",
                                   command=attachment_list.yview)
     attach_scroll.pack(side="right", fill="y")
@@ -116,6 +118,8 @@ def open_notes_window(parent):
         body.delete("1.0", "end")
         caption_var.set("")
         attachment_list.delete(0, "end")
+        preview_label.configure(image="", text="Выбери изображение")
+        preview_label.image = None
 
     def load_note(note_id):
         note = notes_store.get_note(note_id)
@@ -131,6 +135,8 @@ def open_notes_window(parent):
         attachment_list.delete(0, "end")
         for item in state["attachments"]:
             attachment_list.insert("end", f"{item['filename']}  —  {item.get('caption', '')}")
+        preview_label.configure(image="", text="Выбери изображение")
+        preview_label.image = None
         title_entry.focus_set()
 
     def new_note():
@@ -261,6 +267,18 @@ def open_notes_window(parent):
         item = selected_attachment()
         state["selected_attachment"] = item["id"] if item else None
         caption_var.set(item.get("caption", "") if item else "")
+        preview_label.configure(image="", text="Файл без предпросмотра")
+        preview_label.image = None
+        if item and item.get("mime_type", "").startswith("image/"):
+            try:
+                with Image.open(item["path"]) as source:
+                    image = source.copy()
+                image.thumbnail((340, 280))
+                photo = ImageTk.PhotoImage(image, master=win)
+                preview_label.configure(image=photo, text="")
+                preview_label.image = photo
+            except Exception:
+                preview_label.configure(text="Не удалось открыть изображение")
 
     def save_caption():
         item = selected_attachment()
