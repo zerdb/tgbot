@@ -12,7 +12,7 @@ from urllib.parse import quote
 def _capture_camera_image() -> str:
     import cv2
     from agent_core import get_camera_password
-    url = os.getenv("GIGAAM_CAMERA_RTSP_URL", "").strip()
+    url = os.getenv("ZERO_CONTROL_CAMERA_RTSP_URL", os.getenv("GIGAAM_CAMERA_RTSP_URL", "")).strip()
     if not url:
         secret = get_camera_password()
         if not secret:
@@ -64,7 +64,7 @@ def _ask_moondream(image_data: str, api_key: str, question: str = None, strict_a
         headers={
             "X-Moondream-Auth": api_key,
             "Content-Type": "application/json",
-            "User-Agent": "GigaAMVoiceAssistant/1.0 (Windows; camera vision client)",
+            "User-Agent": "ZeroControl/1.0 (Windows; camera vision client)",
             "Accept": "application/json",
         },
         method="POST",
