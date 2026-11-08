@@ -44,8 +44,6 @@ from windows_actions import lock_computer, reboot_computer, open_downloads, open
 from installed_apps import open_installed_application
 from reminders import start_reminder_service, stop_reminder_service, add_reminder, add_note, complete_item_by_text, deliver_due_reminders
 from file_search import search_web, search_files, open_folder_by_name, start_file_search_ui
-from email_form import open_email_form
-from contact_form import open_contact_form
 from folder_organizer import open_folder_organizer
 from assistant_window import AssistantWindow, show_ai_answer
 from ai_chat import ask_ai
@@ -106,10 +104,9 @@ _ui_actions = queue.SimpleQueue()
 
 
 def update_ui_status(listening=None, recording=None):
+    """Queue status changes so Tkinter is only touched by its main thread."""
     if _ui is not None:
-        _ui.set_status(listening=listening)
-        if recording is not None:
-            _ui.set_recording_overlay(bool(recording), mode=recording if recording else None)
+        _ui_actions.put(("status", {"listening": listening, "recording": recording}))
 
 
 def configure_ffmpeg():
@@ -388,17 +385,30 @@ def normalize_command(text: str) -> str:
 
 
 def handle_command(text: str):
+    """Run semantic classification away from Tk's event loop when called by a GUI control."""
+    if _ui is not None and _ui_thread_id == threading.get_ident():
+        threading.Thread(
+            target=_handle_command_worker,
+            args=(text,),
+            daemon=True,
+            name="command-handler",
+        ).start()
+        return
+    _handle_command_worker(text)
+
+
+def _handle_command_worker(text: str):
     """Единая точка входа: сразу показывает статус, затем определяет намерение."""
     print(f"Распознана команда: {text}")
     # Команда уже распознана: не ждём ответа классификатора, чтобы показать индикатор.
     if _ui is not None:
-        _ui.set_busy_overlay("Обрабатываю команду…")
+        _ui_actions.put(("busy", "Обрабатываю команду…"))
     try:
         from intent_router import understand_command
         intent = understand_command(text)
     except Exception as exc:
         if _ui is not None:
-            _ui.set_busy_overlay(None)
+            _ui_actions.put(("busy", None))
         error_text = str(exc)
         print(f"Не удалось определить команду: {error_text}")
         if "HTTP 402" in error_text:
@@ -427,21 +437,21 @@ def handle_command(text: str):
     )
     if kind == "clarify":
         if _ui is not None:
-            _ui.set_busy_overlay(None)
+            _ui_actions.put(("busy", None))
             clarification = str(intent.get("clarification") or "Уточни, пожалуйста, что именно нужно сделать.")
-            show_ai_answer(_ui.root, "Нужно уточнение", clarification, None)
+            _ui_actions.put(("show_ai_answer", ("Нужно уточнение", clarification, None)))
         else:
             print(str(intent.get("clarification") or "Нужно уточнить задачу."), flush=True)
         return
     if kind == "respond" and action != "ai_chat":
         question = str(args.get("question") or intent.get("response") or text).strip()
         if _ui is not None:
-            _ui.set_busy_overlay("Жду ответ ИИ…")
+            _ui_actions.put(("busy", "Жду ответ ИИ…"))
         _ui_actions.put(("ai_chat", question))
         return
     if action == "unknown" or confidence < 0.55:
         if _ui is not None:
-            _ui.set_busy_overlay(None)
+            _ui_actions.put(("busy", None))
         print("Не удалось надёжно определить намерение. Сформулируй цель или уточни место действия.")
         return
     print(f"Понял намерение: {action} (уверенность {confidence:.2f})")
@@ -450,7 +460,7 @@ def handle_command(text: str):
     if action == "ai_chat":
         question = str(args.get("question") or text).strip()
         if _ui is not None:
-            _ui.set_busy_overlay("Жду ответ ИИ…")
+            _ui_actions.put(("busy", "Жду ответ ИИ…"))
         _ui_actions.put(("ai_chat", question))
     elif action in ("add_contact", "open_contacts"):
         print("[GUI] Открываю общую адресную книгу.", flush=True)
@@ -504,16 +514,16 @@ def handle_command(text: str):
     elif action == "complete_item":
         if not complete_item_by_text(str(args.get("item_text") or "")):
             print("Не нашёл подходящую активную запись. Открой заметки и дела, чтобы выбрать её.")
-    elif action == "organize_folder": open_folder_organizer(parent)
+    elif action == "organize_folder": _ui_actions.put(("organize_folder", None))
     elif action == "search_web": search_web(str(args.get("query") or text))
     elif action == "open_folder":
         if _ui is not None:
-            _ui.set_busy_overlay("Ищу папку…")
+            _ui_actions.put(("busy", "Ищу папку…"))
         if open_folder_by_name(str(args.get("folder") or text), parent) and _ui is not None:
-            _ui.set_busy_overlay(None)
+            _ui_actions.put(("busy", None))
     elif action == "search_files":
         if _ui is not None:
-            _ui.set_busy_overlay("Ищу файлы…")
+            _ui_actions.put(("busy", "Ищу файлы…"))
         search_files(
             str(args.get("query") or text),
             parent,
@@ -522,7 +532,7 @@ def handle_command(text: str):
     else:
         print("Эта операция пока не подключена.")
     if not keep_busy and _ui is not None:
-        _ui.set_busy_overlay(None)
+        _ui_actions.put(("busy", None))
 
 def transcribe_and_execute(audio_data: np.ndarray):
     if not _transcription_lock.acquire(blocking=False):
@@ -594,7 +604,7 @@ def _mail_reader_worker():
 
 
 def main():
-    global _ui, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
+    global _ui, _ui_thread_id, imageio_ffmpeg, keyboard, np, pyperclip, sd, sf, ImageGrab, audio, torch, AutoModel
 
     # Заставка уже показана до импорта модулей приложения.
     # Долгая загрузка проходит за заставкой; главное окно пока не открываем.
@@ -625,6 +635,7 @@ def main():
         on_open_other=lambda: open_camera_viewer(_ui.root),
         on_open_notes=lambda: open_notes_window(_ui.root),
     )
+    _ui_thread_id = threading.get_ident()
     # Сначала создаём и отображаем главное окно, затем убираем заставку —
     # между ними не должно быть пустой паузы.
     _ui.root.update_idletasks()
@@ -663,7 +674,20 @@ def main():
 
             print(f"[GUI] Получено действие из очереди: {ui_action}", flush=True)
             try:
-                if ui_action == "add_contact":
+                if ui_action == "busy":
+                    _ui.set_busy_overlay(value)
+                elif ui_action == "status":
+                    status = value if isinstance(value, dict) else {}
+                    _ui.set_status(listening=status.get("listening"))
+                    recording = status.get("recording")
+                    if recording is not None:
+                        _ui.set_recording_overlay(bool(recording), mode=recording if recording else None)
+                elif ui_action == "show_ai_answer":
+                    question, answer, error = value
+                    show_ai_answer(_ui.root, question, answer, error)
+                elif ui_action == "organize_folder":
+                    open_folder_organizer(_ui.root)
+                elif ui_action == "add_contact":
                     print("[GUI] Открываю раздел контактов почтового клиента.", flush=True)
                     open_mail_client(_ui.root, initial_tab="contacts", start_new_contact=bool(value))
                 elif ui_action == "email_compose":
