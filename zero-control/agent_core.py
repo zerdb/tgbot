@@ -94,6 +94,25 @@ def get_secret_env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
+def get_mail_password() -> str:
+    """Read the mail app password from Windows Credential Manager."""
+    try:
+        import keyring
+        return keyring.get_password("ZeroControl", "mail_password") or keyring.get_password("GigaAMVoiceAssistant", "mail_password") or ""
+    except Exception as exc:
+        print(f"Не удалось прочитать пароль почты: {exc}")
+        return ""
+
+
+def set_mail_password(password: str) -> None:
+    """Store the mail app password in Windows Credential Manager."""
+    password = str(password or "")
+    if not password:
+        raise ValueError("Пароль почты не может быть пустым.")
+    import keyring
+    keyring.set_password("ZeroControl", "mail_password", password)
+
+
 def get_groq_api_key() -> str:
     """Read Groq API key from Windows Credential Manager."""
     try:
