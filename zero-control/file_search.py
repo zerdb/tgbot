@@ -513,8 +513,8 @@ def export_file_results(results, query: str, export_format: str) -> Path:
             for row in rows:
                 display_row = list(row)
                 display_row[2] = display_row[2].strftime("%d.%m.%Y %H:%M:%S") if display_row[2] else "—"
-                safe_values = [str(value).replace("\\t", " ").replace("\\r", " ").replace("\\n", " ") for value in display_row]
-                file.write("\\t".join(safe_values) + "\\n")
+                safe_values = [str(value).replace("\t", " ").replace("\r", " ").replace("\n", " ") for value in display_row]
+                file.write("\t".join(safe_values) + "\n")
 
     if export_format == "text":
         subprocess.Popen(["notepad.exe", str(output_path)])
