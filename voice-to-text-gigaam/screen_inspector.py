@@ -44,7 +44,7 @@ def _ask_screen_vision(image_data: str, question: str, ocr_text: str) -> str:
 def open_screen_inspector(parent):
     win = tk.Toplevel(parent)
     apply_modern_style(win)
-    win.title("GigaAM — анализ экрана")
+    win.title("Zero Control — анализ экрана")
     win.geometry("920x700")
     win.minsize(680, 500)
     center_window(win, parent)
