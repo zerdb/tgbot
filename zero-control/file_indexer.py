@@ -232,7 +232,14 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
             if char.isalnum()
         )
         if not needle:
-            return []
+            # Пустая строка означает запрос только по фильтрам: типу, дате,
+            # размеру, диску или расположению. Возвращаем ограниченный набор
+            # индексированных файлов, фильтрация выполняется в file_search.py.
+            rows = connection.execute(
+                "SELECT full_path FROM files ORDER BY name COLLATE NOCASE LIMIT ?",
+                (MAX_RESULTS,),
+            ).fetchall()
+            return [Path(row[0]) for row in rows]
 
         total = connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]
         report(f"В базе SQLite записей: {total:,}. Ищу нормализованную строку «{needle}»...")
