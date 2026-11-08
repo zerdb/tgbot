@@ -364,7 +364,8 @@ def _understand_command_rules(user_text: str) -> dict:
         return {"action": "search_documents", "confidence": 1.0, "arguments": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "arguments": {"question": user_text.strip()}}
-    return {"action": "unknown", "confidence": 0.0, "arguments": {}}\n
+    return {"action": "unknown", "confidence": 0.0, "arguments": {}}
+
 
 def understand_command(user_text: str) -> dict:
     """Return a versioned intent envelope for the execution receiver.
