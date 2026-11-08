@@ -28,7 +28,8 @@ def load_address_book() -> dict[str, dict[str, str]]:
         return {}
     result = {}
     migrated = False
-    for raw_name, value in data.items():n        name = str(raw_name).strip()
+    for raw_name, value in data.items():
+        name = str(raw_name).strip()
         if not name:
             continue
         if isinstance(value, dict):
