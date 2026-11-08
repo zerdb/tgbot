@@ -56,7 +56,7 @@ def _parse_search_request(raw_query: str) -> dict:
 
     text = str(raw_query or "").casefold().replace("ё", "е").strip()
     now = datetime.now()
-    filters = {"extensions": None, "min_size": None, "max_size": None, "exact_size": None,
+    filters = {"extensions": None, "min_size": None, "max_size": None, "exact_size": None, "exact_size_upper": None,
                "start": None, "end": None, "date_field": "mtime",
                "drive": None, "folder": None, "sort": None}
     if re.search(r"\b(?:последние|новые|недавние)\s+(?:документ\w*|файл\w*)\b", text):
@@ -183,7 +183,9 @@ def _parse_search_request(raw_query: str) -> dict:
         multiplier = 1 if unit.startswith(("б", "байт")) else 1024 if unit.startswith("к") else 1024**3 if unit.startswith(("г", "гига")) else 1024**2
         size = int(amount * multiplier)
         if size_re.group(1).startswith(("равн", "ровно")):
+            # «7 ГБ» означает диапазон от 7 ГБ включительно до 8 ГБ.
             filters["exact_size"] = size
+            filters["exact_size_upper"] = size + multiplier
         elif size_re.group(1) in ("больше", "свыше", "крупнее"):
             filters["min_size"] = size
         else:
@@ -234,7 +236,7 @@ def _search_worker(query: str, parent):
         else:
             if filters["exact_size"] is not None:
                 matches = refresh_and_search(
-                    "__SIZE_EQ__:" + str(filters["exact_size"]),
+                    "__SIZE_RANGE__:" + str(filters["exact_size"]) + ":" + str(filters["exact_size_upper"]),
                     report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
                 )
             elif filters["extensions"]:
@@ -273,7 +275,7 @@ def _search_worker(query: str, parent):
                     continue
                 if filters["max_size"] is not None and size >= filters["max_size"]:
                     continue
-                if filters["exact_size"] is not None and size != filters["exact_size"]:
+                if filters["exact_size"] is not None and not (filters["exact_size"] <= size < filters["exact_size_upper"]):
                     continue
                 if filters["start"] and datetime.fromtimestamp(timestamp) < filters["start"]:
                     continue
