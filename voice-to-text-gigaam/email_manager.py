@@ -8,8 +8,9 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from pathlib import Path
+from agent_core import APP_DATA
 
-ADDRESS_BOOK_PATH = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "GigaAMVoiceAssistant" / "address_book.json"
+ADDRESS_BOOK_PATH = APP_DATA / "address_book.json"
 _pending_email_subject: str | None = None
 
 
@@ -66,11 +67,11 @@ def list_email_contacts():
 def send_email(recipient: str, subject: str, body: str = "", attachments: list[str] | None = None):
     """Send an email with optional local-file attachments. Raises on failure."""
     from agent_core import load_settings
-    login = os.getenv("GIGAAM_MAIL_LOGIN", load_settings()["mail_login"])
-    password = os.getenv("GIGAAM_MAIL_PASSWORD")
+    login = os.getenv("ZERO_CONTROL_MAIL_LOGIN", os.getenv("GIGAAM_MAIL_LOGIN", load_settings()["mail_login"]))
+    password = os.getenv("ZERO_CONTROL_MAIL_PASSWORD", os.getenv("ZERO_CONTROL_MAIL_PASSWORD"))
     if not password:
         raise RuntimeError(
-            "Не задан пароль приложения. Установите переменную GIGAAM_MAIL_PASSWORD "
+            "Не задан пароль приложения. Установите переменную ZERO_CONTROL_MAIL_PASSWORD "
             "и перезапустите помощника."
         )
     if not re.fullmatch(r"[\w.+-]+@[\w.-]+\.[a-zа-я]{2,}", recipient.strip(), re.IGNORECASE):
