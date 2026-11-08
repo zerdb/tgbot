@@ -399,8 +399,6 @@ def _understand_command_rules(user_text: str) -> dict:
         return {"action": "open_assistant_settings", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(прочитай|проверь|покажи)\b.*\b(новые|непрочитанные)\b.*\b(письма|почту)\b", normalized):
         return {"action": "read_unread_mail", "confidence": 1.0, "parameters": {}}
-    if re.search(r"\b(найди|поищи|поиск)\b.*\b(в документах|в содержимом|в файлах)\b", normalized):
-        return {"action": "search_documents", "confidence": 1.0, "parameters": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "parameters": {"question": user_text.strip()}}
     return {"action": "unknown", "confidence": 0.0, "parameters": {}}
