@@ -8,6 +8,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from pathlib import Path
+import certifi
 from agent_core import APP_DATA
 
 ADDRESS_BOOK_PATH = APP_DATA / "address_book.json"
@@ -27,8 +28,7 @@ def load_address_book() -> dict[str, dict[str, str]]:
         return {}
     result = {}
     migrated = False
-    for raw_name, value in data.items():
-        name = str(raw_name).strip()
+    for raw_name, value in data.items():n        name = str(raw_name).strip()
         if not name:
             continue
         if isinstance(value, dict):
@@ -94,7 +94,8 @@ def send_email(recipient: str, subject: str, body: str = "", attachments: list[s
         mime_type, _ = mimetypes.guess_type(path.name)
         maintype, subtype = (mime_type or "application/octet-stream").split("/", 1)
         message.add_attachment(data, maintype=maintype, subtype=subtype, filename=path.name)
-    context = ssl.create_default_context()
+    # Use the maintained Mozilla CA bundle shipped with certifi; keep verification enabled.
+    context = ssl.create_default_context(cafile=certifi.where())
     with smtplib.SMTP("smtp.mail.ru", 587, timeout=30) as server:
         server.ehlo()
         server.starttls(context=context)
