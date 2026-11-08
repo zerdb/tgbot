@@ -316,7 +316,7 @@ def _understand_command_rules(user_text: str) -> dict:
         return {"action": "reminder", "confidence": 1.0, "parameters": {"reminder_text": user_text.strip()}}
 
     # Почта: создание/отправка письма открывает форму; само отправление только после кнопки пользователя.
-    if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт|письм|email|емейл)", normalized):
+    if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт\w*|письм\w*|email|емейл)", normalized):
         attach = bool(re.search(r"\b(файл|файлы|документ|документы|вложени)", normalized))
         recipient_name = ""
         # Получатель может стоять как после слова «почту», так и перед ним:
