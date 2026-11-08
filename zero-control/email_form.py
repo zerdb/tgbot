@@ -80,10 +80,12 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
         recipient = ttk.Combobox(outer, textvariable=contact_var, values=contact_names, state="readonly")
         recipient.pack(fill="x", pady=(3, 8))
         selected_address = {"value": ""}
+        manual_address_var = tk.StringVar(master=root)
 
         def select_contact(_event=None):
             index = recipient.current()
             selected_address["value"] = book_items[index][1].strip() if 0 <= index < len(book_items) else ""
+            manual_address_var.set(selected_address["value"])
 
         recipient.bind("<<ComboboxSelected>>", select_contact)
 
@@ -132,8 +134,7 @@ def open_email_form(initial_subject: str = "", parent=None, add_files_on_open: b
         else:
             print("[Почта] Имя адресата не передано из распознавателя команды.", flush=True)
 
-        ttk.Label(outer, text="Или введите email вручную").pack(anchor="w")
-        manual_address_var = tk.StringVar(master=root)
+        ttk.Label(outer, text="Кому").pack(anchor="w")
         ttk.Entry(outer, textvariable=manual_address_var).pack(fill="x", pady=(3, 10))
 
         ttk.Label(outer, text="Тема").pack(anchor="w")
