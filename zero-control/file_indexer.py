@@ -283,8 +283,10 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
         report(f"В базе SQLite записей: {total:,}. Ищу нормализованную строку «{needle}»...")
 
         rows = []
+        fts_query_failed = False
         # Trigram FTS is indexed and finds a substring without scanning the
-        # entire SQLite table. For 1-2 character queries use the safe fallback.
+        # entire SQLite table. For 1-2 character queries, or SQLite builds
+        # without trigram FTS support, use the compatibility fallback.
         if len(needle) >= 3:
             try:
                 fts_query = '"' + needle.replace('"', '""') + '"'
@@ -294,9 +296,9 @@ def refresh_and_search(query: str, report: Callable[[str], None] | None = None) 
                     (fts_query, MAX_RESULTS),
                 ).fetchall()
             except sqlite3.OperationalError:
-                rows = []
+                fts_query_failed = True
 
-        if not rows and len(needle) < 3:
+        if not rows and (len(needle) < 3 or fts_query_failed):
             rows = connection.execute(
                 "SELECT full_path FROM files "
                 "WHERE instr(SEARCHKEY(name), ?) > 0 "
