@@ -61,6 +61,7 @@ def _parse_search_request(raw_query: str) -> dict:
                "drive": None, "folder": None, "sort": None}
     ext_groups = [
         (r"\b(?:таблиц\w*\s+excel|excel|эксель)\b", {".xls", ".xlsx"}),
+        (r"\b(?:документ\w*|файл\w*)\b", {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt"}),
         (r"\b(?:документ\w*\s+word|word|ворд)\b", {".doc", ".docx"}),
         (r"\b(?:презентаци\w*)\b", {".ppt", ".pptx"}),
         (r"\b(?:фотографи\w*\s+jpg|картинк\w*\s+jpg|jpg|jpeg)\b", {".jpg", ".jpeg"}),
@@ -135,6 +136,16 @@ def _parse_search_request(raw_query: str) -> dict:
                 text = text[:m.start()] + " " + text[m.end():]
                 break
 
+    # Разговорные единицы без числового значения означают один гигабайт/мегабайт.
+    word_size = re.search(r"\b(больше|свыше|крупнее|меньше|до)\s+(гигабайт\w*|гиг\w*|мегабайт\w*|мег\w*)\b", text)
+    if word_size:
+        value = 1024**3 if word_size.group(2).startswith(("гига", "гиг")) else 1024**2
+        if word_size.group(1) in ("больше", "свыше", "крупнее"):
+            filters["min_size"] = value
+        else:
+            filters["max_size"] = value
+        text = text[:word_size.start()] + " " + text[word_size.end():]
+
     # Размер: поддерживаются байты, КБ, МБ и ГБ.
     size_re = re.search(r"\b(больше|свыше|крупнее|меньше|до)\s+(\d+(?:[.,]\d+)?)\s*(байт\w*|б|кб|кбайт\w*|мб|мбайт\w*|гб|гбайт\w*)?\b", text)
     if size_re:
@@ -158,11 +169,13 @@ def _parse_search_request(raw_query: str) -> dict:
 
     # Служебные слова не должны становиться частью имени.
     text = re.sub(r"\b(?:найди|поищи|найти|поискать|мне|все|всех|файл\w*|документ\w*|документы|за|на|больше|свыше|крупнее|меньше|до|мегабайт\w*|гигабайт\w*|мб|гб|байт\w*|созданн\w*|измененн\w*|изменен\w*|последние|новые|недавние|самые|большие|маленькие|старые)\b", " ", text)
-    terms = [part for part in re.findall(r"[a-zа-яё0-9_.-]+", text) if len(part) > 1 or part.isdigit()]
+    stop_words = {"по", "для", "при", "это", "как", "или", "его", "ее", "их", "копию", "копия", "названию", "название", "имя", "имени"}
+    terms = [part for part in re.findall(r"[a-zа-яё0-9_.-]+", text) if (len(part) > 1 or part.isdigit()) and part not in stop_words]
     return {"terms": terms, "filters": filters}
 
 
 def _search_worker(query: str, parent):
+    from datetime import datetime
     parsed = _parse_search_request(query)
     filters = parsed["filters"]
     terms = parsed["terms"]
@@ -178,7 +191,8 @@ def _search_worker(query: str, parent):
             result_sets = [set(refresh_and_search(term, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))) for term in terms]
             matches = list(set.intersection(*result_sets)) if result_sets else []
         else:
-            matches = refresh_and_search("", report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
+            empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else ""
+            matches = refresh_and_search(empty_query, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
 
         filtered = []
         for path in matches:
