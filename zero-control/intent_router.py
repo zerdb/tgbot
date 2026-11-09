@@ -444,7 +444,7 @@ def _understand_command_rules(user_text: str) -> dict:
             recipient = (recipient_match.group(1) or recipient_match.group(2) or "").strip()
             recipient = re.sub(r"^(?:контакт|человеку|получателю)\s+", "", recipient, flags=re.IGNORECASE)
             recipient = re.sub(r"\b(?:пожалуйста|срочно|мне)\b", " ", recipient, flags=re.IGNORECASE)
-            recipient = re.sub(r"\s+", " ", recipient).strip(" .,!?:;«»\\"")
+            recipient = re.sub(r"\s+", " ", recipient).strip(' .,!?:;«»"')
         if recipient:
             return {"action": "email_compose", "confidence": 1.0, "parameters": {"attach_copied_files": True, "recipient_name": recipient}}
     # Почта: создание/отправка письма открывает форму; само отправление только после кнопки пользователя.
