@@ -46,6 +46,7 @@ class AssistantWindow:
         self._set_application_icon()
         self.root.update_idletasks()
         self._apply_windows_taskbar_style()
+        self.root.after(250, self._apply_windows_taskbar_style)
         self._start_tray_icon()
 
     def _build_styles(self):
