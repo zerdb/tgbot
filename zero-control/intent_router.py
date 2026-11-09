@@ -296,6 +296,15 @@ def _understand_command(user_text: str) -> dict:
 
 def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
+    # Убираем речевые вводные и нейтральный контекст, не меняющие намерение.
+    normalized = re.sub(
+        r"^(?:(?:пожалуйста|слушай|будь доб(?:р|ра))\s*[,!]?\s*)+",
+        "",
+        normalized,
+    )
+    normalized = re.sub(r"^мне нужно\s*,?\s*(?:чтобы ты\s+)?", "", normalized)
+    normalized = re.sub(r"[,!]?\s+пожалуйста$", "", normalized)
+    normalized = re.sub(r"\s+(?:на компьютере|на пк)$", "", normalized).strip(" .,!?:;")
 
     # Снимок текущего экрана — локальная команда. Учитываем варианты ASR:
     # «скрин», «скриншот», «снепшот», «фото/снимок монитора» и разные порядки слов.
@@ -349,18 +358,29 @@ def _understand_command_rules(user_text: str) -> dict:
     if re.search(r"\b(добав\w*|создай\w*|запиш\w*|внес\w*)\b", normalized) and re.search(r"\b(контакт\w*|адресн\w* книг\w*)\b", normalized):
         return {"action": "add_contact", "confidence": 1.0, "parameters": {}}
 
+    # Разделяем системные настройки Windows и настройки Zero Control.
+    settings_request = bool(re.search(r"\b(настройк\w*|параметр\w*)\b", normalized))
+    if settings_request and re.search(r"\b(windows|систем\w*|компьютер\w*)\b", normalized):
+        return {"action": "open_settings", "confidence": 1.0, "parameters": {}}
+    if settings_request and re.search(r"\b(zero\s*control|помощник\w*|ассистент\w*)\b", normalized):
+        return {"action": "open_assistant_settings", "confidence": 1.0, "parameters": {}}
+
     # Управление списком дел: формулировки «поставь/создай/добавь напоминание».
     if re.search(r"\b(напомн\w*|создай\w*|добавь\w*|поставь\w*|установи\w*)\b", normalized) and re.search(r"\b(напоминан\w*|напомни\w*)\b", normalized):
         return {"action": "reminder", "confidence": 1.0, "parameters": {"reminder_text": user_text.strip()}}
     if re.search(r"\b(открой\w*|покажи\w*|выведи\w*|отобрази\w*)\b", normalized) and re.search(r"\b(список дел|напоминан\w*|заметк\w*|задач\w*)\b", normalized):
         return {"action": "open_reminders", "confidence": 1.0, "parameters": {}}
 
-    # Заметки из произнесённого текста. Буфер обмена обрабатывается отдельным действием.
-    spoken_note = re.search(r"\b(запомни|запиши|сохрани|добавь|создай)\b\s+(.+?)\s+(?:как заметку|в заметки|в виде заметки)$", normalized)
-    if spoken_note:
-        return {"action": "add_note", "confidence": 1.0, "parameters": {"note_text": spoken_note.group(2).strip()}}
+    # Буфер обмена проверяем раньше общей конструкции «... как заметку».
     if re.search(r"\b(сохрани|сохранить|запиши|записать)\b", normalized) and re.search(r"\b(буфер обмена|содержимое буфера)\b", normalized) and re.search(r"\b(заметк\w*)\b", normalized):
         return {"action": "save_note", "confidence": 1.0, "parameters": {}}
+
+    # Заметки из произнесённого текста.
+    spoken_note = re.search(r"\b(запомни|запиши|сохрани|добавь|создай)\b\s+(.+?)\s+(?:как заметку|в заметки|в виде заметки)$", normalized)
+    if spoken_note:
+        note_text = spoken_note.group(2).strip(" .,!?:;")
+        if note_text:
+            return {"action": "add_note", "confidence": 1.0, "parameters": {"note_text": note_text}}
 
     # Снимок/скриншот без обязательного упоминания слова «экран».
     if re.search(r"\b(сделай|сделать|создай|создать|сними|снять|получи|получить|нужен|нужна|нужно)\b", normalized) and re.search(r"\b(скриншот\w*|скрин\w*|снепшот\w*|snapshot\w*|снимок экрана)\b", normalized):
@@ -396,7 +416,11 @@ def _understand_command_rules(user_text: str) -> dict:
         return {"action": "organize_folder", "confidence": 1.0, "parameters": {}}
 
     # Голосовое управление общей системой заметок и дел.
-    done_match = re.search(r"\b(отметь|пометь|закрой)\b\s+(.+?)\s+(?:выполненным|выполненной|готовым|сделанным)$", normalized)
+    done_match = re.search(
+        r"\b(отметь|пометь|закрой)\b\s+(.+?)\s+"
+        r"(?:выполненным|выполненной|готовым|готовой|сделанным|сделанной|завершенным|завершенной)$",
+        normalized,
+    )
     if done_match:
         return {"action": "complete_item", "confidence": 1.0, "parameters": {"item_text": done_match.group(2).strip()}}
     note_match = re.match(r"^(?:запомни|сохрани заметку|добавь заметку|добавь запись)\s+(.+)$", normalized)
@@ -508,8 +532,8 @@ def _understand_command_rules(user_text: str) -> dict:
     # Любое другое название приложения ищем локально в меню «Пуск», на рабочем столе
     # и среди зарегистрированных приложений Windows — без обращения к языковой модели.
     open_match = re.match(
-        r"^\s*(?:пожалуйста\s+)?(?:открой|открыть|запусти|запустить|включи|включить)\s+(.+?)\s*$",
-        user_text.strip(),
+        r"^\s*(?:открой|открыть|запусти|запустить|включи|включить)\s+(.+?)\s*$",
+        normalized,
         flags=re.IGNORECASE,
     )
     if open_match:
