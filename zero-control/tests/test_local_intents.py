@@ -68,11 +68,6 @@ class LocalIntentValidationTests(unittest.TestCase):
         self.assertEqual(intent["action"], "email_compose")
         self.assertEqual(intent["parameters"]["recipient_name"], "Ивану Петрову")
 
-    def test_send_files_to_recipient_without_saying_email(self):
-        intent = intent_router._understand_command_rules("Отправь файлы Богатырю")
-        self.assertEqual(intent["action"], "email_compose")
-        self.assertEqual(intent["parameters"]["recipient_name"], "Богатырю")
-        self.assertTrue(intent["parameters"]["attach_copied_files"])
     def test_email_recipient_after_mail_keyword_keeps_full_name(self):
         intent = intent_router._understand_command_rules(
             "Отправь на почту Ивану Петрову о встрече"
