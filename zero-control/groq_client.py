@@ -3,16 +3,17 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.error
-import urllib.request
 import ssl
 import time
+import urllib.error
+import urllib.request
 
 ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b"
 
 
-def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90):
+def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90,
+         response_format=None):
     """Call Groq Cloud using its OpenAI-compatible chat-completions API."""
     from agent_core import get_groq_api_key, load_settings
 
@@ -27,8 +28,21 @@ def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90):
     if not selected_model:
         raise RuntimeError("Не выбрана модель Groq.")
 
-    payload = {"model": selected_model, "temperature": temperature,
-               "max_tokens": max_tokens, "messages": messages}
+    # Groq пометил max_tokens устаревшим в пользу max_completion_tokens. Для GPT-OSS
+    # отдельно ограничиваем reasoning, чтобы короткая классификация
+    # не расходовала весь бюджет генерации на внутренние рассуждения.
+    payload = {
+        "model": selected_model,
+        "temperature": temperature,
+        "max_completion_tokens": max_tokens,
+        "messages": messages,
+    }
+    if selected_model.startswith(("openai/gpt-oss-20b", "openai/gpt-oss-120b")):
+        payload["reasoning_effort"] = "low"
+        payload["include_reasoning"] = False
+    if response_format is not None:
+        payload["response_format"] = response_format
+
     request = urllib.request.Request(
         ENDPOINT, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
@@ -57,10 +71,28 @@ def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90):
             raise RuntimeError("Groq недоступен: %s" % exc) from exc
 
     choices = data.get("choices") or []
-    content = (choices[0].get("message") or {}).get("content") if choices else None
+    choice = choices[0] if choices else {}
+    message = choice.get("message") or {}
+    content = message.get("content")
     if isinstance(content, list):
-        content = "\n".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        content = "\n".join(
+            str(part.get("text", "")) for part in content if isinstance(part, dict)
+        )
     answer = str(content or "").strip()
     if not answer:
-        raise RuntimeError("Groq вернул пустой ответ.")
+        usage = data.get("usage") or {}
+        diagnostic = {
+            "model": data.get("model") or selected_model,
+            "finish_reason": choice.get("finish_reason"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "message_fields": sorted(message.keys()),
+        }
+        refusal = message.get("refusal")
+        if refusal:
+            diagnostic["refusal"] = str(refusal)[:300]
+        raise RuntimeError(
+            "Groq вернул пустой текст; диагностика: "
+            + json.dumps(diagnostic, ensure_ascii=False)
+        )
     return answer
