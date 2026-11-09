@@ -298,10 +298,11 @@ def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
     # Убираем речевые вводные и нейтральный контекст, не меняющие намерение.
     normalized = re.sub(
-        r"^(?:(?:пожалуйста|слушай|будь доб(?:р|ра))\s*[,!]?\s*|мне нужно\s*,?\s*чтобы ты\s+)",
+        r"^(?:(?:пожалуйста|слушай|будь доб(?:р|ра))\s*[,!]?\s*)+",
         "",
         normalized,
     )
+    normalized = re.sub(r"^мне нужно\s*,?\s*(?:чтобы ты\s+)?", "", normalized)
     normalized = re.sub(r"[,!]?\s+пожалуйста$", "", normalized)
     normalized = re.sub(r"\s+(?:на компьютере|на пк)$", "", normalized).strip(" .,!?:;")
 
