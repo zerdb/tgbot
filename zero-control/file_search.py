@@ -588,6 +588,16 @@ def export_file_results(results, query: str, export_format: str) -> Path:
     return output_path
 
 
+def _report_search_progress(message: str) -> None:
+    """Report worker progress to the console and the Tk overlay."""
+    print(f"[Поиск файлов] {message}", flush=True)
+    if _busy_callback:
+        try:
+            _busy_callback(message)
+        except Exception:
+            pass
+
+
 def _search_worker(query: str, parent, export_format=None):
     from datetime import datetime
     search_started = time.perf_counter()
@@ -622,7 +632,7 @@ def _search_worker(query: str, parent, export_format=None):
             db_started = time.perf_counter()
             term_results = refresh_and_search(
                 unique_terms,
-                report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+                report=_report_search_progress,
             )
             print(
                 f"[Поиск файлов][Тайминг] Пакетный поиск {len(unique_terms)} вариантов: "
@@ -652,7 +662,7 @@ def _search_worker(query: str, parent, export_format=None):
                         ))
                         semantic_results = refresh_and_search(
                             semantic_terms,
-                            report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+                            report=_report_search_progress,
                         )
                         group_results = [
                             set().union(*(set(semantic_results.get(term, [])) for term in group))
@@ -695,17 +705,17 @@ def _search_worker(query: str, parent, export_format=None):
             if filters["exact_size"] is not None:
                 matches = refresh_and_search(
                     "__SIZE_RANGE__:" + str(filters["exact_size"]) + ":" + str(filters["exact_size_upper"]),
-                    report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+                    report=_report_search_progress,
                 )
             elif filters["extensions"]:
                 result_sets = [
-                    set(refresh_and_search("__EXT__:" + ext, report=lambda message: print(f"[Поиск файлов] {message}", flush=True)))
+                    set(refresh_and_search("__EXT__:" + ext, report=_report_search_progress))
                     for ext in sorted(filters["extensions"])
                 ]
                 matches = list(set.union(*result_sets)) if result_sets else []
             else:
                 empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else "__ALL_FILTERED__" if any((filters["start"], filters["end"], filters["drive"], filters["folder"], filters["min_size"], filters["max_size"], filters["exact_size"])) else ""
-                matches = refresh_and_search(empty_query, report=lambda message: print(f"[Поиск файлов] {message}", flush=True))
+                matches = refresh_and_search(empty_query, report=_report_search_progress)
 
         filter_started = time.perf_counter()
         filtered = []

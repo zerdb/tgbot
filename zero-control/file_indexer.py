@@ -23,6 +23,43 @@ BATCH_SIZE = 50_000
 MAX_RESULTS = 1000
 
 
+_LATIN_TO_CYRILLIC = str.maketrans({
+    "a": "а", "b": "б", "c": "с", "d": "д", "e": "е", "f": "ф",
+    "g": "г", "h": "х", "i": "и", "j": "ж", "k": "к", "l": "л",
+    "m": "м", "n": "н", "o": "о", "p": "п", "q": "к", "r": "р",
+    "s": "с", "t": "т", "u": "у", "v": "в", "w": "в", "x": "х",
+    "y": "ы", "z": "з",
+})
+_CYRILLIC_TO_LATIN = str.maketrans({
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e",
+    "ё": "yo", "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k",
+    "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+    "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
+    "ч": "ch", "ш": "sh", "щ": "shch", "ъ": "", "ы": "y", "ь": "",
+    "э": "e", "ю": "yu", "я": "ya",
+})
+
+
+def _search_needle_variants(raw_query: str) -> list[str]:
+    """Return normalized spelling variants for common Latin/Cyrillic ASR swaps."""
+    normalized = unicodedata.normalize("NFKC", str(raw_query or "")).casefold().replace("ё", "е")
+    needle = "".join(char for char in normalized if char.isalnum())
+    if not needle:
+        return []
+    variants = [needle]
+    has_latin = any("a" <= char <= "z" for char in needle)
+    has_cyrillic = any("а" <= char <= "я" for char in needle)
+    if has_latin and not has_cyrillic:
+        alternate = needle.translate(_LATIN_TO_CYRILLIC)
+    elif has_cyrillic and not has_latin:
+        alternate = needle.translate(_CYRILLIC_TO_LATIN)
+    else:
+        alternate = needle
+    if alternate and alternate != needle:
+        variants.append(alternate)
+    return variants
+
+
 def is_admin() -> bool:
     if os.name != "nt":
         return False
@@ -71,7 +108,8 @@ def _entry_to_path(drive: str, entry) -> tuple[str, str, int] | None:
 
 def _connect() -> sqlite3.Connection:
     APP_DATA.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DB_PATH, timeout=30)
+    connection = sqlite3.connect(DB_PATH, timeout=5)
+    connection.execute("PRAGMA busy_timeout=5000")
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
     connection.execute("PRAGMA temp_store=MEMORY")
@@ -169,6 +207,7 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
     if not volumes:
         raise OSError("Не найдены доступные диски.")
 
+    report("Открываю локальную базу SQLite и проверяю индекс файлов…")
     db_open_started = time.perf_counter()
     connection = _connect()
     report(f"[Тайминг] Открытие SQLite и подготовка индексов: {time.perf_counter() - db_open_started:.3f} сек.")
@@ -247,28 +286,27 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
             batch_started = time.perf_counter()
             results: dict[str, list[Path]] = {}
             for raw_query in dict.fromkeys(str(item) for item in query if str(item).strip()):
-                needle = "".join(
-                    char for char in unicodedata.normalize("NFKC", raw_query).casefold().replace("ё", "е")
-                    if char.isalnum()
-                )
-                rows = []
-                fts_query_failed = False
-                if len(needle) >= 3:
-                    try:
-                        fts_query = '"' + needle.replace('"', '""') + '"'
+                rows_by_path = {}
+                for needle in _search_needle_variants(raw_query):
+                    rows = []
+                    fts_query_failed = False
+                    if len(needle) >= 3:
+                        try:
+                            fts_query = '"' + needle.replace('"', '""') + '"'
+                            rows = connection.execute(
+                                "SELECT full_path FROM files_fts WHERE files_fts MATCH ? LIMIT ?",
+                                (fts_query, MAX_RESULTS),
+                            ).fetchall()
+                        except sqlite3.OperationalError:
+                            fts_query_failed = True
+                    if not rows and (len(needle) < 3 or fts_query_failed):
                         rows = connection.execute(
-                            "SELECT full_path FROM files_fts WHERE files_fts MATCH ? LIMIT ?",
-                            (fts_query, MAX_RESULTS),
+                            "SELECT full_path FROM files WHERE instr(SEARCHKEY(name), ?) > 0 "
+                            "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
+                            (needle, needle, MAX_RESULTS),
                         ).fetchall()
-                    except sqlite3.OperationalError:
-                        fts_query_failed = True
-                if not rows and (len(needle) < 3 or fts_query_failed):
-                    rows = connection.execute(
-                        "SELECT full_path FROM files WHERE instr(SEARCHKEY(name), ?) > 0 "
-                        "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
-                        (needle, needle, MAX_RESULTS),
-                    ).fetchall()
-                results[raw_query] = [Path(row[0]) for row in rows]
+                    rows_by_path.update((row[0], None) for row in rows)
+                results[raw_query] = [Path(path) for path in rows_by_path]
             report(
                 f"[Тайминг] Выполнение {len(results)} поисковых вариантов: "
                 f"{time.perf_counter() - batch_started:.3f} сек."
@@ -277,10 +315,8 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
 
         # Equivalent to *query*: find the text anywhere in the file name
         # or full path. casefold() makes matching case-insensitive for Cyrillic too.
-        needle = "".join(
-            char for char in unicodedata.normalize("NFKC", query).casefold().replace("ё", "е")
-            if char.isalnum()
-        )
+        needle_variants = _search_needle_variants(query)
+        needle = needle_variants[0] if needle_variants else ""
         if query.startswith("__EXT__:"):
             extension = query.split(":", 1)[1].casefold()
             rows = connection.execute(
@@ -323,29 +359,35 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
         total = connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]
         report(f"В базе SQLite записей: {total:,}. Ищу нормализованную строку «{needle}»...")
 
-        rows = []
-        fts_query_failed = False
-        # Trigram FTS is indexed and finds a substring without scanning the
-        # entire SQLite table. For 1-2 character queries, or SQLite builds
-        # without trigram FTS support, use the compatibility fallback.
-        if len(needle) >= 3:
-            try:
-                fts_query = '"' + needle.replace('"', '""') + '"'
-                rows = connection.execute(
-                    "SELECT full_path FROM files_fts "
-                    "WHERE files_fts MATCH ? LIMIT ?",
-                    (fts_query, MAX_RESULTS),
-                ).fetchall()
-            except sqlite3.OperationalError:
-                fts_query_failed = True
+        rows_by_path = {}
+        # Search both original spelling and its likely cross-alphabet form.
+        # This handles ASR output such as Latin "LPU" for Cyrillic "ЛПУ".
+        for candidate_needle in needle_variants:
+            rows = []
+            fts_query_failed = False
+            # Trigram FTS is indexed and finds a substring without scanning the
+            # entire SQLite table. For 1-2 character queries, or SQLite builds
+            # without trigram FTS support, use the compatibility fallback.
+            if len(candidate_needle) >= 3:
+                try:
+                    fts_query = '"' + candidate_needle.replace('"', '""') + '"'
+                    rows = connection.execute(
+                        "SELECT full_path FROM files_fts "
+                        "WHERE files_fts MATCH ? LIMIT ?",
+                        (fts_query, MAX_RESULTS),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    fts_query_failed = True
 
-        if not rows and (len(needle) < 3 or fts_query_failed):
-            rows = connection.execute(
-                "SELECT full_path FROM files "
-                "WHERE instr(SEARCHKEY(name), ?) > 0 "
-                "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
-                (needle, needle, MAX_RESULTS),
-            ).fetchall()
+            if not rows and (len(candidate_needle) < 3 or fts_query_failed):
+                rows = connection.execute(
+                    "SELECT full_path FROM files "
+                    "WHERE instr(SEARCHKEY(name), ?) > 0 "
+                    "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
+                    (candidate_needle, candidate_needle, MAX_RESULTS),
+                ).fetchall()
+            rows_by_path.update((row[0], None) for row in rows)
+        rows = [(path,) for path in rows_by_path]
 
         if not rows:
             first_word = needle.split()[0] if " " in needle else needle[:3]
