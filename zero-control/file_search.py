@@ -708,11 +708,10 @@ def _search_worker(query: str, parent, export_format=None):
                     report=_report_search_progress,
                 )
             elif filters["extensions"]:
-                result_sets = [
-                    set(refresh_and_search("__EXT__:" + ext, report=_report_search_progress))
-                    for ext in sorted(filters["extensions"])
-                ]
-                matches = list(set.union(*result_sets)) if result_sets else []
+                # One batch means one SQLite open and one MFT availability pass.
+                extension_queries = ["__EXT__:" + ext for ext in sorted(filters["extensions"])]
+                extension_results = refresh_and_search(extension_queries, report=_report_search_progress)
+                matches = list(set().union(*(set(extension_results.get(item, [])) for item in extension_queries))) if extension_queries else []
             else:
                 empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else "__ALL_FILTERED__" if any((filters["start"], filters["end"], filters["drive"], filters["folder"], filters["min_size"], filters["max_size"], filters["exact_size"])) else ""
                 matches = refresh_and_search(empty_query, report=_report_search_progress)
