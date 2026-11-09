@@ -41,6 +41,13 @@ class AssistantWindow:
         self._prepare_recording_overlay()
         center_window(self.root)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self._tray_icon = None
+        self._install_drag_bindings(outer)
+        self._set_application_icon()
+        self.root.update_idletasks()
+        self._apply_windows_taskbar_style()
+        self.root.after(250, self._apply_windows_taskbar_style)
+        self._start_tray_icon()
 
     def _build_styles(self):
         style = ttk.Style(self.root)
@@ -221,6 +228,102 @@ class AssistantWindow:
         ttk.Label(footer, text="Right Ctrl — голосовая команда   ·   Right Ctrl + Right Shift — диктовка",
                   style="Muted.TLabel").pack(anchor="center")
 
+    def _install_drag_bindings(self, root_widget):
+        """Allow dragging from non-interactive surfaces of the frameless window."""
+        interactive = {"Button", "TButton", "Entry", "TEntry", "Text", "Canvas",
+                       "Scrollbar", "TScrollbar", "Treeview", "TCombobox", "Combobox"}
+        def visit(widget):
+            try:
+                if widget is not root_widget and widget.winfo_class() in interactive:
+                    return
+                if str(widget.cget("cursor") or "") == "hand2":
+                    return
+                if widget.winfo_class() in {"Frame", "TFrame", "Label", "TLabel"}:
+                    widget.bind("<ButtonPress-1>", self._start_window_drag, add="+")
+                    widget.bind("<B1-Motion>", self._drag_window, add="+")
+                for child in widget.winfo_children():
+                    visit(child)
+            except (tk.TclError, AttributeError):
+                return
+        visit(root_widget)
+
+    def _set_application_icon(self):
+        """Set the application icon used by Tk and the notification area."""
+        try:
+            from PIL import Image, ImageDraw, ImageTk
+            image = Image.new("RGBA", (64, 64), (81, 70, 216, 255))
+            draw = ImageDraw.Draw(image)
+            draw.rounded_rectangle((7, 7, 57, 57), radius=13, fill=(255, 255, 255, 255))
+            draw.ellipse((20, 18, 44, 42), fill=(81, 70, 216, 255))
+            draw.rounded_rectangle((28, 37, 36, 48), radius=3, fill=(81, 70, 216, 255))
+            self._tray_image = image
+            self._tk_icon = ImageTk.PhotoImage(image, master=self.root)
+            self.root.iconphoto(True, self._tk_icon)
+        except Exception as exc:
+            self._tray_image = None
+            print(f"[GUI] Не удалось установить иконку приложения: {exc}", flush=True)
+
+    def _apply_windows_taskbar_style(self):
+        """Expose a frameless Tk window as a normal Windows taskbar application."""
+        if __import__("sys").platform != "win32":
+            return
+        try:
+            import ctypes
+            hwnd = self.root.winfo_id()
+            user32 = ctypes.windll.user32
+            get_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
+            set_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+            get_long.restype = ctypes.c_ssize_t
+            get_long.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            set_long.restype = ctypes.c_ssize_t
+            set_long.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t]
+            style = get_long(hwnd, -20)
+            style = (style & ~0x00000080) | 0x00040000
+            set_long(hwnd, -20, style)
+            user32.SetWindowPos.argtypes = [
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                ctypes.c_int, ctypes.c_int, ctypes.c_uint,
+            ]
+            user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x2 | 0x1 | 0x4 | 0x20)
+        except Exception as exc:
+            print(f"[GUI] Не удалось включить кнопку на панели задач: {exc}", flush=True)
+
+    def _start_tray_icon(self):
+        """Start a notification-area icon with restore and exit actions."""
+        try:
+            import pystray
+            if self._tray_image is None:
+                return
+            menu = pystray.Menu(
+                pystray.MenuItem("Открыть Zero Control", self._tray_restore, default=True),
+                pystray.MenuItem("Выход", self._tray_exit),
+            )
+            self._tray_icon = pystray.Icon("zero_control", self._tray_image, "Zero Control", menu)
+            self._tray_icon.run_detached()
+        except Exception as exc:
+            print(f"[GUI] Не удалось запустить значок в системном трее: {exc}", flush=True)
+
+    def _tray_restore(self, icon=None, item=None):
+        try:
+            self.root.after(0, self._restore_from_tray)
+        except tk.TclError:
+            pass
+
+    def _restore_from_tray(self):
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+            self._apply_windows_taskbar_style()
+        except tk.TclError:
+            pass
+
+    def _tray_exit(self, icon=None, item=None):
+        try:
+            self.root.after(0, self.close)
+        except tk.TclError:
+            pass
+
     def _start_window_drag(self, event):
         self._drag_offset_x = event.x_root - self.root.winfo_x()
         self._drag_offset_y = event.y_root - self.root.winfo_y()
@@ -370,6 +473,12 @@ class AssistantWindow:
         self.root.mainloop()
 
     def close(self):
+        if self._tray_icon is not None:
+            try:
+                self._tray_icon.stop()
+            except Exception:
+                pass
+            self._tray_icon = None
         self.on_close()
         self.root.destroy()
 
