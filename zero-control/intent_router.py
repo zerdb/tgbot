@@ -113,6 +113,23 @@ def _file_search_query(user_text: str) -> str:
 
 
 
+def _parse_intent_json(content: str) -> dict:
+    """Extract the first complete JSON object, tolerating fences and surrounding text."""
+    text = str(content or "").strip()
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text, index)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    preview = re.sub(r"\\s+", " ", text)[:240]
+    raise RuntimeError("Модель не вернула корректный JSON-объект. Ответ: %s" % preview)
+
+
 def _classify_semantically(user_text: str) -> dict:
     """Interpret the complete ASR transcript using the structured intent contract."""
     messages = [
@@ -122,7 +139,7 @@ def _classify_semantically(user_text: str) -> dict:
     provider = "groq"
     try:
         from groq_client import chat
-        content = chat(messages, temperature=0, max_tokens=800)
+        content = chat(messages, temperature=0, max_tokens=800, response_format={"type": "json_object"})
         print("[Команды] Семантическая классификация через Groq.", flush=True)
     except Exception as primary_error:
         print("[Команды] Groq недоступна (%s). Пробую Moondream." % primary_error, flush=True)
@@ -134,10 +151,7 @@ def _classify_semantically(user_text: str) -> dict:
         except Exception as fallback_error:
             raise RuntimeError("Groq: %s; Moondream: %s" % (primary_error, fallback_error)) from fallback_error
 
-    match = re.search(r"\{.*\}", str(content or ""), flags=re.S)
-    if not match:
-        raise RuntimeError("Модель вернула некорректный JSON намерения.")
-    parsed = json.loads(match.group(0))
+    parsed = _parse_intent_json(content)
     action = parsed.get("action", "unknown")
     if action not in ACTIONS:
         action = "unknown"
