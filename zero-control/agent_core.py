@@ -40,6 +40,9 @@ DEFAULTS = {
     "imap_port": 993,
     "remember_chat_history": True,
     "clean_dictation_with_ai": False,
+    "mft_refresh_interval_days": 7,
+    "mft_last_refresh_at": 0,
+    "mft_last_reminder_at": 0,
 }
 
 
@@ -77,6 +80,18 @@ def save_settings(values: dict) -> dict:
                 continue
         elif key in ("remember_chat_history", "clean_dictation_with_ai"):
             value = bool(value)
+        elif key == "mft_refresh_interval_days":
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                continue
+            if value not in (3, 7, 14, 30):
+                continue
+        elif key in ("mft_last_refresh_at", "mft_last_reminder_at"):
+            try:
+                value = max(0, int(value))
+            except (TypeError, ValueError):
+                continue
         else:
             value = str(value).strip()
         clean[key] = value

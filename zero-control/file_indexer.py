@@ -233,7 +233,7 @@ def _search_file_rows(connection: sqlite3.Connection, needle: str) -> tuple[list
     return rows, "SQLite fallback (FTS5 unavailable or query shorter than 3)"
 
 
-def refresh_and_search(query: str | list[str], report: Callable[[str], None] | None = None) -> list[Path] | dict[str, list[Path]]:
+def refresh_and_search(query: str | list[str], report: Callable[[str], None] | None = None, force_refresh: bool = False) -> list[Path] | dict[str, list[Path]]:
     """Refresh available NTFS volumes and return matching file paths."""
     report = report or (lambda message: print(message, flush=True))
     if not is_admin():
@@ -256,12 +256,13 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
     connection = _connect()
     report(f"[Тайминг] Открытие SQLite и подготовка индексов: {time.perf_counter() - db_open_started:.3f} сек.")
     refresh_started = time.perf_counter()
+    scan_failures = []
     try:
         for drive in volumes:
             cached_count = connection.execute(
                 "SELECT COUNT(*) FROM files WHERE drive = ?", (drive,)
             ).fetchone()[0]
-            if cached_count:
+            if cached_count and not force_refresh:
                 report(
                     f"Использую сохранённый индекс {drive}: "
                     f"{cached_count:,} файлов (повторное сканирование не требуется)."
@@ -273,6 +274,7 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
             try:
                 entries = mftparser.ScanVolume(drive, only_active=True)
             except Exception as exc:
+                scan_failures.append(f"{drive}: {exc}")
                 report(f"Пропускаю {drive}: MFT недоступна ({exc}).")
                 continue
 
@@ -319,6 +321,18 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
                 except sqlite3.OperationalError:
                     pass
             report(f"{drive}: индексировано {count:,} файлов за {time.perf_counter() - started:.1f} сек.")
+            try:
+                from agent_core import load_settings, save_settings
+                settings = load_settings()
+                settings["mft_last_refresh_at"] = int(time.time())
+                save_settings(settings)
+            except Exception as exc:
+                report(f"Не удалось сохранить время обновления индекса: {exc}")
+
+        if query == "__INDEX_ONLY__":
+            if scan_failures:
+                raise RuntimeError("Не удалось обновить все доступные тома: " + "; ".join(scan_failures))
+            return []
 
         if isinstance(query, (list, tuple)):
             # Пакетный режим: все варианты обслуживаются одним соединением SQLite.

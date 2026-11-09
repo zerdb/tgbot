@@ -162,6 +162,42 @@ def open_settings_window(parent):
         clean_dictation = tk.BooleanVar(master=window, value=bool(values.get("clean_dictation_with_ai", False)))
         ttk.Checkbutton(frame, text="Очищать текст диктовки с помощью ИИ", variable=clean_dictation).pack(anchor="w", pady=(1, 4))
 
+        index_card = make_card(frame, "Индекс файлов MFT")
+        ttk.Label(index_card, text="Обычный поиск использует сохранённый индекс и не запускает повторное сканирование. Обновляй индекс вручную или получай напоминание.", wraplength=540, style="Card.TLabel").pack(anchor="w")
+        interval_var = tk.StringVar(master=window, value=str(values.get("mft_refresh_interval_days", 7)))
+        interval_row = ttk.Frame(index_card, style="Card.TFrame")
+        interval_row.pack(fill="x", pady=(7, 3))
+        ttk.Label(interval_row, text="Напоминать каждые:", style="Card.TLabel").pack(side="left")
+        ttk.Combobox(interval_row, textvariable=interval_var, state="readonly", values=("3", "7", "14", "30"), width=5).pack(side="left", padx=(8, 4))
+        ttk.Label(interval_row, text="дней", style="Card.TLabel").pack(side="left")
+        index_status = tk.StringVar(master=window, value="Индекс обновляется только по кнопке или при первой индексации.")
+        ttk.Label(index_card, textvariable=index_status, style="CardMuted.TLabel", wraplength=530).pack(anchor="w", pady=(2, 5))
+        def refresh_index_now():
+            refresh_button.configure(state="disabled")
+            index_status.set("Обновляю индекс MFT в фоновом потоке…")
+            def worker():
+                try:
+                    from file_indexer import refresh_and_search
+                    refresh_and_search("__INDEX_ONLY__", report=lambda message: print("[MFT] " + message, flush=True), force_refresh=True)
+                    result = (True, "")
+                except Exception as exc:
+                    result = (False, str(exc))
+                def finish():
+                    if not window.winfo_exists():
+                        return
+                    refresh_button.configure(state="normal")
+                    if result[0]:
+                        index_status.set("Индекс успешно обновлён.")
+                        messagebox.showinfo("Индекс файлов", "Индекс MFT успешно обновлён.", parent=window)
+                    else:
+                        index_status.set("Не удалось обновить индекс.")
+                        messagebox.showerror("Индекс файлов", result[1], parent=window)
+                window.after(0, finish)
+            import threading
+            threading.Thread(target=worker, name="mft-manual-refresh", daemon=True).start()
+        refresh_button = ttk.Button(index_card, text="Обновить индекс сейчас", command=refresh_index_now, style="Card.TButton")
+        refresh_button.pack(anchor="w", pady=(2, 0))
+
         learning = make_card(frame, "Обучение локальной маршрутизации")
         ttk.Label(
             learning,
@@ -186,6 +222,10 @@ def open_settings_window(parent):
             payload = {key: var.get() for key, var in vars_.items()}
             payload["remember_chat_history"] = remember.get()
             payload["clean_dictation_with_ai"] = clean_dictation.get()
+            try:
+                payload["mft_refresh_interval_days"] = int(interval_var.get())
+            except (TypeError, ValueError):
+                payload["mft_refresh_interval_days"] = 7
             try:
                 for label, value in secret_vars.items():
                     secret = value.get().strip()

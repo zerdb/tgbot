@@ -128,6 +128,30 @@ def main():
     )
     _keyboard_listener.install()
     start_file_search_ui(_ui.root, busy_callback=_ui.set_busy_overlay)
+
+    def check_mft_refresh_reminder():
+        try:
+            import time
+            from agent_core import load_settings, save_settings
+            settings = load_settings()
+            last_refresh = int(settings.get("mft_last_refresh_at", 0) or 0)
+            last_reminder = int(settings.get("mft_last_reminder_at", 0) or 0)
+            interval = int(settings.get("mft_refresh_interval_days", 7) or 7)
+            now = int(time.time())
+            if last_refresh and now - last_refresh >= interval * 86400 and now - last_reminder >= 3 * 86400:
+                from notifications import show_notification
+                show_notification("Zero Control — индекс файлов", "Пора обновить индекс MFT. Открой настройки и нажми «Обновить индекс сейчас».")
+                settings["mft_last_reminder_at"] = now
+                save_settings(settings)
+        except Exception as exc:
+            print(f"[MFT] Не удалось проверить напоминание: {exc}", flush=True)
+        finally:
+            try:
+                _ui.root.after(60 * 60 * 1000, check_mft_refresh_reminder)
+            except Exception:
+                pass
+
+    _ui.root.after(5000, check_mft_refresh_reminder)
     # Таймер очереди напоминаний обслуживается главным потоком Tkinter.
     start_reminder_service()
 
