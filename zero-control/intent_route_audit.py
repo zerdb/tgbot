@@ -10,7 +10,7 @@ Zero Control: аудит маршрутизации 500 русскоязычны
 - использует настоящий understand_command() и локальные пользовательские правила;
 - отключает сетевой ИИ, чтобы безопасно и бесплатно проверить локальную маршрутизацию;
 - НЕ выполняет команды Windows, не открывает приложения, не удаляет файлы;
-- сохраняет только ошибки/расхождения в CSV.
+- сохраняет все 500 результатов в CSV со статусом OK/MISMATCH/EXCEPTION.
 
 Для проверки семантического слоя:
     python intent_route_audit.py --with-ai --ai-limit 50
@@ -124,8 +124,8 @@ def compact_json(value):
 
 def run():
     parser = argparse.ArgumentParser(description="Аудит 500 фраз маршрутизатора Zero Control")
-    parser.add_argument("--output", default="intent_route_errors.csv",
-                        help="CSV-файл только с ошибками (по умолчанию intent_route_errors.csv)")
+    parser.add_argument("--output", default="intent_route_results.csv",
+                        help="Полный CSV-отчёт по всем тестам (по умолчанию intent_route_results.csv)")
     parser.add_argument("--with-ai", action="store_true",
                         help="Разрешить реальные вызовы Groq/Moondream для тестовых фраз")
     parser.add_argument("--ai-limit", type=int, default=50,
@@ -153,6 +153,7 @@ def run():
         raise RuntimeError("AI отключён параметрами теста; проверяется локальный fallback")
 
     failures = []
+    results = []
     counts = Counter()
     cases = build_cases()
 
@@ -181,23 +182,25 @@ def run():
                 provider = "Groq/Moondream" if ai_calls > calls_before else "local"
                 error = actual != expected
                 status = "MISMATCH" if error else "OK"
+                row = {
+                    **case,
+                    "actual_action": actual,
+                    "kind": kind,
+                    "confidence": confidence,
+                    "parameters": compact_json(params),
+                    "provider": provider,
+                    "status": status,
+                    "note": "Ожидаемое и фактическое действия различаются" if error else "",
+                }
+                results.append(row)
                 if error:
                     counts["mismatch"] += 1
-                    failures.append({
-                        **case,
-                        "actual_action": actual,
-                        "kind": kind,
-                        "confidence": confidence,
-                        "parameters": compact_json(params),
-                        "provider": provider,
-                        "status": status,
-                        "note": "Ожидаемое и фактическое действия различаются",
-                    })
+                    failures.append(row)
                 else:
                     counts["ok"] += 1
             except Exception as exc:
                 counts["exception"] += 1
-                failures.append({
+                row = {
                     **case,
                     "actual_action": "EXCEPTION",
                     "kind": "",
@@ -206,7 +209,9 @@ def run():
                     "provider": "",
                     "status": "EXCEPTION",
                     "note": f"{type(exc).__name__}: {exc}",
-                })
+                }
+                results.append(row)
+                failures.append(row)
     finally:
         router._classify_semantically = original_classifier
         if local_intents_module is not None and original_record_intent is not None:
@@ -220,7 +225,7 @@ def run():
     with output.open("w", newline="", encoding="utf-8-sig") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(failures)
+        writer.writerows(results)
 
     print("\n=== ZERO CONTROL: ROUTE AUDIT ===")
     print(f"Всего тестов:       {len(cases)}")
@@ -229,7 +234,7 @@ def run():
     print(f"Исключений:         {counts['exception']}")
     print(f"Вызовов ИИ:         {ai_calls}")
     print(f"Ошибки сохранены:   {output}")
-    print("\nВ CSV записаны только ошибки. Успешные фразы в отчёт не попадают.")
+    print(f"Полный отчёт:       {len(results)} строк с результатами")
 
     if failures:
         print("\nПервые ошибки:")
