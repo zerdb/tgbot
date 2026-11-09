@@ -126,7 +126,7 @@ def _parse_intent_json(content: str) -> dict:
             continue
         if isinstance(value, dict):
             return value
-    preview = re.sub(r"\\s+", " ", text)[:240]
+    preview = re.sub(r"\s+", " ", text)[:240]
     raise RuntimeError("Модель не вернула корректный JSON-объект. Ответ: %s" % preview)
 
 
