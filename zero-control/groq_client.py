@@ -75,7 +75,7 @@ def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90,
     message = choice.get("message") or {}
     content = message.get("content")
     if isinstance(content, list):
-        content = "\\n".join(
+        content = "\n".join(
             str(part.get("text", "")) for part in content if isinstance(part, dict)
         )
     answer = str(content or "").strip()
