@@ -11,6 +11,7 @@ from tkinter import ttk, messagebox, filedialog
 
 from dialog_utils import center_window, apply_modern_style
 from email_manager import load_address_book, save_address_book, send_email
+from contact_matching import best_contact_matches
 
 
 def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
@@ -424,16 +425,17 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
     def prepare_compose():
         refresh_contacts()
         if recipient_name:
-            spoken = normalized_tokens(recipient_name)
-            matches = [
-                name for name, item in book_cache.items()
-                if item.get("email") and spoken and spoken.issubset(normalized_tokens(name))
-            ]
+            available_names = [name for name, item in book_cache.items() if item.get("email")]
+            matches = best_contact_matches(recipient_name, available_names)
             if len(matches) == 1:
-                recipient_var.set(matches[0])
-                address_var.set(f"{matches[0]} <{book_cache[matches[0]]['email']}>")
-            elif len(matches) > 1:
-                contacts_status.set("Имя неоднозначно — выбери получателя вручную на вкладке «Написать».")
+                selected_name = matches[0]
+                recipient_var.set(selected_name)
+                address_var.set(f"{selected_name} <{book_cache[selected_name]['email']}>")
+                contacts_status.set(f"Получатель найден: {selected_name}")
+            elif matches:
+                contacts_status.set("Нашлось несколько похожих контактов — выбери нужного вручную на вкладке «Написать».")
+            else:
+                contacts_status.set(f"Контакт «{recipient_name}» не найден — выбери адресата вручную.")
         if add_files_on_open:
             # Сначала используем снимок списка файлов, полученный в момент
             # голосовой команды, пока очередь GUI не изменила состояние буфера.

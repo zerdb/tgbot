@@ -432,6 +432,21 @@ def _understand_command_rules(user_text: str) -> dict:
     if re.search(r"\b(напомни|напомнить|создай напоминание|добавь напоминание)\b", normalized):
         return {"action": "reminder", "confidence": 1.0, "parameters": {"reminder_text": user_text.strip()}}
 
+    # Отправка файлов адресату из адресной книги: открываем редактор письма
+    # и прикладываем выбранные/скопированные файлы. Отправка остаётся за пользователем.
+    if re.search(r"\b(отправь|отправить|перешли|переслать|пошли|послать)\b", normalized) and re.search(r"\b(файл\w*|документ\w*)\b", normalized):
+        recipient_match = re.search(
+            r"\b(?:файлы?|документы?)\s+(.+)$|\b(?:отправь|отправить|перешли|переслать|пошли|послать)\s+(.+?)\s+(?:файлы?|документы?)\b",
+            user_text, flags=re.IGNORECASE,
+        )
+        recipient = ""
+        if recipient_match:
+            recipient = (recipient_match.group(1) or recipient_match.group(2) or "").strip()
+            recipient = re.sub(r"^(?:контакт|человеку|получателю)\s+", "", recipient, flags=re.IGNORECASE)
+            recipient = re.sub(r"\b(?:пожалуйста|срочно|мне)\b", " ", recipient, flags=re.IGNORECASE)
+            recipient = re.sub(r"\s+", " ", recipient).strip(' .,!?:;«»"')
+        if recipient:
+            return {"action": "email_compose", "confidence": 1.0, "parameters": {"attach_copied_files": True, "recipient_name": recipient}}
     # Почта: создание/отправка письма открывает форму; само отправление только после кнопки пользователя.
     if re.search(r"\b(отправь|отправить|перешли|переслать)\b.*\b(почт\w*|письм\w*|email|емейл)", normalized):
         attach = bool(re.search(r"\b(файл|файлы|документ|документы|вложени)", normalized))
