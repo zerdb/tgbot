@@ -144,6 +144,23 @@ def _connect() -> sqlite3.Connection:
     connection.execute(
         "CREATE TABLE IF NOT EXISTS index_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
     )
+    # Keep a normalized copy in the ordinary table as a fast C-level fallback.
+    # Calling the Python SEARCHKEY UDF for every row made fallback searches take
+    # minutes on large indexes when FTS5/trigram was unavailable.
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(files)")}
+    if "search_text" not in columns:
+        connection.execute("ALTER TABLE files ADD COLUMN search_text TEXT NOT NULL DEFAULT ''")
+    search_text_row = connection.execute(
+        "SELECT value FROM index_meta WHERE key = 'search_text_version'"
+    ).fetchone()
+    if not search_text_row or search_text_row[0] != "1":
+        with connection:
+            connection.execute(
+                "UPDATE files SET search_text = SEARCHKEY(name) || ' ' || SEARCHKEY(full_path)"
+            )
+            connection.execute(
+                "INSERT OR REPLACE INTO index_meta(key, value) VALUES ('search_text_version', '1')"
+            )
     # FTS5 trigram index supports fast substring search (including Cyrillic),
     # unlike instr(SEARCHKEY(...)), which scans every row.
     try:
@@ -162,8 +179,7 @@ def _connect() -> sqlite3.Connection:
                 connection.execute("DELETE FROM files_fts")
                 connection.execute(
                     "INSERT INTO files_fts(drive, full_path, search_text) "
-                    "SELECT drive, full_path, "
-                    "SEARCHKEY(name) || ' ' || SEARCHKEY(full_path) FROM files"
+                    "SELECT drive, full_path, search_text FROM files"
                 )
                 connection.execute(
                     "INSERT OR REPLACE INTO index_meta(key, value) VALUES ('fts_populated', '1')"
@@ -187,6 +203,34 @@ def _connect() -> sqlite3.Connection:
                 "INSERT OR REPLACE INTO index_meta(key, value) VALUES ('schema_version', '2')"
             )
     return connection
+
+
+def _search_file_rows(connection: sqlite3.Connection, needle: str) -> tuple[list[tuple], str]:
+    """Search the normalized index, preferring trigram FTS and avoiding Python UDF scans."""
+    fts_exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'files_fts'"
+    ).fetchone()
+    if len(needle) >= 3 and fts_exists:
+        try:
+            fts_query = '"' + needle.replace('"', '""') + '"'
+            rows = connection.execute(
+                "SELECT full_path FROM files_fts WHERE files_fts MATCH ? LIMIT ?",
+                (fts_query, MAX_RESULTS),
+            ).fetchall()
+            return rows, "FTS5 trigram"
+        except sqlite3.OperationalError:
+            # An incompatible SQLite build or damaged FTS table must not send
+            # every row through the Python SEARCHKEY callback.
+            rows = connection.execute(
+                "SELECT full_path FROM files WHERE instr(search_text, ?) > 0 LIMIT ?",
+                (needle, MAX_RESULTS),
+            ).fetchall()
+            return rows, "SQLite fallback (FTS5 error)"
+    rows = connection.execute(
+        "SELECT full_path FROM files WHERE instr(search_text, ?) > 0 LIMIT ?",
+        (needle, MAX_RESULTS),
+    ).fetchall()
+    return rows, "SQLite fallback (FTS5 unavailable or query shorter than 3)"
 
 
 def refresh_and_search(query: str | list[str], report: Callable[[str], None] | None = None) -> list[Path] | dict[str, list[Path]]:
@@ -261,16 +305,16 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
             with connection:
                 connection.execute("DELETE FROM files WHERE drive = ?", (drive,))
                 connection.execute(
-                    "INSERT INTO files(drive, full_path, name, size) "
-                    "SELECT drive, full_path, name, size FROM scan_files"
+                    "INSERT INTO files(drive, full_path, name, size, search_text) "
+                    "SELECT drive, full_path, name, size, "
+                    "SEARCHKEY(name) || ' ' || SEARCHKEY(full_path) FROM scan_files"
                 )
                 try:
                     connection.execute("DELETE FROM files_fts WHERE drive = ?", (drive,))
                     connection.execute(
                         "INSERT INTO files_fts(drive, full_path, search_text) "
-                        "SELECT drive, full_path, "
-                        "SEARCHKEY(name) || ' ' || SEARCHKEY(full_path) "
-                        "FROM scan_files"
+                        "SELECT drive, full_path, search_text FROM files WHERE drive = ?",
+                        (drive,),
                     )
                 except sqlite3.OperationalError:
                     pass
@@ -288,23 +332,12 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
             for raw_query in dict.fromkeys(str(item) for item in query if str(item).strip()):
                 rows_by_path = {}
                 for needle in _search_needle_variants(raw_query):
-                    rows = []
-                    fts_query_failed = False
-                    if len(needle) >= 3:
-                        try:
-                            fts_query = '"' + needle.replace('"', '""') + '"'
-                            rows = connection.execute(
-                                "SELECT full_path FROM files_fts WHERE files_fts MATCH ? LIMIT ?",
-                                (fts_query, MAX_RESULTS),
-                            ).fetchall()
-                        except sqlite3.OperationalError:
-                            fts_query_failed = True
-                    if not rows and (len(needle) < 3 or fts_query_failed):
-                        rows = connection.execute(
-                            "SELECT full_path FROM files WHERE instr(SEARCHKEY(name), ?) > 0 "
-                            "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
-                            (needle, needle, MAX_RESULTS),
-                        ).fetchall()
+                    candidate_started = time.perf_counter()
+                    rows, search_mode = _search_file_rows(connection, needle)
+                    report(
+                        f"[Тайминг] Вариант «{needle}»: {search_mode}; "
+                        f"строк: {len(rows)}; {time.perf_counter() - candidate_started:.3f} сек."
+                    )
                     rows_by_path.update((row[0], None) for row in rows)
                 results[raw_query] = [Path(path) for path in rows_by_path]
             report(
@@ -363,36 +396,19 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
         # Search both original spelling and its likely cross-alphabet form.
         # This handles ASR output such as Latin "LPU" for Cyrillic "ЛПУ".
         for candidate_needle in needle_variants:
-            rows = []
-            fts_query_failed = False
-            # Trigram FTS is indexed and finds a substring without scanning the
-            # entire SQLite table. For 1-2 character queries, or SQLite builds
-            # without trigram FTS support, use the compatibility fallback.
-            if len(candidate_needle) >= 3:
-                try:
-                    fts_query = '"' + candidate_needle.replace('"', '""') + '"'
-                    rows = connection.execute(
-                        "SELECT full_path FROM files_fts "
-                        "WHERE files_fts MATCH ? LIMIT ?",
-                        (fts_query, MAX_RESULTS),
-                    ).fetchall()
-                except sqlite3.OperationalError:
-                    fts_query_failed = True
-
-            if not rows and (len(candidate_needle) < 3 or fts_query_failed):
-                rows = connection.execute(
-                    "SELECT full_path FROM files "
-                    "WHERE instr(SEARCHKEY(name), ?) > 0 "
-                    "OR instr(SEARCHKEY(full_path), ?) > 0 LIMIT ?",
-                    (candidate_needle, candidate_needle, MAX_RESULTS),
-                ).fetchall()
+            candidate_started = time.perf_counter()
+            rows, search_mode = _search_file_rows(connection, candidate_needle)
+            report(
+                f"[Тайминг] Вариант «{candidate_needle}»: {search_mode}; "
+                f"строк: {len(rows)}; {time.perf_counter() - candidate_started:.3f} сек."
+            )
             rows_by_path.update((row[0], None) for row in rows)
         rows = [(path,) for path in rows_by_path]
 
         if not rows:
             first_word = needle.split()[0] if " " in needle else needle[:3]
             partial = connection.execute(
-                "SELECT name FROM files WHERE instr(SEARCHKEY(name), ?) > 0 LIMIT 5",
+                "SELECT name FROM files WHERE instr(search_text, ?) > 0 LIMIT 5",
                 (first_word,),
             ).fetchall()
             if partial:
