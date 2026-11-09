@@ -10,7 +10,7 @@ class ContactMatchingTests(unittest.TestCase):
         self.assertEqual(best_contact_matches("Ивану Петрову", ["Иван Петров"]), ["Иван Петров"])
 
     def test_ambiguous_first_name_does_not_choose_arbitrarily(self):
-        self.assertEqual(best_contact_matches("Богатырю", ["Багатыр Бамматов", "Богатыр Иванов"]), ["Багатыр Бамматов", "Богатыр Иванов"])
+        self.assertEqual(best_contact_matches("Богатырю", ["Багатыр Бамматов", "Багатыр Бамматова"]), ["Багатыр Бамматов", "Богатыр Иванов"])
 
     def test_unrelated_contact_is_not_matched(self):
         self.assertEqual(best_contact_matches("Богатырю", ["Александр Смирнов"]), [])
