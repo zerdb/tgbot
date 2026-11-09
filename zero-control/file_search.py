@@ -588,6 +588,16 @@ def export_file_results(results, query: str, export_format: str) -> Path:
     return output_path
 
 
+def _report_search_progress(message: str) -> None:
+    """Report worker progress to the console and the Tk overlay."""
+    print(f"[Поиск файлов] {message}", flush=True)
+    if _busy_callback:
+        try:
+            _busy_callback(message)
+        except Exception:
+            pass
+
+
 def _search_worker(query: str, parent, export_format=None):
     from datetime import datetime
     search_started = time.perf_counter()
@@ -622,7 +632,7 @@ def _search_worker(query: str, parent, export_format=None):
             db_started = time.perf_counter()
             term_results = refresh_and_search(
                 unique_terms,
-                report=lambda message: print(f"[Поиск файлов] {message}", flush=True),
+                report=_report_search_progress,
             )
             print(
                 f"[Поиск файлов][Тайминг] Пакетный поиск {len(unique_terms)} вариантов: "
