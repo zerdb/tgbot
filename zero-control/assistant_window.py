@@ -249,15 +249,14 @@ class AssistantWindow:
     def _set_application_icon(self):
         """Set the application icon used by Tk and the notification area."""
         try:
-            from PIL import Image, ImageDraw
+            from PIL import Image, ImageDraw, ImageTk
             image = Image.new("RGBA", (64, 64), (81, 70, 216, 255))
             draw = ImageDraw.Draw(image)
             draw.rounded_rectangle((7, 7, 57, 57), radius=13, fill=(255, 255, 255, 255))
             draw.ellipse((20, 18, 44, 42), fill=(81, 70, 216, 255))
             draw.rounded_rectangle((28, 37, 36, 48), radius=3, fill=(81, 70, 216, 255))
             self._tray_image = image
-            ppm = image.convert("RGB").tobytes()
-            self._tk_icon = tk.PhotoImage(data=b"P6 64 64 255\\n" + ppm, format="PPM")
+            self._tk_icon = ImageTk.PhotoImage(image, master=self.root)
             self.root.iconphoto(True, self._tk_icon)
         except Exception as exc:
             self._tray_image = None
@@ -280,6 +279,10 @@ class AssistantWindow:
             style = get_long(hwnd, -20)
             style = (style & ~0x00000080) | 0x00040000
             set_long(hwnd, -20, style)
+            user32.SetWindowPos.argtypes = [
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                ctypes.c_int, ctypes.c_int, ctypes.c_uint,
+            ]
             user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x2 | 0x1 | 0x4 | 0x20)
         except Exception as exc:
             print(f"[GUI] Не удалось включить кнопку на панели задач: {exc}", flush=True)
