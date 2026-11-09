@@ -256,6 +256,7 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
     connection = _connect()
     report(f"[Тайминг] Открытие SQLite и подготовка индексов: {time.perf_counter() - db_open_started:.3f} сек.")
     refresh_started = time.perf_counter()
+    scan_failures = []
     try:
         for drive in volumes:
             cached_count = connection.execute(
@@ -273,6 +274,7 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
             try:
                 entries = mftparser.ScanVolume(drive, only_active=True)
             except Exception as exc:
+                scan_failures.append(f"{drive}: {exc}")
                 report(f"Пропускаю {drive}: MFT недоступна ({exc}).")
                 continue
 
@@ -328,6 +330,8 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
                 report(f"Не удалось сохранить время обновления индекса: {exc}")
 
         if query == "__INDEX_ONLY__":
+            if scan_failures:
+                raise RuntimeError("Не удалось обновить все доступные тома: " + "; ".join(scan_failures))
             return []
 
         if isinstance(query, (list, tuple)):
