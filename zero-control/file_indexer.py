@@ -233,6 +233,36 @@ def _search_file_rows(connection: sqlite3.Connection, needle: str) -> tuple[list
     return rows, "SQLite fallback (FTS5 unavailable or query shorter than 3)"
 
 
+def _search_index_query(connection: sqlite3.Connection, raw_query: str, report: Callable[[str], None] | None = None) -> list[Path]:
+    """Run one text or metadata query against an already-open, already-refreshed index."""
+    report = report or (lambda message: None)
+    if raw_query.startswith("__EXT__:"):
+        extension = raw_query.split(":", 1)[1].casefold()
+        rows = connection.execute("SELECT full_path FROM files WHERE lower(full_path) LIKE ? LIMIT ?", ("%" + extension, MAX_RESULTS)).fetchall()
+        return [Path(row[0]) for row in rows]
+    if raw_query.startswith("__SIZE_RANGE__:"):
+        _, lower_size, upper_size = raw_query.split(":", 2)
+        rows = connection.execute("SELECT full_path FROM files WHERE size >= ? AND size < ? LIMIT ?", (int(lower_size), int(upper_size), MAX_RESULTS)).fetchall()
+        return [Path(row[0]) for row in rows]
+    if raw_query == "__ALL_FILTERED__":
+        rows = connection.execute("SELECT full_path FROM files LIMIT 100000").fetchall()
+        return [Path(row[0]) for row in rows]
+    if raw_query in ("__SORT_SIZE_DESC__", "__SORT_SIZE_ASC__"):
+        direction = "DESC" if raw_query == "__SORT_SIZE_DESC__" else "ASC"
+        rows = connection.execute("SELECT full_path FROM files ORDER BY size " + direction + " LIMIT ?", (MAX_RESULTS,)).fetchall()
+        return [Path(row[0]) for row in rows]
+    needle_variants = _search_needle_variants(raw_query)
+    if not needle_variants:
+        rows = connection.execute("SELECT full_path FROM files ORDER BY name COLLATE NOCASE LIMIT ?", (MAX_RESULTS,)).fetchall()
+        return [Path(row[0]) for row in rows]
+    rows_by_path = {}
+    for candidate_needle in needle_variants:
+        candidate_started = time.perf_counter()
+        rows, search_mode = _search_file_rows(connection, candidate_needle)
+        report(f"[Тайминг] Вариант «{candidate_needle}»: {search_mode}; строк: {len(rows)}; {time.perf_counter() - candidate_started:.3f} сек.")
+        rows_by_path.update((row[0], None) for row in rows)
+    return [Path(path) for path in rows_by_path]
+
 def refresh_and_search(query: str | list[str], report: Callable[[str], None] | None = None, force_refresh: bool = False) -> list[Path] | dict[str, list[Path]]:
     """Refresh available NTFS volumes and return matching file paths."""
     report = report or (lambda message: print(message, flush=True))
@@ -344,16 +374,8 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
             batch_started = time.perf_counter()
             results: dict[str, list[Path]] = {}
             for raw_query in dict.fromkeys(str(item) for item in query if str(item).strip()):
-                rows_by_path = {}
-                for needle in _search_needle_variants(raw_query):
-                    candidate_started = time.perf_counter()
-                    rows, search_mode = _search_file_rows(connection, needle)
-                    report(
-                        f"[Тайминг] Вариант «{needle}»: {search_mode}; "
-                        f"строк: {len(rows)}; {time.perf_counter() - candidate_started:.3f} сек."
-                    )
-                    rows_by_path.update((row[0], None) for row in rows)
-                results[raw_query] = [Path(path) for path in rows_by_path]
+                # Text and metadata queries share this connection and refresh pass.
+                results[raw_query] = _search_index_query(connection, raw_query, report=report)
             report(
                 f"[Тайминг] Выполнение {len(results)} поисковых вариантов: "
                 f"{time.perf_counter() - batch_started:.3f} сек."
