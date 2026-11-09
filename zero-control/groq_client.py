@@ -28,7 +28,7 @@ def chat(messages, temperature=0.2, max_tokens=1200, model=None, timeout=90,
     if not selected_model:
         raise RuntimeError("Не выбрана модель Groq.")
 
-    # Groq заменил max_tokens на max_completion_tokens. Для GPT-OSS
+    # Groq пометил max_tokens устаревшим в пользу max_completion_tokens. Для GPT-OSS
     # отдельно ограничиваем reasoning, чтобы короткая классификация
     # не расходовала весь бюджет генерации на внутренние рассуждения.
     payload = {
