@@ -9,7 +9,7 @@ _agent_core = types.ModuleType("agent_core")
 _agent_core.APP_DATA = Path(tempfile.gettempdir()) / "zero-control-file-index-tests"
 sys.modules.setdefault("agent_core", _agent_core)
 
-from file_indexer import _search_file_rows, _search_needle_variants
+from file_indexer import _search_file_rows, _search_needle_variants, _search_index_query
 
 
 class SearchNeedleVariantTests(unittest.TestCase):
@@ -42,6 +42,32 @@ class SearchNeedleVariantTests(unittest.TestCase):
         rows, mode = _search_file_rows(connection, "лпу")
         self.assertEqual(rows, [(r"C:\Docs\ЛПУ адреса.pdf",)])
         self.assertIn("SQLite fallback", mode)
+        connection.close()
+
+    def test_extension_query_uses_existing_connection(self):
+        import sqlite3
+
+        connection = sqlite3.connect(":memory:")
+        connection.execute("CREATE TABLE files (full_path TEXT, name TEXT, size INTEGER)")
+        connection.executemany("INSERT INTO files VALUES (?, ?, ?)", [
+            (r"C:\Photos\one.jpg", "one.jpg", 10),
+            (r"C:\Photos\two.png", "two.png", 20),
+            (r"C:\Docs\notes.txt", "notes.txt", 30),
+        ])
+        self.assertEqual(_search_index_query(connection, "__EXT__:.jpg"), [Path(r"C:\Photos\one.jpg")])
+        connection.close()
+
+    def test_size_range_query_uses_existing_connection(self):
+        import sqlite3
+
+        connection = sqlite3.connect(":memory:")
+        connection.execute("CREATE TABLE files (full_path TEXT, name TEXT, size INTEGER)")
+        connection.executemany("INSERT INTO files VALUES (?, ?, ?)", [
+            (r"C:\small.bin", "small.bin", 5),
+            (r"C:\medium.bin", "medium.bin", 15),
+            (r"C:\large.bin", "large.bin", 25),
+        ])
+        self.assertEqual(_search_index_query(connection, "__SIZE_RANGE__:10:20"), [Path(r"C:\medium.bin")])
         connection.close()
 
     def test_fts5_returns_empty_without_scanning_fallback(self):
