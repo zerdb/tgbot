@@ -12,8 +12,20 @@ from windows_actions import (
     paste_clipboard_to_application,
 )
 from installed_apps import open_installed_application
+from notifications import speak_text
 from reminders import add_reminder, add_note, complete_item_by_text
 from file_search import search_web, search_files, open_folder_by_name
+
+
+# Короткие подтверждения Дениса после успешного открытия известных приложений.
+_APP_OPEN_PHRASES = {
+    "notepad": "Блокнот открыт",
+    "calculator": "Калькулятор открыт",
+    "browser": "Браузер открыт",
+    "word": "Word открыт",
+    "excel": "Excel открыт",
+    "images": "Папка изображений открыта",
+}
 
 
 class CommandHandler:
@@ -28,6 +40,17 @@ class CommandHandler:
         self._get_ui = get_ui
         self._get_ui_thread_id = get_ui_thread_id
         self._ui_actions = ui_actions
+
+    @staticmethod
+    def _announce_success(message: str) -> None:
+        """Озвучивает короткое подтверждение; сбой TTS не прерывает команду."""
+        text = str(message or "").strip()
+        if not text:
+            return
+        try:
+            speak_text(text)
+        except Exception as exc:
+            print(f"[Озвучивание] Не удалось озвучить подтверждение: {exc}", flush=True)
 
     def handle_command(self, text: str) -> None:
         """Не блокирует Tk event loop при вызове из главного потока."""
@@ -149,34 +172,61 @@ class CommandHandler:
             self._ui_actions.put(("open_mail_client", None))
         elif action == "read_unread_mail":
             self._ui_actions.put(("confirm_read_mail", None))
-        elif action == "save_note":
+        else:
+            try:
+                self._execute_action(action, args, text, parent, ui)
+            except Exception as exc:
+                print(f"Не удалось выполнить команду «{action}»: {exc}", flush=True)
+                if ui is not None:
+                    self._ui_actions.put(("busy", None))
+
+    def _execute_action(
+        self,
+        action: str,
+        args: dict,
+        text: str,
+        parent: Any,
+        ui: Any,
+    ) -> None:
+        """Выполняет действие и при успехе коротко озвучивает результат."""
+        if action == "save_note":
             save_clipboard_as_note()
         elif action == "clipboard_to_excel":
             paste_clipboard_to_excel()
         elif action == "lock_computer":
             lock_computer()
+            self._announce_success("Компьютер заблокирован")
         elif action == "reboot_computer":
             reboot_computer()
         elif action == "open_downloads":
             open_downloads()
+            self._announce_success("Загрузки открыты")
         elif action == "open_recycle_bin":
             open_recycle_bin()
+            self._announce_success("Корзина открыта")
         elif action == "open_application":
-            open_application(str(args.get("app") or ""))
+            app = str(args.get("app") or "").strip().casefold()
+            open_application(app)
+            self._announce_success(_APP_OPEN_PHRASES.get(app, "Приложение открыто"))
         elif action == "open_installed_application":
-            open_installed_application(str(args.get("app_name") or ""))
+            display_name = open_installed_application(str(args.get("app_name") or ""))
+            self._announce_success(f"{display_name} открыт")
         elif action == "open_settings":
             open_settings()
+            self._announce_success("Параметры открыты")
         elif action == "empty_recycle_bin":
             empty_recycle_bin()
         elif action == "screenshot":
             take_screenshot()
+            self._announce_success("Скриншот сохранён")
         elif action == "inspect_screen":
             self._ui_actions.put(("inspect_screen", None))
         elif action == "paste_clipboard_to_application":
             paste_clipboard_to_application(str(args.get("app_name") or ""))
+            self._announce_success("Текст вставлен")
         elif action == "reminder":
-            add_reminder(str(args.get("reminder_text") or text))
+            if add_reminder(str(args.get("reminder_text") or text)):
+                self._announce_success("Напоминание добавлено")
         elif action == "add_note":
             add_note(str(args.get("note_text") or text))
         elif action == "complete_item":
@@ -189,8 +239,11 @@ class CommandHandler:
         elif action == "open_folder":
             if ui is not None:
                 self._ui_actions.put(("busy", "Ищу папку…"))
-            if open_folder_by_name(str(args.get("folder") or text), parent) and ui is not None:
+            opened = open_folder_by_name(str(args.get("folder") or text), parent)
+            if ui is not None:
                 self._ui_actions.put(("busy", None))
+            if opened:
+                self._announce_success("Папка открыта")
         elif action == "search_files":
             if ui is not None:
                 self._ui_actions.put(("busy", "Ищу файлы…"))
