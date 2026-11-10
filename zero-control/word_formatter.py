@@ -79,6 +79,7 @@ def _word_selection_snapshot():
         word_range = selection.Range
         if word_range.Start == word_range.End:
             raise RuntimeError("Сначала выдели фрагмент текста в Word.")
+        document_identity = str(app.ActiveDocument.FullName or app.ActiveDocument.Name)
         selected_text = str(word_range.Text or "")
         if not selected_text.strip():
             raise RuntimeError("В выделенном фрагменте нет текста.")
@@ -86,12 +87,12 @@ def _word_selection_snapshot():
             raise RuntimeError(
                 "Выделенный фрагмент слишком большой. Выдели меньшую часть (до 12 000 символов)."
             )
-        return int(word_range.Start), int(word_range.End), selected_text
+        return int(word_range.Start), int(word_range.End), document_identity, selected_text
     finally:
         pythoncom.CoUninitialize()
 
 
-def _apply_to_word(start: int, end: int, expected_text: str, suggestion: dict) -> int:
+def _apply_to_word(start: int, end: int, document_identity: str, expected_text: str, suggestion: dict) -> int:
     """Apply only paragraph properties; never assign or replace Range.Text."""
     import pythoncom
     import win32com.client
@@ -100,6 +101,9 @@ def _apply_to_word(start: int, end: int, expected_text: str, suggestion: dict) -
     try:
         app = win32com.client.GetActiveObject("Word.Application")
         document = app.ActiveDocument
+        current_identity = str(document.FullName or document.Name)
+        if current_identity != document_identity:
+            raise RuntimeError("В Word открыт другой документ. Ничего не применено.")
         word_range = document.Range(start, end)
         if str(word_range.Text or "") != expected_text:
             raise RuntimeError(
@@ -178,7 +182,7 @@ def _format_summary(suggestion: dict) -> str:
 def open_word_formatter(parent):
     """Ask consent, analyze selection in background, preview, then apply on approval."""
     try:
-        start, end, selected_text = _word_selection_snapshot()
+        start, end, document_identity, selected_text = _word_selection_snapshot()
     except Exception as exc:
         messagebox.showerror("ИИ — подровнять Word", str(exc), parent=parent)
         return
@@ -257,7 +261,7 @@ def open_word_formatter(parent):
             if not messagebox.askyesno("Предварительный просмотр", preview, parent=parent):
                 return
             try:
-                count = _apply_to_word(start, end, selected_text, suggestion)
+                count = _apply_to_word(start, end, document_identity, selected_text, suggestion)
             except Exception as exc:
                 messagebox.showerror("ИИ — подровнять Word", str(exc), parent=parent)
                 return
