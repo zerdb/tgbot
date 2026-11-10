@@ -93,7 +93,6 @@ def main():
         on_open_other=lambda: open_camera_viewer(_ui.root),
         on_open_notes=lambda: open_notes_window(_ui.root),
         on_open_settings=lambda: _ui_actions.put(("open_assistant_settings", None)),
-        on_word_format=lambda: _ui_actions.put(("word_format", None)),
     )
     _ui_thread_id = threading.get_ident()
     _command_handler = CommandHandler(
@@ -218,9 +217,6 @@ def main():
                     _ui.set_busy_overlay(None)
                     result_text, error = value
                     print("[Камера] " + (error if error else result_text), flush=True)
-                elif ui_action == "word_format":
-                    from word_formatter import open_word_formatter
-                    open_word_formatter(_ui.root)
                 elif ui_action == "open_assistant_settings":
                     from settings_window import open_settings_window
                     open_settings_window(_ui.root)
