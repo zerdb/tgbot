@@ -81,7 +81,7 @@ def _plan(command, context):
         "Excel actions: "
         '{"type":"sum_column","column":"B"} (добавить формулу SUM под последними данными); '
         '{"type":"format_cell","cell":"C5","bold":true,"italic":false,"fill_color":"#FF0000"}; '
-        '{"type":"format_range","range":"A1:C3","bold":true}; '
+        '{"type":"format_range","range":"A1:C3","bold":true,"fill_color":"#FF0000"}; '
         '{"type":"set_formula","cell":"D2","formula":"=A2+B2"}; '
         '{"type":"set_value","cell":"A1","value":"текст"}. '
         "Word action: "
@@ -166,7 +166,14 @@ def _excel_apply(app, actions):
             address = str(action.get("range") or "").strip().replace("$","")
             if not re.fullmatch(r"[A-Z]{1,3}[1-9][0-9]{0,6}(?::[A-Z]{1,3}[1-9][0-9]{0,6})?",address,re.I):
                 raise ValueError("Некорректный диапазон.")
-            _font(sheet.Range(address).Font,action)
+            target = sheet.Range(address)
+            _font(target.Font,action)
+            if "fill_color" in action:
+                color = str(action["fill_color"])
+                if not re.fullmatch(r"#[0-9A-Fa-f]{6}",color):
+                    raise ValueError("Цвет должен быть в формате #RRGGBB.")
+                red,green,blue = (int(color[i:i+2],16) for i in (1,3,5))
+                target.Interior.Color = red + green*256 + blue*65536
             results.append("Оформлен диапазон "+address.upper())
         elif kind == "set_formula":
             address, formula = _cell(action.get("cell")), str(action.get("formula") or "").strip()
