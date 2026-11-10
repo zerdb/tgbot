@@ -35,6 +35,7 @@ from background_workers import (
     camera_inspection_worker,
     camera_question_worker,
     mail_reader_worker,
+    office_command_worker,
 )
 
 from reminders import start_reminder_service, stop_reminder_service, deliver_due_reminders
@@ -93,6 +94,7 @@ def main():
         on_open_other=lambda: open_camera_viewer(_ui.root),
         on_open_notes=lambda: open_notes_window(_ui.root),
         on_open_settings=lambda: _ui_actions.put(("open_assistant_settings", None)),
+        on_office_command=lambda command: _ui_actions.put(("office_command", command)),
     )
     _ui_thread_id = threading.get_ident()
     _command_handler = CommandHandler(
@@ -217,6 +219,20 @@ def main():
                     _ui.set_busy_overlay(None)
                     result_text, error = value
                     print("[Камера] " + (error if error else result_text), flush=True)
+                elif ui_action == "office_command":
+                    command = str(value or "").strip()
+                    if command:
+                        _ui.set_busy_overlay("Проверяю активное окно Word / Excel и выполняю команду…")
+                        threading.Thread(
+                            target=office_command_worker,
+                            args=(command, _ui_actions),
+                            daemon=True,
+                            name="office-command",
+                        ).start()
+                elif ui_action == "office_command_result":
+                    question, answer, error = value
+                    _ui.set_busy_overlay(None)
+                    show_ai_answer(_ui.root, question, answer, error)
                 elif ui_action == "open_assistant_settings":
                     from settings_window import open_settings_window
                     open_settings_window(_ui.root)
