@@ -92,7 +92,7 @@ def _available_ntfs_volumes() -> list[str]:
     for index, letter in enumerate(string.ascii_uppercase):
         if not (drive_mask & (1 << index)):
             continue
-        root = f"{letter}:\\\\"
+        root = f"{letter}:\\"
         if kernel32.GetDriveTypeW(root) in local_drive_types:
             drives.append(f"{letter}:")
     return drives
