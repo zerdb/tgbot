@@ -241,9 +241,16 @@ def _format_summary(suggestion: dict) -> str:
 
 def open_word_formatter(parent):
     """Ask consent, analyze selection in background, preview, then apply on approval."""
+    print("[Word] Запущена команда форматирования выделения.", flush=True)
     try:
         start, end, document_identity, selected_text, profiles = _word_selection_snapshot()
+        print(
+            "[Word] Выделение прочитано: диапазон=%s:%s, документ=%r, символов=%s, абзацев=%s."
+            % (start, end, document_identity, len(selected_text), len(profiles)),
+            flush=True,
+        )
     except Exception as exc:
+        print("[Word] Не удалось прочитать выделение: %s: %s" % (type(exc).__name__, exc), flush=True)
         messagebox.showerror("ИИ — подровнять Word", str(exc), parent=parent)
         return
 
@@ -254,7 +261,9 @@ def open_word_formatter(parent):
         parent=parent,
     )
     if not approved:
+        print("[Word] Пользователь отказался передавать выделение на анализ.", flush=True)
         return
+    print("[Word] Пользователь разрешил анализ выделения.", flush=True)
 
     progress = tk.Toplevel(parent)
     progress.title("ИИ — подровнять Word")
@@ -382,3 +391,4 @@ def open_word_formatter(parent):
             pass
 
     threading.Thread(target=analyze, daemon=True, name="word-format-ai").start()
+    print("[Word] Фоновый поток анализа запущен.", flush=True)
