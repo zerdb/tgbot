@@ -623,6 +623,7 @@ def _search_worker(query: str, parent, export_format=None):
         display_query = "*" + " ".join(group[0] for group in term_groups) + "*" + extension
     print(f"Ищу «{display_query}» по локальному индексу MFT и SQLite...", flush=True)
     try:
+        vector_matches = False
         if term_groups:
             # Внутри смысловой группы ищем любой вариант (OR), между
             # обязательными понятиями требуем совпадение всех групп (AND).
@@ -655,6 +656,7 @@ def _search_worker(query: str, parent, export_format=None):
                             vector_query,
                             report=_report_search_progress,
                         )
+                        vector_matches = bool(matches)
                     except Exception as vector_exc:
                         print(
                             f"[Поиск файлов] Локальный векторный поиск недоступен: {vector_exc}",
@@ -771,7 +773,7 @@ def _search_worker(query: str, parent, export_format=None):
                 continue
 
         sort_mode = filters["sort"]
-        if sort_mode is None and term_groups and not (filters["start"] or filters["end"]):
+        if sort_mode is None and term_groups and not vector_matches and not (filters["start"] or filters["end"]):
             # Relevance is ranked locally: prefer matches in the filename over
             # matches only in a parent directory. No local filenames are sent
             # back to the cloud model for ranking.
