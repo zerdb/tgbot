@@ -153,7 +153,7 @@ class CommandHandler:
             # рабочего потока часто сталкивается с временной блокировкой clipboard.
             send_to_person = bool(
                 recipient_name
-                and re.search(r"\\b(отправ\\w*|перешл\\w*|пошл\\w*|передай\\w*)\\b", text or "", re.IGNORECASE)
+                and re.search(r"\b(отправ\w*|перешл\w*|пошл\w*|передай\w*)\b", text or "", re.IGNORECASE)
             )
             attach_files = bool(args.get("attach_copied_files", False) or send_to_person)
             if attach_files and not args.get("attach_copied_files", False):
