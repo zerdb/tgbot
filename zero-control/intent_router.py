@@ -207,8 +207,8 @@ def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) ->
     # Local fallback for a dative recipient when the semantic model is unavailable.
     if not recipient:
         patterns = (
-            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(?:мне\s+)?(?:эти\s+)?файл\w*\s+(.+)$",
-            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(.+?)\s+(?:эти\s+)?файл\w*\b",
+            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(?:мне\s+)?(?:эти\s+)?(?:файл\w*|документ\w*|вложен\w*)\s+(.+)$",
+            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(.+?)\s+(?:эти\s+)?(?:файл\w*|документ\w*|вложен\w*)\b",
         )
         for pattern in patterns:
             match = re.search(pattern, user_text or "", re.IGNORECASE)
