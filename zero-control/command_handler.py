@@ -195,11 +195,13 @@ class CommandHandler:
         if action == "save_note":
             save_clipboard_as_note()
         elif action == "clipboard_to_excel":
+            # Функция сама сообщает об ошибках пустого/неподходящего буфера.
             paste_clipboard_to_excel()
         elif action == "lock_computer":
             lock_computer()
             self._announce_success("Компьютер заблокирован")
         elif action == "reboot_computer":
+            # При отмене пользователем функция просто возвращается.
             reboot_computer()
         elif action == "open_downloads":
             open_downloads()
@@ -218,6 +220,7 @@ class CommandHandler:
             open_settings()
             self._announce_success("Параметры открыты")
         elif action == "empty_recycle_bin":
+            # При отмене подтверждения озвучка не нужна.
             empty_recycle_bin()
         elif action == "screenshot":
             take_screenshot()
@@ -231,8 +234,10 @@ class CommandHandler:
             if add_reminder(str(args.get("reminder_text") or text)):
                 self._announce_success("Напоминание добавлено")
         elif action == "add_note":
+            # add_note уже озвучивает «Запись сохранена.»
             add_note(str(args.get("note_text") or text))
         elif action == "complete_item":
+            # complete_item_by_text уже озвучивает «Отмечено выполненным.»
             if not complete_item_by_text(str(args.get("item_text") or "")):
                 print("Не нашёл подходящую активную запись. Открой заметки и дела, чтобы выбрать её.")
         elif action == "organize_folder":
