@@ -38,6 +38,12 @@ class ContactResolverTests(unittest.TestCase):
         self.assertEqual(result["status"], "match")
         self.assertEqual(result["contact"]["name"], "Анна Смирнова")
 
+    def test_phonetic_match_is_offered_for_confirmation(self):
+        contact = {"Баграт Бамматов": {"email": "bagrat@example.com"}}
+        result = resolve_contact("Богатырю", contact)
+        self.assertEqual(result["status"], "ambiguous")
+        self.assertEqual(result["candidates"][0]["name"], "Баграт Бамматов")
+
     def test_does_not_match_contact_without_email(self):
         result = resolve_contact("Анне", {"Анна Смирнова": {"email": ""}})
         self.assertEqual(result["status"], "not_found")

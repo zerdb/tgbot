@@ -31,6 +31,38 @@ def _token_forms(token: str) -> set[str]:
     return forms
 
 
+def _consonant_skeleton(token: str) -> str:
+    """A lightweight phonetic key resilient to vowel substitutions by speech recognition."""
+    return re.sub(r"[аеёиоуыэюяaeiouy]", "", token)
+
+
+def _damerau_similarity(left: str, right: str) -> float:
+    """Normalized edit similarity with support for adjacent transpositions."""
+    if not left or not right:
+        return 0.0
+    rows, cols = len(left) + 1, len(right) + 1
+    distance = [[0] * cols for _ in range(rows)]
+    for i in range(rows):
+        distance[i][0] = i
+    for j in range(cols):
+        distance[0][j] = j
+    for i in range(1, rows):
+        for j in range(1, cols):
+            cost = 0 if left[i - 1] == right[j - 1] else 1
+            distance[i][j] = min(
+                distance[i - 1][j] + 1,
+                distance[i][j - 1] + 1,
+                distance[i - 1][j - 1] + cost,
+            )
+            if (
+                i > 1 and j > 1
+                and left[i - 1] == right[j - 2]
+                and left[i - 2] == right[j - 1]
+            ):
+                distance[i][j] = min(distance[i][j], distance[i - 2][j - 2] + 1)
+    return 1.0 - distance[-1][-1] / max(len(left), len(right))
+
+
 def _token_similarity(query: str, candidate: str) -> float:
     query_forms = _token_forms(query)
     candidate_forms = _token_forms(candidate)
@@ -45,6 +77,14 @@ def _token_similarity(query: str, candidate: str) -> float:
             shorter = min(len(left), len(right))
             if shorter >= 4 and (left.startswith(right) or right.startswith(left)):
                 best = max(best, 0.86 + 0.10 * shorter / max(len(left), len(right)))
+
+            # Speech recognition often changes vowels and occasionally swaps
+            # adjacent consonants. Compare consonant skeletons as a second,
+            # lower-confidence signal rather than treating them as exact names.
+            left_key = _consonant_skeleton(left)
+            right_key = _consonant_skeleton(right)
+            if min(len(left_key), len(right_key)) >= 3:
+                best = max(best, _damerau_similarity(left_key, right_key))
     return best
 
 
@@ -88,15 +128,12 @@ def resolve_contact(spoken_name: str, address_book: dict) -> dict:
 
     best = ranked[0]
     second_score = ranked[1]["score"] if len(ranked) > 1 else 0.0
-    if best["score"] >= 0.90 and (len(ranked) == 1 or best["score"] - second_score >= 0.12):
-        return {"status": "match", "contact": best, "candidates": ranked[:3]}
     if best["score"] >= 0.86 and (len(ranked) == 1 or best["score"] - second_score >= 0.12):
         return {"status": "match", "contact": best, "candidates": ranked[:3]}
 
-    # Show only close candidates; never silently select among similar contacts.
+    # Medium-confidence phonetic matches are presented for explicit confirmation,
+    # even when there is only one plausible contact. Never silently guess.
     close = [item for item in ranked if item["score"] >= max(0.62, best["score"] - 0.12)]
-    if best["score"] >= 0.68 and len(close) > 1:
+    if best["score"] >= 0.68 and close:
         return {"status": "ambiguous", "contact": None, "candidates": close[:5]}
-    if best["score"] >= 0.90:
-        return {"status": "match", "contact": best, "candidates": ranked[:3]}
     return {"status": "not_found", "contact": None, "candidates": ranked[:3]}
