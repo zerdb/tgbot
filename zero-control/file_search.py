@@ -19,6 +19,7 @@ _search_results = queue.Queue()
 _folder_results = queue.Queue()
 _polling_parent = None
 _busy_callback = None
+_progress_messages = queue.Queue()
 
 
 def search_web(text: str):
@@ -589,13 +590,11 @@ def export_file_results(results, query: str, export_format: str) -> Path:
 
 
 def _report_search_progress(message: str) -> None:
-    """Report worker progress to the console and the Tk overlay."""
+    """Report progress without touching Tkinter from the search worker."""
     print(f"[Поиск файлов] {message}", flush=True)
-    if _busy_callback:
-        try:
-            _busy_callback(message)
-        except Exception:
-            pass
+    # Tkinter calls (including root.after) are not safe from worker threads.
+    # The UI polling callback drains this queue on the main Tk thread.
+    _progress_messages.put(str(message))
 
 
 def _search_worker(query: str, parent, export_format=None):
@@ -923,6 +922,15 @@ def _poll_search_queues():
         if not parent.winfo_exists():
             _polling_parent = None
             return
+        # Progress callbacks are delivered only on Tk's main thread.
+        while True:
+            try:
+                progress_message = _progress_messages.get_nowait()
+            except queue.Empty:
+                break
+            if _busy_callback:
+                _busy_callback(progress_message)
+
         while True:
             try:
                 query, request_parent, export_format = _search_requests.get_nowait()

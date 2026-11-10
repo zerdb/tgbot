@@ -455,7 +455,9 @@ def refresh_and_search(query: str | list[str], report: Callable[[str], None] | N
 
         return [Path(row[0]) for row in rows]
     finally:
+        close_started = time.perf_counter()
         connection.close()
+        report(f"[Тайминг] Закрытие SQLite: {time.perf_counter() - close_started:.3f} сек.")
 
 
 def refresh_and_search_folders(query: str, report: Callable[[str], None] | None = None) -> list[Path]:
