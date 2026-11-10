@@ -74,7 +74,11 @@ class LocalIntentValidationTests(unittest.TestCase):
     def test_word_aliases_route_to_word(self):
         for phrase in ("Открой Word", "Открой Ворд", "Запусти Ворт", "Открой Уорд"):
             with self.subTest(phrase=phrase):
-                intent = intent_router._understand_command_rules(phrase)
+                with patch.object(
+                    intent_router, "_classify_semantically",
+                    side_effect=AssertionError("semantic model must not be called"),
+                ):
+                    intent = intent_router._understand_command(phrase)
                 self.assertEqual(intent["action"], "open_application")
                 self.assertEqual(intent["parameters"], {"app": "word"})
 
