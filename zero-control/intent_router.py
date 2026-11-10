@@ -218,7 +218,7 @@ def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) ->
                 r"\b(?:мне|пожалуйста|срочно|эти|этих|файлы?|документы?|вложения?|по\s+почте|на\s+почту|email)\b",
                 " ", match.group(1), flags=re.IGNORECASE,
             )
-            candidate = re.sub(r"\s+", " ", candidate).strip(" .,!?:;«»\\"")
+            candidate = re.sub(r"\s+", " ", candidate).strip(" .,!?:;«»")
             # Dative endings cover common spoken recipient forms without guessing folders or paths.
             if candidate and re.search(r"(?:у|ю|е|и|ам|ям|ом|ем|ой|ей)$", candidate.lower().replace("ё", "е")):
                 recipient = candidate
