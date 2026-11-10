@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, os, queue, re, threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from notifications import show_notification, speak_text
+from notifications import show_notification
 from agent_core import APP_DATA
 
 _APP_DATA = APP_DATA
@@ -155,8 +155,6 @@ def add_note(text: str) -> bool:
     with _lock:
         _load_locked(); _items.append(_new_item(text)); _save_locked()
     print("Запись сохранена в общих заметках и делах.")
-    try: speak_text("Запись сохранена.")
-    except Exception as exc: print(f"Не удалось озвучить сохранение: {exc}")
     return True
 
 def add_reminder(text: str) -> bool:
@@ -214,8 +212,6 @@ def complete_item_by_text(query: str) -> bool:
         if match is None: return False
         match["completed"] = True; _save_locked()
     print(f"Выполнено: {match['text']}")
-    try: speak_text("Отмечено выполненным.")
-    except Exception: pass
     return True
 
 def delete_item(item_id: str) -> bool:
@@ -265,8 +261,6 @@ def deliver_due_reminders():
         print(f"НАПОМИНАНИЕ: {message}")
         try: show_notification("Напоминание",message)
         except Exception as exc: print(f"Не удалось показать уведомление: {exc}")
-        try: speak_text("Напоминание. " + message)
-        except Exception as exc: print(f"Не удалось озвучить напоминание: {exc}")
 
 def start_reminder_service():
     global _reminder_thread_started, _reminder_thread
