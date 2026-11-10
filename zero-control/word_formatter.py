@@ -56,6 +56,32 @@ def validate_format_suggestion(payload: dict) -> dict:
     return result
 
 
+def parse_format_response(answer: str):
+    """Parse Groq output; distinguish a deliberate no-op from a malformed reply."""
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("Groq вернул пустой ответ.")
+    raw = answer.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+        if raw.lower().startswith("json"):
+            raw = raw[4:].strip()
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "Groq вернул некорректный JSON (позиция %s): %s"
+            % (exc.pos, raw[:500])
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Groq вернул JSON не в виде объекта.")
+    if payload.get("no_changes") is True:
+        reason = str(payload.get("reason") or "").strip()
+        return None, reason or "Оформление абзацев уже выглядит согласованным."
+    return validate_format_suggestion(payload), None
+
+
 def _word_selection_snapshot():
     """Read the active Word selection without changing the document."""
     try:
@@ -241,54 +267,83 @@ def open_word_formatter(parent):
     progress.transient(parent)
     progress.grab_set()
 
+
     def analyze():
         try:
-            answer = chat(
-                [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Ты анализируешь фрагмент документа Word и предлагаешь "
-                            "только безопасные параметры оформления абзацев. "
-                            "Не переписывай текст и не меняй смысл. Верни только JSON-объект "
-                            "с полями: alignment (left/center/right/justify), "
-                            "left_indent_pt, right_indent_pt, first_line_indent_pt, "
-                            "space_before_pt, space_after_pt. Числа — в пунктах. "
-                            "Учитывай, что выделение может содержать несколько обычных абзацев. "
-                            "Не предлагай экстремальные отступы или интервалы. "
-                            "Не включай поля, которые не требуется менять."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": (
-                            "Текущий текст выделения:\n" + selected_text
-                            + "\n\nТекущие параметры обычных абзацев (пункты):\n"
-                            + json.dumps(profiles, ensure_ascii=False)
-                            + "\n\nНайди явные несоответствия. По возможности ориентируйся "
-                            "на преобладающие значения. Не меняй параметры, которые уже "
-                            "выглядят согласованно; для основного текста предпочитай "
-                            "левое выравнивание или выравнивание по ширине."
-                        ),
-                    },
-                ],
-                temperature=0.1,
-                max_tokens=400,
-                response_format={"type": "json_object"},
+            print(
+                "[Word] Начат анализ: символов=%s, абзацев=%s, профили=%s."
+                % (len(selected_text), len(profiles), json.dumps(profiles, ensure_ascii=False)),
+                flush=True,
             )
-            suggestion = validate_format_suggestion(json.loads(answer))
-            result = (suggestion, None)
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты — редактор оформления документов Microsoft Word. "
+                        "Сравни параметры обычных абзацев и найди конкретные визуальные "
+                        "несоответствия. Не меняй текст, смысл или символьное оформление. "
+                        "Анализируй только переданные параметры абзацев: выравнивание, "
+                        "отступы и интервалы. Учитывай стиль и контекст; различие не является "
+                        "ошибкой, если объясняется назначением абзаца. Если значения "
+                        "единообразны и уместны, оставь их без изменений. Не выдумывай "
+                        "улучшения. Если есть обоснованное улучшение, верни JSON-объект "
+                        "только с изменяемыми полями: alignment (left/center/right/justify), "
+                        "left_indent_pt, right_indent_pt, first_line_indent_pt, "
+                        "space_before_pt, space_after_pt. Числа — в пунктах. "
+                        "Если улучшений нет, верни строго "
+                        '{"no_changes":true,"reason":"краткое объяснение"}. '
+                        "Никогда не возвращай пустой объект. Только JSON без Markdown. "
+                        "Безопасные пределы: отступы -36..144 пт, интервалы 0..48 пт."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "Оцени оформление выделения. Определи общий тип фрагмента и "
+                        "сравни абзацы с преобладающим согласованным оформлением. Для "
+                        "основного текста часто уместны левое выравнивание или по ширине, "
+                        "нулевые боковые отступы и умеренный отступ первой строки либо "
+                        "единообразные интервалы, но не навязывай эти правила, если текущий "
+                        "вариант аккуратен.\n\nТекст для понимания структуры:\n"
+                        + selected_text
+                        + "\n\nПараметры обычных абзацев (пункты):\n"
+                        + json.dumps(profiles, ensure_ascii=False)
+                        + "\n\nВерни только JSON согласно системной инструкции."
+                    ),
+                },
+            ]
+            print("[Word] Отправка запроса в Groq (JSON mode).", flush=True)
+            answer = chat(messages, temperature=0.1, max_tokens=600,
+                          response_format={"type": "json_object"})
+            print("[Word] Получен ответ Groq: %s символов; фрагмент=%r."
+                  % (len(answer), answer[:1200]), flush=True)
+            suggestion, no_change_reason = parse_format_response(answer)
+            if suggestion is None:
+                print("[Word] Изменения не требуются: " + no_change_reason, flush=True)
+                result = (None, None, no_change_reason)
+            else:
+                print("[Word] Предложение проверено: "
+                      + json.dumps(suggestion, ensure_ascii=False), flush=True)
+                result = (suggestion, None, None)
         except Exception as exc:
-            result = (None, str(exc))
+            print("[Word] Ошибка анализа: %s: %s" % (type(exc).__name__, exc), flush=True)
+            result = (None, str(exc), None)
 
         def finish():
             try:
                 progress.destroy()
             except tk.TclError:
                 pass
-            suggestion, error = result
+            suggestion, error, no_change_reason = result
             if error:
                 messagebox.showerror("ИИ — подровнять Word", error, parent=parent)
+                return
+            if suggestion is None:
+                messagebox.showinfo(
+                    "ИИ — подровнять Word",
+                    no_change_reason or "Оформление уже выглядит согласованным. Изменения не нужны.",
+                    parent=parent,
+                )
                 return
             preview = (
                 "ИИ предлагает изменить параметры абзацев:\n\n"
@@ -298,12 +353,15 @@ def open_word_formatter(parent):
                 "списки пропускаются. Применить?"
             )
             if not messagebox.askyesno("Предварительный просмотр", preview, parent=parent):
+                print("[Word] Пользователь отклонил предложение. Документ не изменён.", flush=True)
                 return
             try:
                 count = _apply_to_word(start, end, document_identity, selected_text, suggestion)
             except Exception as exc:
+                print("[Word] Ошибка применения: %s: %s" % (type(exc).__name__, exc), flush=True)
                 messagebox.showerror("ИИ — подровнять Word", str(exc), parent=parent)
                 return
+            print("[Word] Применение завершено: изменено абзацев=%s." % count, flush=True)
             if count == 0:
                 messagebox.showwarning(
                     "ИИ — подровнять Word",
