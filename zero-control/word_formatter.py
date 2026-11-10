@@ -207,8 +207,12 @@ def _word_selection_snapshot():
                         flags[property_name.lower()] = bool(getattr(char_range.Font, property_name))
                     except Exception:
                         flags[property_name.lower()] = None
-                relative_start = int(char_range.Start) - int(word_range.Start)
-                relative_end = int(char_range.End) - int(word_range.Start)
+                absolute_start = max(int(char_range.Start), int(word_range.Start))
+                absolute_end = min(int(char_range.End), int(word_range.End))
+                if absolute_end <= absolute_start:
+                    continue
+                relative_start = absolute_start - int(word_range.Start)
+                relative_end = absolute_end - int(word_range.Start)
                 if (character_runs and character_runs[-1]["end"] == relative_start
                         and all(character_runs[-1].get(key) == value for key, value in flags.items())):
                     character_runs[-1]["end"] = relative_end
