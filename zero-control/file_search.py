@@ -1019,6 +1019,17 @@ def _poll_search_queues():
             _polling_parent = None
 
 
+def _sort_file_results_by_creation(results):
+    """Return file results newest-first using the creation timestamp."""
+    return sorted(
+        results,
+        key=lambda item: (
+            float(item[1]) if item[1] is not None else float("-inf")
+        ),
+        reverse=True,
+    )
+
+
 def show_file_results(parent, results: list[tuple[Path, float, int]], query: str):
     import tkinter as tk
     from tkinter import ttk, messagebox
@@ -1027,8 +1038,8 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
 
     window = tk.Toplevel(parent)
     window.title(f"Результаты поиска: {query}")
-    window.geometry("1000x500")
-    window.minsize(650, 300)
+    window.geometry("1120x520")
+    window.minsize(760, 340)
     window.transient(parent)
     ttk.Label(
         window,
@@ -1037,14 +1048,26 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
 
     frame = ttk.Frame(window)
     frame.pack(fill="both", expand=True, padx=12, pady=6)
-    columns = ("file", "created", "size")
+    columns = ("name", "created", "size", "path")
     listing = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
-    listing.heading("file", text="Файл")
+    listing.heading("name", text="Название файла")
     listing.heading("created", text="Дата создания")
     listing.heading("size", text="Размер")
-    listing.column("file", width=610, minwidth=260, stretch=True)
-    listing.column("created", width=155, minwidth=135, stretch=False, anchor="center")
-    listing.column("size", width=110, minwidth=95, stretch=False, anchor="e")
+    listing.heading("path", text="Путь к папке")
+    listing.column("name", width=330, minwidth=180, stretch=False)
+    listing.column("created", width=210, minwidth=150, stretch=False, anchor="center")
+    listing.column("size", width=130, minwidth=90, stretch=False, anchor="e")
+    listing.column("path", width=420, minwidth=200, stretch=False)
+
+    def resize_columns(event=None):
+        # Keep the four columns balanced as the result window is resized.
+        available = max(500, listing.winfo_width() - 22)
+        proportions = (0.30, 0.19, 0.12, 0.39)
+        minimums = (180, 150, 90, 200)
+        for column, proportion, minimum in zip(columns, proportions, minimums):
+            listing.column(column, width=max(minimum, int(available * proportion)))
+
+    frame.bind("<Configure>", resize_columns)
 
     y_scrollbar = ttk.Scrollbar(frame, orient="vertical", command=listing.yview)
     x_scrollbar = ttk.Scrollbar(frame, orient="horizontal", command=listing.xview)
@@ -1064,6 +1087,7 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
         return f"{value} Б"
 
     paths = []
+    results = _sort_file_results_by_creation(results)
     for index, (path, created_at, size) in enumerate(results):
         paths.append(path)
         try:
@@ -1074,7 +1098,7 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
             "",
             "end",
             iid=str(index),
-            values=(str(path), created_text, format_size(size)),
+            values=(path.name, created_text, format_size(size), str(path.parent)),
         )
 
     def open_selected(_event=None):
