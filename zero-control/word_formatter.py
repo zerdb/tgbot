@@ -376,7 +376,7 @@ def _build_analysis_messages(selected_text: str, profiles: list[dict]) -> list[d
         "но при этом нуждаться в улучшении. Учитывай содержание, длину, количество "
         "абзацев, вероятные роли и текущие параметры. Не меняй текст, смысл, шрифт, "
         "размер или цвет. "
-        "Разрешены только свойства абзацев: alignment (left/center/right/justify), "
+        "Для абзацев разрешены свойства: alignment (left/center/right/justify), "
         "left_indent_pt, right_indent_pt, first_line_indent_pt, space_before_pt, "
         "space_after_pt. Числа — в пунктах. Для обычного основного текста боковые "
         "отступы обычно 0; выравнивание слева или по ширине. Обычно выбирают один "
@@ -458,11 +458,12 @@ def open_word_formatter(parent):
             )
             messages = _build_analysis_messages(selected_text, profiles)
             print("[Word] Отправка запроса в Groq (JSON mode).", flush=True)
-            answer = chat(messages, temperature=0.1, max_tokens=600,
+            answer = chat(messages, temperature=0.1, max_tokens=1000,
                           response_format={"type": "json_object"})
             print("[Word] Получен ответ Groq: %s символов; фрагмент=%r."
                   % (len(answer), answer[:1200]), flush=True)
-            suggestion, no_change_reason = parse_format_response(answer, len(selected_text))
+            selection_length = end - start  # Word range offsets use UTF-16 character positions.
+            suggestion, no_change_reason = parse_format_response(answer, selection_length)
             if suggestion is None:
                 print("[Word] Изменения не требуются: " + no_change_reason, flush=True)
                 result = (None, None, no_change_reason)
