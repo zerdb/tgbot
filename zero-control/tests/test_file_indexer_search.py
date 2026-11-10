@@ -44,6 +44,20 @@ class SearchNeedleVariantTests(unittest.TestCase):
         self.assertIn("SQLite fallback", mode)
         connection.close()
 
+    def test_file_results_are_sorted_newest_creation_first(self):
+        from file_search import _sort_file_results_by_creation
+
+        results = [
+            (Path(r"C:\\Docs\\older.pdf"), 100.0, 10),
+            (Path(r"C:\\Docs\\newest.pdf"), 300.0, 30),
+            (Path(r"C:\\Docs\\middle.pdf"), 200.0, 20),
+        ]
+        sorted_results = _sort_file_results_by_creation(results)
+        self.assertEqual(
+            [item[0].name for item in sorted_results],
+            ["newest.pdf", "middle.pdf", "older.pdf"],
+        )
+
     def test_extension_query_uses_existing_connection(self):
         import sqlite3
 
