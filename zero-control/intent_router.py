@@ -234,7 +234,15 @@ def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) ->
                 recipient = candidate
                 break
 
-    if not recipient and str(target.get("type") or "").lower() != "person":
+    explicit_person_reference = bool(re.search(
+        r"\\b(?:(?:этому|тому|такому|данному)\\s+человеку|кому[- ](?:то|нибудь))\\b",
+        normalized,
+    ))
+    if (
+        not recipient
+        and str(target.get("type") or "").lower() != "person"
+        and not explicit_person_reference
+    ):
         return None
     if not recipient:
         return {
@@ -371,7 +379,6 @@ def _understand_command(user_text: str) -> dict:
                 semantic["clarification"] = ""
                 semantic["confidence"] = max(float(semantic.get("confidence", 0.0) or 0.0), 0.75)
                 return semantic
-            return semantic
             return semantic
         if semantic.get("action") != "unknown" and float(semantic.get("confidence", 0)) >= 0.55:
             return semantic
