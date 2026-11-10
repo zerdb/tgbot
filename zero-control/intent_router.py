@@ -235,7 +235,7 @@ def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) ->
                 break
 
     explicit_person_reference = bool(re.search(
-        r"\\b(?:(?:этому|тому|такому|данному)\\s+человеку|кому[- ](?:то|нибудь))\\b",
+        r"\b(?:(?:этому|тому|такому|данному)\s+человеку|кому[- ](?:то|нибудь))\b",
         normalized,
     ))
     if (
