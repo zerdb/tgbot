@@ -414,26 +414,85 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
     ttk.Button(contact_buttons, text="Удалить", command=delete_contact).pack(side="left")
     ttk.Button(contact_buttons, text="✉  Написать письмо", command=write_to_contact).pack(side="left", padx=7)
 
-    def normalized_tokens(value):
-        value = re.sub(r"[^а-яa-z0-9 ]", " ", str(value or "").lower().replace("ё", "е"))
-        return {
-            re.sub(r"(иями|ями|ами|ого|ему|ому|ыми|ими|иях|а|я|у|ю|е|ы|и|ом|ем|ь|ъ)$", "", token)
-            for token in value.split()
-        } - {""}
+    def choose_contact_match(candidates):
+        """Ask the user to choose when local matching finds close contact candidates."""
+        dialog = tk.Toplevel(win)
+        dialog.title("Уточнить получателя")
+        dialog.transient(win)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        ttk.Label(
+            dialog,
+            text=f"Кого ты имел в виду под «{recipient_name}»?",
+            font=("Segoe UI", 10, "bold"),
+        ).pack(anchor="w", padx=14, pady=(14, 8))
+        choices = tk.Listbox(dialog, width=62, height=min(7, max(2, len(candidates))))
+        choices.pack(fill="both", expand=True, padx=14)
+        for candidate in candidates:
+            name = candidate["name"]
+            email = candidate["email"]
+            choices.insert("end", f"{name}  —  {email}")
+        selected = {"name": None}
+
+        def accept(_event=None):
+            indexes = choices.curselection()
+            if not indexes:
+                return
+            selected["name"] = candidates[indexes[0]]["name"]
+            dialog.destroy()
+
+        controls = ttk.Frame(dialog)
+        controls.pack(fill="x", padx=14, pady=12)
+        ttk.Button(controls, text="Выбрать", command=accept).pack(side="right")
+        ttk.Button(controls, text="Отмена", command=dialog.destroy).pack(side="right", padx=(0, 8))
+        choices.bind("<Double-Button-1>", accept)
+        if candidates:
+            choices.selection_set(0)
+            choices.focus_set()
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        center_window(dialog, win)
+        win.wait_window(dialog)
+        return selected["name"]
+
+    def apply_recipient(name):
+        item = book_cache.get(name, {})
+        email = str(item.get("email") or "").strip()
+        if not email:
+            return False
+        recipient_var.set(name)
+        address_var.set(f"{name} <{email}>")
+        contacts_status.set(f"Получатель выбран: {name}")
+        return True
 
     def prepare_compose():
         refresh_contacts()
         if recipient_name:
-            spoken = normalized_tokens(recipient_name)
-            matches = [
-                name for name, item in book_cache.items()
-                if item.get("email") and spoken and spoken.issubset(normalized_tokens(name))
-            ]
-            if len(matches) == 1:
-                recipient_var.set(matches[0])
-                address_var.set(f"{matches[0]} <{book_cache[matches[0]]['email']}>")
-            elif len(matches) > 1:
-                contacts_status.set("Имя неоднозначно — выбери получателя вручную на вкладке «Написать».")
+            from contact_resolver import resolve_contact
+
+            resolution = resolve_contact(recipient_name, book_cache)
+            if resolution["status"] == "match":
+                apply_recipient(resolution["contact"]["name"])
+                print(
+                    "[Контакты] Локально найден получатель: %s (уверенность %.2f)."
+                    % (resolution["contact"]["name"], resolution["contact"]["score"]),
+                    flush=True,
+                )
+            elif resolution["status"] == "ambiguous":
+                print(
+                    "[Контакты] Неоднозначное совпадение для «%s»: %s."
+                    % (recipient_name, ", ".join(item["name"] for item in resolution["candidates"])),
+                    flush=True,
+                )
+                selected = choose_contact_match(resolution["candidates"])
+                if selected:
+                    apply_recipient(selected)
+                else:
+                    contacts_status.set("Получатель не выбран — проверь адрес перед отправкой.")
+            else:
+                contacts_status.set(
+                    f"Контакт «{recipient_name}» не найден. Выбери получателя вручную или уточни имя."
+                )
+                print("[Контакты] Не найден контакт для «%s»." % recipient_name, flush=True)
         if add_files_on_open:
             # Сначала используем снимок списка файлов, полученный в момент
             # голосовой команды, пока очередь GUI не изменила состояние буфера.
