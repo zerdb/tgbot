@@ -36,6 +36,39 @@ class WordFormatterValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_format_suggestion({"comment": "Looks fine"})
 
+
+    def test_parses_valid_suggestion(self):
+        from word_formatter import parse_format_response
+
+        suggestion, reason = parse_format_response('{"alignment":"justify","space_after_pt":6}')
+        self.assertEqual(suggestion, {"alignment": "justify", "space_after_pt": 6.0})
+        self.assertIsNone(reason)
+
+    def test_parses_explicit_no_changes(self):
+        from word_formatter import parse_format_response
+
+        suggestion, reason = parse_format_response(
+            '{"no_changes":true,"reason":"Абзацы оформлены единообразно."}'
+        )
+        self.assertIsNone(suggestion)
+        self.assertEqual(reason, "Абзацы оформлены единообразно.")
+
+    def test_parses_fenced_json(self):
+        from word_formatter import parse_format_response
+
+        answer = "```json\n{\"alignment\":\"left\"}\n```"
+        suggestion, reason = parse_format_response(answer)
+        self.assertEqual(suggestion, {"alignment": "left"})
+        self.assertIsNone(reason)
+
+    def test_rejects_empty_or_malformed_response(self):
+        from word_formatter import parse_format_response
+
+        for answer in ("", "{}", "not json", "[]"):
+            with self.subTest(answer=answer):
+                with self.assertRaises(ValueError):
+                    parse_format_response(answer)
+
     def test_rejects_non_object_response(self):
         with self.assertRaises(ValueError):
             validate_format_suggestion(["justify"])
