@@ -45,6 +45,8 @@ def _load_model():
     import torch
     from transformers import AutoModel, AutoTokenizer
 
+    # Keep background indexing responsive on everyday Windows machines.
+    torch.set_num_threads(max(1, min(4, os.cpu_count() or 1)))
     MODEL_CACHE.mkdir(parents=True, exist_ok=True)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, cache_dir=str(MODEL_CACHE))
     model = AutoModel.from_pretrained(MODEL_ID, cache_dir=str(MODEL_CACHE))
