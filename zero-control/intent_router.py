@@ -222,7 +222,7 @@ def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) ->
             # Dative endings cover common spoken recipient forms without guessing folders or paths.
             candidate_normalized = candidate.lower().replace("ё", "е")
             is_unnamed_person_reference = bool(re.fullmatch(
-                r"(?:(?:этому|тому|такому|данному)\\s+)?(?:человеку|лицу|адресату)|кому[- ](?:то|нибудь)",
+                r"(?:(?:этому|тому|такому|данному)\s+)?(?:человеку|лицу|адресату)|кому[- ](?:то|нибудь)",
                 candidate_normalized,
             ))
             # Dative endings cover common spoken recipient forms without guessing folders or paths.
@@ -358,17 +358,20 @@ def _understand_command(user_text: str) -> dict:
             if email_request:
                 attach_files = (
                     source.get("type") == "clipboard"
-                    or bool(re.search(r"\b(файл\w*|вложен\w*|буфер\w*|документ\w*)\b", normalized))
+                    or bool(re.search(r"\\b(файл\\w*|вложен\\w*|буфер\\w*|документ\\w*)\\b", normalized))
                 )
-                semantic["kind"] = "execute"
                 semantic["action"] = "email_compose"
-                semantic["parameters"] = {
-                    "recipient_name": recipient,
-                    "attach_copied_files": attach_files,
-                }
+                semantic["parameters"] = {"attach_copied_files": attach_files}
+                if not recipient:
+                    semantic["kind"] = "clarify"
+                    semantic["clarification"] = "Кому отправить письмо?"
+                    return semantic
+                semantic["kind"] = "execute"
+                semantic["parameters"]["recipient_name"] = recipient
                 semantic["clarification"] = ""
                 semantic["confidence"] = max(float(semantic.get("confidence", 0.0) or 0.0), 0.75)
                 return semantic
+            return semantic
             return semantic
         if semantic.get("action") != "unknown" and float(semantic.get("confidence", 0)) >= 0.55:
             return semantic
