@@ -22,6 +22,10 @@ class ImplicitFileEmailIntentTests(unittest.TestCase):
         intent = _implicit_file_email_intent("Перешли Ивану документы.")
         self.assertEqual(intent["parameters"]["recipient_name"], "Ивану")
 
+    def test_extracts_recipient_for_documents_as_well_as_files(self):
+        intent = _implicit_file_email_intent("Отправь документы Богатырю.")
+        self.assertEqual(intent["parameters"]["recipient_name"], "Богатырю")
+
     def test_does_not_assume_email_for_non_person_destination(self):
         self.assertIsNone(_implicit_file_email_intent("Отправь файлы в архив."))
 
