@@ -494,29 +494,30 @@ def open_mail_client(parent, initial_tab="inbox", start_new_contact=False,
                 )
                 print("[Контакты] Не найден контакт для «%s»." % recipient_name, flush=True)
         if add_files_on_open:
-            # Сначала используем снимок списка файлов, полученный в момент
-            # голосовой команды, пока очередь GUI не изменила состояние буфера.
+            # Буфер обмена читается только в GUI-потоке. Explorer может
+            # кратковременно удерживать его, поэтому повторяем попытки до 5 секунд.
             add_attachment_paths(initial_attachment_paths or [])
             if not attachment_paths:
-                try:
-                    from clipboard_files import copied_file_paths
-                    add_attachment_paths(copied_file_paths())
-                except Exception as exc:
-                    compose_status.set("Не удалось прочитать буфер обмена: " + str(exc))
-                # Explorer иногда кратковременно удерживает clipboard.
-                # Повторяем чтение в GUI-потоке, если первая попытка была пустой.
+                compose_status.set("Ищу скопированные файлы в буфере обмена…")
+
                 def retry_clipboard_import(attempt=0):
-                    if attachment_paths or attempt >= 10 or not win.winfo_exists():
+                    if attachment_paths or not win.winfo_exists():
                         return
                     try:
                         from clipboard_files import copied_file_paths
-                        add_attachment_paths(copied_file_paths())
+                        found = copied_file_paths()
+                        add_attachment_paths(found)
+                        if found:
+                            print(f"[Почта] Автоматически добавлено вложений: {len(attachment_paths)}", flush=True)
                     except Exception as exc:
                         compose_status.set("Не удалось прочитать буфер обмена: " + str(exc))
-                    if not attachment_paths and attempt < 9:
+                    if not attachment_paths and attempt < 19:
                         win.after(250, lambda: retry_clipboard_import(attempt + 1))
-                if not attachment_paths:
-                    win.after(250, retry_clipboard_import)
+                    elif not attachment_paths:
+                        compose_status.set("Файлы не найдены в буфере. Нажми «Добавить файлы» или скопируй их в Проводнике.")
+                        print("[Почта] В буфере обмена не найдено файлов для вложения.", flush=True)
+
+                retry_clipboard_import()
         notebook.select(compose_tab)
 
     refresh_contacts()
