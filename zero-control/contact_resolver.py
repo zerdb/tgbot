@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from difflib import SequenceMatcher
+from itertools import combinations
 
 
 def _normalize(value: str) -> str:
@@ -93,15 +94,21 @@ def _score_name(spoken_tokens: list[str], contact_name: str) -> float:
     if not spoken_tokens or not contact_tokens:
         return 0.0
 
-    scores = [
-        max((_token_similarity(token, candidate) for candidate in contact_tokens), default=0.0)
-        for token in spoken_tokens
-    ]
-    # A candidate must account for every spoken name token; one matching fragment
-    # must not outweigh another token that points to a different person.
-    if any(score < 0.62 for score in scores):
+    # Match tokens in their original order and to distinct contact-name tokens.
+    # Independent best-match scoring can accidentally identify "Ивану Петрову"
+    # as "Пётр Иванов" by reusing/swapping the same tokens.
+    if len(spoken_tokens) > len(contact_tokens):
         return 0.0
-    return sum(scores) / len(scores)
+    best = 0.0
+    for aligned_tokens in combinations(contact_tokens, len(spoken_tokens)):
+        scores = [
+            _token_similarity(spoken, candidate)
+            for spoken, candidate in zip(spoken_tokens, aligned_tokens)
+        ]
+        if any(score < 0.62 for score in scores):
+            continue
+        best = max(best, sum(scores) / len(scores))
+    return best
 
 
 def resolve_contact(spoken_name: str, address_book: dict) -> dict:
