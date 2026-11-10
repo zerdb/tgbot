@@ -136,10 +136,16 @@ def _excel_apply(app, actions):
             last = int(sheet.Range("%s%d" % (col, int(sheet.Rows.Count))).End(-4162).Row)
             if last < 1 or sheet.Range("%s%d" % (col,last)).Value in (None,""):
                 raise ValueError("Указанный столбец пуст.")
+            last_cell = sheet.Range("%s%d" % (col,last))
+            existing_formula = str(last_cell.Formula or "").replace(" ", "").upper()
+            if existing_formula.startswith("=SUM("):
+                last -= 1
             first_value = sheet.Range("%s1" % col).Value
             first = 2 if isinstance(first_value,str) and first_value.strip() else 1
             if first > last:
                 raise ValueError("В столбце нет данных для суммы.")
+            if last >= int(sheet.Rows.Count):
+                raise ValueError("В столбце нет свободной строки для результата.")
             row = last + 1
             result_cell = sheet.Range("%s%d" % (col,row))
             result_cell.Formula = "=SUM(%s%d:%s%d)" % (col,first,col,last)
@@ -164,17 +170,23 @@ def _excel_apply(app, actions):
             results.append("Оформлен диапазон "+address.upper())
         elif kind == "set_formula":
             address, formula = _cell(action.get("cell")), str(action.get("formula") or "").strip()
-            if (not formula.startswith("=") or len(formula)>250 or
-                any(x in formula.upper() for x in ("[","]","WEBSERVICE(","HYPERLINK(","DDE("))):
-                raise ValueError("Формула отклонена как небезопасная или некорректная.")
+            allowed_functions = {
+                "SUM","AVERAGE","MIN","MAX","COUNT","COUNTA","IF","AND","OR",
+                "ROUND","ROUNDUP","ROUNDDOWN","ABS","TODAY","NOW",
+            }
+            functions = re.findall(r"([A-Z][A-Z0-9_.]*)\s*\(", formula.upper())
+            if (not formula.startswith("=") or len(formula)>250 or "!" in formula or
+                "[" in formula or "]" in formula or
+                any(name not in allowed_functions for name in functions)):
+                raise ValueError("Формула отклонена: разрешены только простые формулы и стандартные функции.")
             sheet.Range(address).Formula = formula
             results.append("Формула записана в "+address)
         elif kind == "set_value":
             address, value = _cell(action.get("cell")), action.get("value")
             if not isinstance(value,(str,int,float,bool)) and value is not None:
                 raise ValueError("Недопустимое значение.")
-            if isinstance(value,str) and len(value)>2000:
-                raise ValueError("Слишком длинный текст ячейки.")
+            if isinstance(value,str) and (len(value)>2000 or value.startswith("=")):
+                raise ValueError("Слишком длинный текст или формула в поле значения.")
             sheet.Range(address).Value = value
             results.append("Значение записано в "+address)
         else:
@@ -190,7 +202,16 @@ def _word_apply(app, actions):
     for action in actions:
         if action.get("type") != "format_selection":
             raise ValueError("Это действие Word пока не поддерживается.")
-        _font(selection.Font,action)
+        font = selection.Font
+        for prop in ("bold","italic"):
+            if prop in action:
+                if not isinstance(action[prop],bool):
+                    raise ValueError("Параметр %s должен быть true/false." % prop)
+                setattr(font,prop.capitalize(),action[prop])
+        if "underline" in action:
+            if not isinstance(action["underline"],bool):
+                raise ValueError("Параметр underline должен быть true/false.")
+            font.Underline = 1 if action["underline"] else 0
         results.append("Оформлено текущее выделение Word")
     return results
 
