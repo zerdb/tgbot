@@ -1,7 +1,6 @@
-"""Safe AI-assisted paragraph formatting for the current Microsoft Word selection.
+"""AI-assisted paragraph and character formatting for the current Word selection.
 
-The model only proposes paragraph-level values. Word applies those values directly;
-the document text and character-level formatting are never rewritten.
+The model proposes formatting only; document text is never rewritten.
 """
 from __future__ import annotations
 
@@ -353,6 +352,8 @@ def _format_summary(suggestion: dict) -> str:
                 lines.append(f"• Абзац {item['paragraph']} — {labels[key]}: {shown}")
     else:
         for key, value in suggestion.items():
+            if key in ("paragraphs", "character_formats"):
+                continue
             shown = values.get(value, f"{value:g} пт" if isinstance(value, float) else str(value))
             lines.append(f"• {labels[key]}: {shown}")
     for span in suggestion.get("character_formats", []):
@@ -374,7 +375,7 @@ def _build_analysis_messages(selected_text: str, profiles: list[dict]) -> list[d
         "соответствует назначению текста. Все абзацы могут быть одинаково оформлены, "
         "но при этом нуждаться в улучшении. Учитывай содержание, длину, количество "
         "абзацев, вероятные роли и текущие параметры. Не меняй текст, смысл, шрифт, "
-        "размер, цвет, жирность, курсив, подчёркивание или символьное оформление. "
+        "размер или цвет. "
         "Разрешены только свойства абзацев: alignment (left/center/right/justify), "
         "left_indent_pt, right_indent_pt, first_line_indent_pt, space_before_pt, "
         "space_after_pt. Числа — в пунктах. Для обычного основного текста боковые "
@@ -420,7 +421,7 @@ def _build_analysis_messages(selected_text: str, profiles: list[dict]) -> list[d
 
 
 def open_word_formatter(parent):
-    """Ask consent, analyze selection in background, preview, then apply on approval."""
+    """Analyze the current Word selection immediately and apply safe formatting suggestions."""
     print("[Word] Запущена команда форматирования выделения.", flush=True)
     try:
         start, end, document_identity, selected_text, profiles = _word_selection_snapshot()
