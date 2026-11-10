@@ -22,6 +22,20 @@ class IntentJsonParserTests(unittest.TestCase):
         )
         self.assertEqual(parsed["response"], "текст с фигурными скобками {пример}")
 
+    def test_bare_files_name_routes_to_file_search_not_folder(self):
+        from intent_router import _understand_command_rules
+
+        intent = _understand_command_rules("Файлы Логико.")
+        self.assertEqual(intent["action"], "search_files")
+        self.assertEqual(intent["parameters"]["query"], "Логико")
+
+    def test_explicit_folder_opening_still_routes_to_folder(self):
+        from intent_router import _understand_command_rules
+
+        intent = _understand_command_rules("Открой папку Логико")
+        self.assertEqual(intent["action"], "open_folder")
+        self.assertEqual(intent["parameters"]["folder"], "Логико")
+
     def test_rejects_response_without_json_object(self):
         with self.assertRaisesRegex(RuntimeError, "корректный JSON-объект"):
             _parse_intent_json("не получилось сформировать ответ")
