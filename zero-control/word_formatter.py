@@ -87,7 +87,41 @@ def _word_selection_snapshot():
             raise RuntimeError(
                 "Выделенный фрагмент слишком большой. Выдели меньшую часть (до 12 000 символов)."
             )
-        return int(word_range.Start), int(word_range.End), document_identity, selected_text
+
+        profiles = []
+        paragraphs = word_range.Paragraphs
+        for index in range(1, paragraphs.Count + 1):
+            paragraph = paragraphs.Item(index)
+            try:
+                is_list = int(paragraph.Range.ListFormat.ListType) != 0
+            except Exception:
+                is_list = True
+            try:
+                style_name = str(paragraph.Range.Style.NameLocal or "")
+            except Exception:
+                style_name = ""
+            if is_list or any(
+                token in style_name.lower()
+                for token in ("heading", "заголовок", "title", "название")
+            ):
+                continue
+            fmt = paragraph.Format
+            profiles.append({
+                "paragraph": index,
+                "style": style_name[:80],
+                "alignment": int(fmt.Alignment),
+                "left_indent_pt": round(float(fmt.LeftIndent), 2),
+                "right_indent_pt": round(float(fmt.RightIndent), 2),
+                "first_line_indent_pt": round(float(fmt.FirstLineIndent), 2),
+                "space_before_pt": round(float(fmt.SpaceBefore), 2),
+                "space_after_pt": round(float(fmt.SpaceAfter), 2),
+            })
+        if not profiles:
+            raise RuntimeError("В выделении нет обычных абзацев для форматирования.")
+        return (
+            int(word_range.Start), int(word_range.End), document_identity,
+            selected_text, profiles,
+        )
     finally:
         pythoncom.CoUninitialize()
 
@@ -182,7 +216,7 @@ def _format_summary(suggestion: dict) -> str:
 def open_word_formatter(parent):
     """Ask consent, analyze selection in background, preview, then apply on approval."""
     try:
-        start, end, document_identity, selected_text = _word_selection_snapshot()
+        start, end, document_identity, selected_text, profiles = _word_selection_snapshot()
     except Exception as exc:
         messagebox.showerror("ИИ — подровнять Word", str(exc), parent=parent)
         return
