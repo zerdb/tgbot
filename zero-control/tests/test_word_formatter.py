@@ -99,6 +99,38 @@ class WordFormatterValidationTests(unittest.TestCase):
                 '{"paragraph":1,"alignment":"left"}]}'
             )
 
+    def test_parses_character_formatting_spans(self):
+        from word_formatter import parse_format_response
+
+        answer = '{"character_formats":[{"start":0,"end":8,"bold":true},' \
+                 '{"start":12,"end":20,"italic":true,"underline":true}]}'
+        suggestion, reason = parse_format_response(answer, text_length=24)
+        self.assertEqual(suggestion, {
+            "character_formats": [
+                {"start": 0, "end": 8, "bold": True},
+                {"start": 12, "end": 20, "italic": True, "underline": True},
+            ]
+        })
+        self.assertIsNone(reason)
+
+    def test_rejects_character_formatting_outside_selection(self):
+        from word_formatter import parse_format_response
+
+        with self.assertRaises(ValueError):
+            parse_format_response(
+                '{"character_formats":[{"start":2,"end":30,"bold":true}]}',
+                text_length=24,
+            )
+
+    def test_rejects_non_boolean_character_formatting(self):
+        from word_formatter import parse_format_response
+
+        with self.assertRaises(ValueError):
+            parse_format_response(
+                '{"character_formats":[{"start":0,"end":4,"bold":"yes"}]}',
+                text_length=10,
+            )
+
     def test_parses_fenced_json(self):
         from word_formatter import parse_format_response
 
