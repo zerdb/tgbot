@@ -49,5 +49,9 @@ class ContactResolverTests(unittest.TestCase):
         self.assertEqual(result["status"], "not_found")
 
 
+    def test_does_not_match_reversed_name_tokens(self):
+        result = resolve_contact("Ивану Петрову", {"Пётр Иванов": self.book["Пётр Иванов"]})
+        self.assertEqual(result["status"], "not_found")
+
 if __name__ == "__main__":
     unittest.main()
