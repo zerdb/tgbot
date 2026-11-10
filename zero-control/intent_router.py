@@ -191,10 +191,10 @@ def _classify_semantically(user_text: str) -> dict:
 
 def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) -> dict | None:
     """Route file transfers addressed to a person through the current email workflow."""
-    normalized = re.sub(r"\\s+", " ", (user_text or "").lower().replace("ё", "е")).strip()
-    if not re.search(r"\\b(отправ\\w*|перешл\\w*|пошл\\w*|передай|передать)\\b", normalized):
+    normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip()
+    if not re.search(r"\b(отправ\w*|перешл\w*|пошл\w*|передай|передать)\b", normalized):
         return None
-    if not re.search(r"\\b(файл\\w*|документ\\w*|вложен\\w*)\\b", normalized):
+    if not re.search(r"\b(файл\w*|документ\w*|вложен\w*)\b", normalized):
         return None
 
     semantic = semantic if isinstance(semantic, dict) else {}
@@ -207,18 +207,18 @@ def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) ->
     # Local fallback for a dative recipient when the semantic model is unavailable.
     if not recipient:
         patterns = (
-            r"\\b(?:отправ\\w*|перешл\\w*|пошл\\w*|передай|передать)\\s+(?:мне\\s+)?(?:эти\\s+)?файл\\w*\\s+(.+)$",
-            r"\\b(?:отправ\\w*|перешл\\w*|пошл\\w*|передай|передать)\\s+(.+?)\\s+(?:эти\\s+)?файл\\w*\\b",
+            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(?:мне\s+)?(?:эти\s+)?файл\w*\s+(.+)$",
+            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(.+?)\s+(?:эти\s+)?файл\w*\b",
         )
         for pattern in patterns:
             match = re.search(pattern, user_text or "", re.IGNORECASE)
             if not match:
                 continue
             candidate = re.sub(
-                r"\\b(?:мне|пожалуйста|срочно|эти|этих|файлы?|документы?|вложения?|по\\s+почте|на\\s+почту|email)\\b",
+                r"\b(?:мне|пожалуйста|срочно|эти|этих|файлы?|документы?|вложения?|по\s+почте|на\s+почту|email)\b",
                 " ", match.group(1), flags=re.IGNORECASE,
             )
-            candidate = re.sub(r"\\s+", " ", candidate).strip(" .,!?:;«»\\\"")
+            candidate = re.sub(r"\s+", " ", candidate).strip(" .,!?:;«»\\"")
             # Dative endings cover common spoken recipient forms without guessing folders or paths.
             if candidate and re.search(r"(?:у|ю|е|и|ам|ям|ом|ем|ой|ей)$", candidate.lower().replace("ё", "е")):
                 recipient = candidate
@@ -690,6 +690,9 @@ def _understand_command_rules(user_text: str) -> dict:
         return {"action": "read_unread_mail", "confidence": 1.0, "parameters": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "parameters": {"question": user_text.strip()}}
+    implicit_email = _implicit_file_email_intent(user_text)
+    if implicit_email:
+        return implicit_email
     return {"action": "unknown", "confidence": 0.0, "parameters": {}}
 
 
