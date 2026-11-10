@@ -17,7 +17,7 @@ class AssistantWindow:
     RED = "#D9485F"
     GREY = "#98A2B3"
 
-    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None, on_open_settings=None):
+    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None, on_open_settings=None, on_office_command=None):
         self.root = tk.Tk()
         self.root.title("Zero Control")
         self.root.geometry("760x600")
@@ -32,6 +32,7 @@ class AssistantWindow:
         self.on_open_other = on_open_other or (lambda: None)
         self.on_open_notes = on_open_notes or (lambda: None)
         self.on_open_settings = on_open_settings or (lambda: None)
+        self.on_office_command = on_office_command or (lambda command: None)
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
@@ -232,8 +233,21 @@ class AssistantWindow:
 
         footer = ttk.Frame(outer)
         footer.pack(fill="x", pady=(7, 0))
+        ttk.Button(
+            footer, text="ИИ-помощник Word / Excel",
+            command=self._ask_office_command, style="Accent.TButton",
+        ).pack(anchor="center", pady=(0, 5))
         ttk.Label(footer, text="Right Ctrl — голосовая команда   ·   Right Ctrl + Right Shift — диктовка",
                   style="Muted.TLabel").pack(anchor="center")
+
+    def _ask_office_command(self):
+        command = simpledialog.askstring(
+            "ИИ-помощник Office",
+            "Что нужно сделать в открытом Word или Excel?",
+            parent=self.root,
+        )
+        if command and command.strip():
+            self.on_office_command(command.strip())
 
     def _set_application_icon(self):
         """Set the application icon used by Tk and the notification area."""
