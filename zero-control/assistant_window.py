@@ -23,7 +23,6 @@ class AssistantWindow:
         self.root.geometry("760x600")
         self.root.minsize(620, 500)
         self.root.configure(bg=self.BG)
-        self.root.overrideredirect(True)
         self.on_close = on_close
         self.on_command = on_command
         self.on_open_mail = on_open_mail or (lambda: None)
@@ -41,16 +40,8 @@ class AssistantWindow:
         self._prepare_recording_overlay()
         center_window(self.root)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
-        # A frameless Tk window cannot be iconified while override-redirect is set.
-        # Temporarily restore normal window-manager handling for minimization,
-        # then re-enable the frameless style when Windows maps the window again.
-        self.root.bind("<Map>", self._on_window_map, add="+")
         self._tray_icon = None
-        self._install_drag_bindings(self._content_frame)
         self._set_application_icon()
-        self.root.update_idletasks()
-        self._apply_windows_taskbar_style()
-        self.root.after(250, self._apply_windows_taskbar_style)
         self._start_tray_icon()
 
     def _build_styles(self):
@@ -96,20 +87,31 @@ class AssistantWindow:
 
         header = ttk.Frame(outer)
         header.pack(fill="x", pady=(0, 10))
-        header.bind("<ButtonPress-1>", self._start_window_drag)
-        header.bind("<B1-Motion>", self._drag_window)
         brand = ttk.Frame(header)
         brand.pack(side="left", fill="x", expand=True)
         ttk.Label(brand, text="Zero Control", font=("Segoe UI", 11, "bold"),
                   foreground=self.ACCENT).pack(anchor="w")
-        controls = ttk.Frame(header)
-        controls.pack(side="right", anchor="n")
-        ttk.Button(controls, text="🔧", style="Header.TButton",
-                   command=self.on_open_settings).pack(side="left", padx=2)
-        ttk.Button(controls, text="—", style="Header.TButton",
-                   command=self._minimize_window).pack(side="left", padx=2)
-        ttk.Button(controls, text="✕", style="Header.TButton",
-                   command=self.close).pack(side="left", padx=2)
+        settings_button = tk.Canvas(
+            header, width=36, height=36, bg=self.BG,
+            highlightthickness=0, bd=0, cursor="hand2",
+        )
+        settings_button.pack(side="right", anchor="ne", padx=(8, 0))
+        settings_circle = settings_button.create_oval(
+            2, 2, 34, 34, fill="#EAE8FF", outline="",
+        )
+        settings_glyph = settings_button.create_text(
+            18, 18, text="⚙", fill=self.ACCENT,
+            font=("Segoe UI Symbol", 17, "bold"),
+        )
+        settings_button.bind("<Button-1>", lambda _event: self.on_open_settings())
+        settings_button.bind(
+            "<Enter>",
+            lambda _event: settings_button.itemconfigure(settings_circle, fill="#DCD8FF"),
+        )
+        settings_button.bind(
+            "<Leave>",
+            lambda _event: settings_button.itemconfigure(settings_circle, fill="#EAE8FF"),
+        )
 
         status_card = tk.Frame(outer, bg=self.SURFACE, highlightthickness=1,
                                highlightbackground=self.BORDER, bd=0)
@@ -233,25 +235,6 @@ class AssistantWindow:
         ttk.Label(footer, text="Right Ctrl — голосовая команда   ·   Right Ctrl + Right Shift — диктовка",
                   style="Muted.TLabel").pack(anchor="center")
 
-    def _install_drag_bindings(self, root_widget):
-        """Allow dragging from non-interactive surfaces of the frameless window."""
-        interactive = {"Button", "TButton", "Entry", "TEntry", "Text", "Canvas",
-                       "Scrollbar", "TScrollbar", "Treeview", "TCombobox", "Combobox"}
-        def visit(widget):
-            try:
-                if widget is not root_widget and widget.winfo_class() in interactive:
-                    return
-                if str(widget.cget("cursor") or "") == "hand2":
-                    return
-                if widget.winfo_class() in {"Frame", "TFrame", "Label", "TLabel"}:
-                    widget.bind("<ButtonPress-1>", self._start_window_drag, add="+")
-                    widget.bind("<B1-Motion>", self._drag_window, add="+")
-                for child in widget.winfo_children():
-                    visit(child)
-            except (tk.TclError, AttributeError):
-                return
-        visit(root_widget)
-
     def _set_application_icon(self):
         """Set the application icon used by Tk and the notification area."""
         try:
@@ -268,31 +251,6 @@ class AssistantWindow:
             self._tray_image = None
             print(f"[GUI] Не удалось установить иконку приложения: {exc}", flush=True)
 
-    def _apply_windows_taskbar_style(self):
-        """Expose a frameless Tk window as a normal Windows taskbar application."""
-        if __import__("sys").platform != "win32":
-            return
-        try:
-            import ctypes
-            hwnd = self.root.winfo_id()
-            user32 = ctypes.windll.user32
-            get_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
-            set_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
-            get_long.restype = ctypes.c_ssize_t
-            get_long.argtypes = [ctypes.c_void_p, ctypes.c_int]
-            set_long.restype = ctypes.c_ssize_t
-            set_long.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t]
-            style = get_long(hwnd, -20)
-            style = (style & ~0x00000080) | 0x00040000
-            set_long(hwnd, -20, style)
-            user32.SetWindowPos.argtypes = [
-                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
-                ctypes.c_int, ctypes.c_int, ctypes.c_uint,
-            ]
-            user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x2 | 0x1 | 0x4 | 0x20)
-        except Exception as exc:
-            print(f"[GUI] Не удалось включить кнопку на панели задач: {exc}", flush=True)
-
     def _start_tray_icon(self):
         """Start a notification-area icon with restore and exit actions."""
         try:
@@ -308,34 +266,6 @@ class AssistantWindow:
         except Exception as exc:
             print(f"[GUI] Не удалось запустить значок в системном трее: {exc}", flush=True)
 
-    def _minimize_window(self):
-        """Minimize the borderless window without asking Tk to iconify override-redirect."""
-        try:
-            self.root.overrideredirect(False)
-            self.root.iconify()
-        except tk.TclError:
-            # Keep the app usable if the window manager rejects minimization.
-            try:
-                self.root.overrideredirect(True)
-            except tk.TclError:
-                pass
-
-    def _on_window_map(self, _event=None):
-        """Restore the frameless appearance after the window is shown again."""
-        try:
-            if self.root.state() == "normal":
-                self.root.after_idle(self._restore_frameless_style)
-        except tk.TclError:
-            pass
-
-    def _restore_frameless_style(self):
-        try:
-            if self.root.state() == "normal":
-                self.root.overrideredirect(True)
-                self._apply_windows_taskbar_style()
-        except tk.TclError:
-            pass
-
     def _tray_restore(self, icon=None, item=None):
         try:
             self.root.after(0, self._restore_from_tray)
@@ -347,7 +277,6 @@ class AssistantWindow:
             self.root.deiconify()
             self.root.lift()
             self.root.focus_force()
-            self._apply_windows_taskbar_style()
         except tk.TclError:
             pass
 
@@ -356,15 +285,6 @@ class AssistantWindow:
             self.root.after(0, self.close)
         except tk.TclError:
             pass
-
-    def _start_window_drag(self, event):
-        self._drag_offset_x = event.x_root - self.root.winfo_x()
-        self._drag_offset_y = event.y_root - self.root.winfo_y()
-
-    def _drag_window(self, event):
-        x = event.x_root - getattr(self, "_drag_offset_x", 0)
-        y = event.y_root - getattr(self, "_drag_offset_y", 0)
-        self.root.geometry(f"+{x}+{y}")
 
     def _hover_card(self, card, widgets, active):
         bg = "#F2F1FF" if active else self.SURFACE
