@@ -17,7 +17,7 @@ class AssistantWindow:
     RED = "#D9485F"
     GREY = "#98A2B3"
 
-    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None, on_open_settings=None, on_word_format=None):
+    def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None, on_open_settings=None):
         self.root = tk.Tk()
         self.root.title("Zero Control")
         self.root.geometry("760x600")
@@ -32,7 +32,6 @@ class AssistantWindow:
         self.on_open_other = on_open_other or (lambda: None)
         self.on_open_notes = on_open_notes or (lambda: None)
         self.on_open_settings = on_open_settings or (lambda: None)
-        self.on_word_format = on_word_format or (lambda: None)
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
@@ -233,10 +232,6 @@ class AssistantWindow:
 
         footer = ttk.Frame(outer)
         footer.pack(fill="x", pady=(7, 0))
-        ttk.Button(
-            footer, text="ИИ — подровнять выделенный текст Word",
-            command=self.on_word_format, style="Accent.TButton",
-        ).pack(anchor="center", pady=(0, 5))
         ttk.Label(footer, text="Right Ctrl — голосовая команда   ·   Right Ctrl + Right Shift — диктовка",
                   style="Muted.TLabel").pack(anchor="center")
 
