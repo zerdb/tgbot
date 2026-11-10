@@ -88,7 +88,9 @@ def _plan(command, context):
         '{"type":"format_selection","bold":true,"italic":true,"underline":true} '
         "(только текущее выделение). Не менять текст Word, выравнивание, отступы, "
         "интервалы, шрифты или размеры. Не использовать макросы, VBA, произвольный код "
-        "или внешние ссылки. Не угадывай адрес ячейки. Если неясно/не поддерживается, "
+        "или внешние ссылки. Если пользователь произносит букву столбца по-русски (например, «Б»), " 
+        "преобразуй её в соответствующую латинскую букву Excel (B). Не угадывай адрес ячейки. " 
+        "Если неясно/не поддерживается, "
         'верни {"actions":[],"message":"что нужно уточнить"}.'
     )
     answer = chat([
@@ -131,15 +133,17 @@ def _excel_apply(app, actions):
             col = str(action.get("column") or "").strip().upper()
             if not re.fullmatch(r"[A-Z]{1,3}",col):
                 raise ValueError("Укажи столбец, например B.")
-            last = int(sheet.Cells(sheet.Rows.Count,col).End(-4162).Row)
-            if last < 1 or sheet.Cells(last,col).Value in (None,""):
+            last = int(sheet.Range("%s%d" % (col, int(sheet.Rows.Count))).End(-4162).Row)
+            if last < 1 or sheet.Range("%s%d" % (col,last)).Value in (None,""):
                 raise ValueError("Указанный столбец пуст.")
-            first = 2 if isinstance(sheet.Cells(1,col).Value,str) and sheet.Cells(1,col).Value.strip() else 1
+            first_value = sheet.Range("%s1" % col).Value
+            first = 2 if isinstance(first_value,str) and first_value.strip() else 1
             if first > last:
                 raise ValueError("В столбце нет данных для суммы.")
             row = last + 1
-            sheet.Cells(row,col).Formula = "=SUM(%s%d:%s%d)" % (col,first,col,last)
-            sheet.Cells(row,col).Font.Bold = True
+            result_cell = sheet.Range("%s%d" % (col,row))
+            result_cell.Formula = "=SUM(%s%d:%s%d)" % (col,first,col,last)
+            result_cell.Font.Bold = True
             results.append("Сумма столбца %s записана в %s%d" % (col,col,row))
         elif kind == "format_cell":
             address = _cell(action.get("cell"))
