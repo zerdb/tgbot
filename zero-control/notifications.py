@@ -18,9 +18,11 @@ from winotify import Notification, audio
 
 
 def show_notification(title: str, message: str):
+    """Show a Windows notification and announce it with the local voice."""
     toast = Notification(app_id="Zero Control", title=title, msg=message, duration="long")
     toast.set_audio(audio.Default, loop=False)
     toast.show()
+    speak_text(". ".join(part.strip() for part in (title, message) if part and part.strip()))
 
 
 # Russian medium-quality male voice. The model is downloaded once and then used offline.
@@ -138,12 +140,7 @@ def _speak_with_piper(voice, text: str):
 
 def _speech_worker():
     voice = None
-    try:
-        # Предзагрузка начинается сразу при запуске приложения, без ожидания первой фразы.
-        voice = _load_piper_voice()
-    except Exception as exc:
-        print(f"[Озвучивание] Не удалось заранее загрузить Piper: {exc}", flush=True)
-
+    # Голос загружается лениво — только при первом напоминании или уведомлении.
     while True:
         text = _speech_queue.get()
         try:
@@ -178,48 +175,3 @@ def speak_text(message: str):
         return
     initialize_speech_engine()
     _speech_queue.put(text)
-
-
-def install_messagebox_voice():
-    """Speak message-box text and then display the original Tk dialog."""
-    import tkinter.messagebox as messagebox
-
-    if getattr(messagebox, "_zero_control_voice_installed", False):
-        return
-
-    original_showinfo = messagebox.showinfo
-    original_showwarning = messagebox.showwarning
-    original_showerror = messagebox.showerror
-    original_askyesno = messagebox.askyesno
-    original_askokcancel = messagebox.askokcancel
-    original_askretrycancel = messagebox.askretrycancel
-
-    def _announcement(title, message):
-        parts = [str(part).strip() for part in (title, message) if str(part or "").strip()]
-        return ". ".join(parts)
-
-    def _speak_then_show(original, title, message, **kwargs):
-        speak_text(_announcement(title, message))
-        # Show the full original dialog after Denis finishes speaking.
-        _speech_queue.join()
-        return original(title, message, **kwargs)
-
-    messagebox.showinfo = lambda title, message, **kwargs: _speak_then_show(
-        original_showinfo, title, message, **kwargs
-    )
-    messagebox.showwarning = lambda title, message, **kwargs: _speak_then_show(
-        original_showwarning, title, message, **kwargs
-    )
-    messagebox.showerror = lambda title, message, **kwargs: _speak_then_show(
-        original_showerror, title, message, **kwargs
-    )
-    messagebox.askyesno = lambda title, message, **kwargs: _speak_then_show(
-        original_askyesno, title, message, **kwargs
-    )
-    messagebox.askokcancel = lambda title, message, **kwargs: _speak_then_show(
-        original_askokcancel, title, message, **kwargs
-    )
-    messagebox.askretrycancel = lambda title, message, **kwargs: _speak_then_show(
-        original_askretrycancel, title, message, **kwargs
-    )
-    messagebox._zero_control_voice_installed = True
