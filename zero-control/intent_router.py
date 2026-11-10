@@ -220,7 +220,17 @@ def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) ->
             )
             candidate = re.sub(r"\s+", " ", candidate).strip(" .,!?:;«»")
             # Dative endings cover common spoken recipient forms without guessing folders or paths.
-            if candidate and re.search(r"(?:у|ю|е|и|ам|ям|ом|ем|ой|ей)$", candidate.lower().replace("ё", "е")):
+            candidate_normalized = candidate.lower().replace("ё", "е")
+            is_unnamed_person_reference = bool(re.fullmatch(
+                r"(?:(?:этому|тому|такому|данному)\\s+)?(?:человеку|лицу|адресату)|кому[- ](?:то|нибудь)",
+                candidate_normalized,
+            ))
+            # Dative endings cover common spoken recipient forms without guessing folders or paths.
+            if (
+                candidate
+                and not is_unnamed_person_reference
+                and re.search(r"(?:у|ю|е|и|ам|ям|ом|ем|ой|ей)$", candidate_normalized)
+            ):
                 recipient = candidate
                 break
 
@@ -477,7 +487,7 @@ def _understand_command_rules(user_text: str) -> dict:
     # она нередко принимает имя после слова «файлы» за название каталога.
     files_only_match = re.match(
         r"^(?:пожалуйста\s+)?(?:покажи\s+|найди\s+)?(?:мне\s+)?файл\w*\s+(.+)$",
-        normalized,
+        (user_text or "").strip(),
         flags=re.IGNORECASE,
     )
     if files_only_match:
