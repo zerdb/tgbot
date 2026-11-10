@@ -37,10 +37,6 @@ from background_workers import (
     mail_reader_worker,
 )
 
-# Все стандартные уведомления приложения озвучиваются голосом Denis.
-from notifications import install_messagebox_voice
-install_messagebox_voice()
-
 from reminders import start_reminder_service, stop_reminder_service, deliver_due_reminders
 from file_search import start_file_search_ui
 from folder_organizer import open_folder_organizer
@@ -85,11 +81,6 @@ def main():
         handle_command=handle_command,
     )
     _audio_engine.load_dependencies()
-
-    # Загружаем Piper и голос Денис заранее в фоновом потоке.
-    # Интерфейс и загрузка GigaAM не ждут завершения этой операции.
-    from notifications import initialize_speech_engine
-    initialize_speech_engine()
 
     _ui = AssistantWindow(
         on_close=shutdown,
