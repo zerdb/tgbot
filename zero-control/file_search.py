@@ -1061,7 +1061,7 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
 
     def resize_columns(event=None):
         # Keep the four columns balanced as the result window is resized.
-        available = max(500, listing.winfo_width() - 22)
+        available = max(500, (event.width if event else listing.winfo_width()) - 22)
         proportions = (0.30, 0.19, 0.12, 0.39)
         minimums = (180, 150, 90, 200)
         for column, proportion, minimum in zip(columns, proportions, minimums):
