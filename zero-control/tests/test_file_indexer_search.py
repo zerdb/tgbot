@@ -48,9 +48,9 @@ class SearchNeedleVariantTests(unittest.TestCase):
         from file_search import _sort_file_results_by_creation
 
         results = [
-            (Path(r"C:\\Docs\\older.pdf"), 100.0, 10),
-            (Path(r"C:\\Docs\\newest.pdf"), 300.0, 30),
-            (Path(r"C:\\Docs\\middle.pdf"), 200.0, 20),
+            (Path("C:/Docs/older.pdf"), 100.0, 10),
+            (Path("C:/Docs/newest.pdf"), 300.0, 30),
+            (Path("C:/Docs/middle.pdf"), 200.0, 20),
         ]
         sorted_results = _sort_file_results_by_creation(results)
         self.assertEqual(
