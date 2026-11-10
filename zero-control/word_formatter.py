@@ -30,10 +30,11 @@ def validate_format_suggestion(payload: dict) -> dict:
     if not isinstance(payload, dict):
         raise ValueError("ИИ вернул ответ неверного формата.")
 
+    result = {}
     if "paragraphs" in payload:
         entries = payload.get("paragraphs")
-        if not isinstance(entries, list) or not entries:
-            raise ValueError("ИИ вернул пустой или некорректный список абзацев.")
+        if not isinstance(entries, list):
+            raise ValueError("ИИ вернул некорректный список абзацев.")
         normalized = []
         seen = set()
         for entry in entries:
@@ -49,9 +50,8 @@ def validate_format_suggestion(payload: dict) -> dict:
             if not properties:
                 raise ValueError("ИИ не указал параметры для одного из абзацев.")
             normalized.append({"paragraph": paragraph_number, **validate_format_suggestion(properties)})
-        return {"paragraphs": normalized}
-
-    result = {}
+        if normalized:
+            result["paragraphs"] = normalized
     alignment = payload.get("alignment")
     if alignment is not None:
         normalized = str(alignment).strip().lower()
@@ -73,12 +73,36 @@ def validate_format_suggestion(payload: dict) -> dict:
             raise ValueError("Предложенные ИИ параметры выходят за безопасные пределы.")
         result[key] = number
 
+    if "character_formats" in payload:
+        spans = payload.get("character_formats")
+        if not isinstance(spans, list):
+            raise ValueError("ИИ вернул некорректный список символьного форматирования.")
+        normalized_spans = []
+        for span in spans:
+            if not isinstance(span, dict):
+                raise ValueError("ИИ вернул некорректный диапазон символьного форматирования.")
+            start, end = span.get("start"), span.get("end")
+            if (isinstance(start, bool) or not isinstance(start, int)
+                    or isinstance(end, bool) or not isinstance(end, int)
+                    or start < 0 or end <= start):
+                raise ValueError("ИИ вернул некорректные границы символьного форматирования.")
+            item = {"start": start, "end": end}
+            for key in ("bold", "italic", "underline"):
+                if key in span:
+                    if not isinstance(span[key], bool):
+                        raise ValueError("ИИ вернул некорректное значение символьного форматирования.")
+                    item[key] = span[key]
+            if len(item) == 2:
+                raise ValueError("ИИ не указал свойства символьного форматирования.")
+            normalized_spans.append(item)
+        result["character_formats"] = normalized_spans
+
     if not result:
         raise ValueError("ИИ не предложил параметров форматирования.")
     return result
 
 
-def parse_format_response(answer: str):
+def parse_format_response(answer: str, text_length: int | None = None):
     """Parse Groq output; distinguish a deliberate no-op from a malformed reply."""
     if not isinstance(answer, str) or not answer.strip():
         raise ValueError("Groq вернул пустой ответ.")
@@ -101,7 +125,12 @@ def parse_format_response(answer: str):
     if payload.get("no_changes") is True:
         reason = str(payload.get("reason") or "").strip()
         return None, reason or "Оформление абзацев уже выглядит согласованным."
-    return validate_format_suggestion(payload), None
+    suggestion = validate_format_suggestion(payload)
+    if text_length is not None:
+        for span in suggestion.get("character_formats", []):
+            if span["end"] > text_length:
+                raise ValueError("ИИ указал диапазон символьного форматирования за пределами выделения.")
+    return suggestion, None
 
 
 def _word_selection_snapshot():
@@ -168,8 +197,26 @@ def _word_selection_snapshot():
                     character_format[property_name.lower()] = "mixed" if numeric_value == 9999999 else numeric_value
                 except Exception:
                     character_format[property_name.lower()] = "unknown"
+            character_runs = []
+            char_ranges = paragraph.Range.Characters
+            for char_index in range(1, char_ranges.Count + 1):
+                char_range = char_ranges.Item(char_index)
+                flags = {}
+                for property_name in ("Bold", "Italic", "Underline"):
+                    try:
+                        flags[property_name.lower()] = bool(getattr(char_range.Font, property_name))
+                    except Exception:
+                        flags[property_name.lower()] = None
+                relative_start = int(char_range.Start) - int(word_range.Start)
+                relative_end = int(char_range.End) - int(word_range.Start)
+                if (character_runs and character_runs[-1]["end"] == relative_start
+                        and all(character_runs[-1].get(key) == value for key, value in flags.items())):
+                    character_runs[-1]["end"] = relative_end
+                else:
+                    character_runs.append({"start": relative_start, "end": relative_end, **flags})
             profiles.append({
                 "paragraph": index,
+                "character_runs": character_runs,
                 "style": style_name[:80],
                 "whitespace": whitespace,
                 "character_format": character_format,
@@ -180,8 +227,6 @@ def _word_selection_snapshot():
                 "space_before_pt": round(float(fmt.SpaceBefore), 2),
                 "space_after_pt": round(float(fmt.SpaceAfter), 2),
             })
-        if not profiles:
-            raise RuntimeError("В выделении нет обычных абзацев для форматирования.")
         return (
             int(word_range.Start), int(word_range.End), document_identity,
             selected_text, profiles,
@@ -225,7 +270,10 @@ def _apply_to_word(start: int, end: int, document_identity: str, expected_text: 
                 }
             for index in range(1, paragraphs.Count + 1):
                 paragraph = paragraphs.Item(index)
-                current_suggestion = paragraph_suggestions.get(index) if paragraph_suggestions is not None else suggestion
+                current_suggestion = paragraph_suggestions.get(index) if paragraph_suggestions is not None else {
+                    key: value for key, value in suggestion.items()
+                    if key not in ("paragraphs", "character_formats")
+                }
                 if not current_suggestion:
                     continue
                 try:
@@ -255,6 +303,18 @@ def _apply_to_word(start: int, end: int, document_identity: str, expected_text: 
                     fmt.SpaceBefore = current_suggestion["space_before_pt"]
                 if "space_after_pt" in current_suggestion:
                     fmt.SpaceAfter = current_suggestion["space_after_pt"]
+                applied += 1
+
+            for span in suggestion.get("character_formats", []):
+                char_range = document.Range(start + span["start"], start + span["end"])
+                font = char_range.Font
+                if "bold" in span:
+                    font.Bold = span["bold"]
+                if "italic" in span:
+                    font.Italic = span["italic"]
+                if "underline" in span:
+                    # Word wdUnderlineNone=0, wdUnderlineSingle=1.
+                    font.Underline = 1 if span["underline"] else 0
                 applied += 1
         finally:
             if record_started:
@@ -291,6 +351,12 @@ def _format_summary(suggestion: dict) -> str:
         for key, value in suggestion.items():
             shown = values.get(value, f"{value:g} пт" if isinstance(value, float) else str(value))
             lines.append(f"• {labels[key]}: {shown}")
+    for span in suggestion.get("character_formats", []):
+        props = []
+        for key, label in (("bold", "жирный"), ("italic", "курсив"), ("underline", "подчёркивание")):
+            if key in span:
+                props.append(label if span[key] else "без " + label)
+        lines.append(f"• Символы {span['start']}–{span['end']}: " + ", ".join(props))
     return "\n".join(lines)
 
 
@@ -324,9 +390,15 @@ def _build_analysis_messages(selected_text: str, profiles: list[dict]) -> list[d
         '{"paragraphs":[{"paragraph":1,"space_after_pt":6},'
         '{"paragraph":2,"alignment":"left"}]}. Номер абзаца — номер из профиля. '
         "Если одно изменение подходит всем, также можно вернуть общий объект. "
-        "Учитывай переданные счётчики лишних пробелов/табуляций и признаки жирного, "
-        "курсива и подчёркивания; используй их для понимания структуры и диагностики, "
-        "но никогда не предлагай менять текст или символьное оформление. "
+        "Учитывай character_runs каждого абзаца: start/end — смещения символов "
+        "от начала выделения, bold/italic/underline — текущее оформление. "
+        "Если заголовок, ключевой термин или важное обозначение следует выделить, "
+        "можешь предложить символьное оформление точного диапазона. Формат: "
+        '{"character_formats":[{"start":0,"end":12,"bold":true},'
+        '{"start":20,"end":34,"italic":true}]}. '
+        "Смещения нулевые, end не включается. Предлагай только нужные свойства, "
+        "не сбрасывай остальные; не форматируй подряд весь текст без причины. "
+        "Никогда не меняй текст, смысл, шрифт, размер или цвет. "
         "Не возвращай пустой объект. Только JSON без Markdown. Безопасные пределы: "
         "отступы -36..144 пт, интервалы 0..48 пт."
     )
@@ -358,16 +430,7 @@ def open_word_formatter(parent):
         messagebox.showerror("ИИ — подровнять Word", str(exc), parent=parent)
         return
 
-    approved = messagebox.askyesno(
-        "Передать выделенный текст ИИ?",
-        "Для анализа выделенный фрагмент будет отправлен подключённой модели Groq. "
-        "Документ не будет изменён до твоего подтверждения. Продолжить?",
-        parent=parent,
-    )
-    if not approved:
-        print("[Word] Пользователь отказался передавать выделение на анализ.", flush=True)
-        return
-    print("[Word] Пользователь разрешил анализ выделения.", flush=True)
+    print("[Word] Выделение автоматически отправляется на анализ по нажатию кнопки.", flush=True)
 
     progress = tk.Toplevel(parent)
     progress.title("ИИ — подровнять Word")
@@ -394,7 +457,7 @@ def open_word_formatter(parent):
                           response_format={"type": "json_object"})
             print("[Word] Получен ответ Groq: %s символов; фрагмент=%r."
                   % (len(answer), answer[:1200]), flush=True)
-            suggestion, no_change_reason = parse_format_response(answer)
+            suggestion, no_change_reason = parse_format_response(answer, len(selected_text))
             if suggestion is None:
                 print("[Word] Изменения не требуются: " + no_change_reason, flush=True)
                 result = (None, None, no_change_reason)
@@ -422,23 +485,14 @@ def open_word_formatter(parent):
                     parent=parent,
                 )
                 return
-            preview = (
-                "ИИ предлагает изменить параметры абзацев:\n\n"
-                + _format_summary(suggestion)
-                + "\n\nЖирный шрифт, курсив, подчёркивания и сам текст "
-                "не переписываются. Заголовки и маркированные/нумерованные "
-                "списки пропускаются. Применить?"
-            )
-            if not messagebox.askyesno("Предварительный просмотр", preview, parent=parent):
-                print("[Word] Пользователь отклонил предложение. Документ не изменён.", flush=True)
-                return
+            print("[Word] Предложение ИИ: " + _format_summary(suggestion), flush=True)
             try:
                 count = _apply_to_word(start, end, document_identity, selected_text, suggestion)
             except Exception as exc:
                 print("[Word] Ошибка применения: %s: %s" % (type(exc).__name__, exc), flush=True)
                 messagebox.showerror("ИИ — подровнять Word", str(exc), parent=parent)
                 return
-            print("[Word] Применение завершено: изменено абзацев=%s." % count, flush=True)
+            print("[Word] Применение завершено: операций форматирования=%s." % count, flush=True)
             if count == 0:
                 messagebox.showwarning(
                     "ИИ — подровнять Word",
@@ -448,7 +502,7 @@ def open_word_formatter(parent):
             else:
                 messagebox.showinfo(
                     "Готово",
-                    f"Форматирование применено к абзацам: {count}. "
+                    f"Форматирование применено. Операций: {count}. "
                     "Изменения можно отменить в Word сочетанием Ctrl+Z. Документ не сохранён автоматически.",
                     parent=parent,
                 )
