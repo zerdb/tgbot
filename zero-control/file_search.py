@@ -644,7 +644,26 @@ def _search_worker(query: str, parent, export_format=None):
                 for group in term_groups
             ]
             matches = list(set.intersection(*group_results)) if group_results else []
-            if not matches and parsed.get("_semantic_fallback"):
+
+            # Run the local vector search for every text query, regardless of
+            # whether FTS5 found anything. It runs before the legacy AI synonym
+            # fallback, so a semantic hit does not need a cloud round-trip.
+            vector_results = []
+            vector_query = " ".join(group[0] for group in term_groups if group)
+            if vector_query:
+                try:
+                    from vector_search import search_similar
+                    vector_results = search_similar(
+                        vector_query,
+                        report=_report_search_progress,
+                    )
+                except Exception as vector_exc:
+                    print(
+                        f"[Поиск файлов] Векторный поиск недоступен; продолжаю обычный поиск: {vector_exc}",
+                        flush=True,
+                    )
+
+            if not matches and not vector_results and parsed.get("_semantic_fallback"):
                 # Avoid paying for a second LLM call on common exact matches.
                 # If literal search misses, ask Groq for synonyms/ASR variants,
                 # then retry locally without ever uploading filenames.
@@ -719,29 +738,15 @@ def _search_worker(query: str, parent, export_format=None):
         # Preserve both independent result sets and their provenance.
         legacy_matches = list(matches)
         source_by_path = {path: "legacy" for path in legacy_matches}
-        if term_groups:
-            vector_query = " ".join(group[0] for group in term_groups if group)
-            if vector_query:
-                try:
-                    from vector_search import search_similar
-                    vector_results = search_similar(
-                        vector_query,
-                        report=_report_search_progress,
-                    )
-                    for vector_path in vector_results:
-                        source_by_path[vector_path] = (
-                            "both" if vector_path in source_by_path else "vector"
-                        )
-                    print(
-                        f"[Поиск файлов] Два механизма: обычный — {len(legacy_matches)}, "
-                        f"векторный — {len(vector_results)}.",
-                        flush=True,
-                    )
-                except Exception as vector_exc:
-                    print(
-                        f"[Поиск файлов] Векторный поиск недоступен; показываю обычные результаты: {vector_exc}",
-                        flush=True,
-                    )
+        for vector_path in vector_results:
+            source_by_path[vector_path] = (
+                "both" if vector_path in source_by_path else "vector"
+            )
+        print(
+            f"[Поиск файлов] Два механизма: обычный — {len(legacy_matches)}, "
+            f"векторный — {len(vector_results)}.",
+            flush=True,
+        )
         matches = list(source_by_path)
 
         filter_started = time.perf_counter()
