@@ -41,6 +41,10 @@ class AssistantWindow:
         self._prepare_recording_overlay()
         center_window(self.root)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+        # A frameless Tk window cannot be iconified while override-redirect is set.
+        # Temporarily restore normal window-manager handling for minimization,
+        # then re-enable the frameless style when Windows maps the window again.
+        self.root.bind("<Map>", self._on_window_map, add="+")
         self._tray_icon = None
         self._install_drag_bindings(self._content_frame)
         self._set_application_icon()
@@ -103,7 +107,7 @@ class AssistantWindow:
         ttk.Button(controls, text="🔧", style="Header.TButton",
                    command=self.on_open_settings).pack(side="left", padx=2)
         ttk.Button(controls, text="—", style="Header.TButton",
-                   command=self.root.iconify).pack(side="left", padx=2)
+                   command=self._minimize_window).pack(side="left", padx=2)
         ttk.Button(controls, text="✕", style="Header.TButton",
                    command=self.close).pack(side="left", padx=2)
 
@@ -303,6 +307,34 @@ class AssistantWindow:
             self._tray_icon.run_detached()
         except Exception as exc:
             print(f"[GUI] Не удалось запустить значок в системном трее: {exc}", flush=True)
+
+    def _minimize_window(self):
+        """Minimize the borderless window without asking Tk to iconify override-redirect."""
+        try:
+            self.root.overrideredirect(False)
+            self.root.iconify()
+        except tk.TclError:
+            # Keep the app usable if the window manager rejects minimization.
+            try:
+                self.root.overrideredirect(True)
+            except tk.TclError:
+                pass
+
+    def _on_window_map(self, _event=None):
+        """Restore the frameless appearance after the window is shown again."""
+        try:
+            if self.root.state() == "normal":
+                self.root.after_idle(self._restore_frameless_style)
+        except tk.TclError:
+            pass
+
+    def _restore_frameless_style(self):
+        try:
+            if self.root.state() == "normal":
+                self.root.overrideredirect(True)
+                self._apply_windows_taskbar_style()
+        except tk.TclError:
+            pass
 
     def _tray_restore(self, icon=None, item=None):
         try:
