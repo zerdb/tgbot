@@ -6,6 +6,7 @@ the document text and character-level formatting are never rewritten.
 from __future__ import annotations
 
 import json
+import re
 import threading
 import tkinter as tk
 from tkinter import messagebox
@@ -28,6 +29,27 @@ def validate_format_suggestion(payload: dict) -> dict:
     """Keep only supported, bounded paragraph properties from an AI response."""
     if not isinstance(payload, dict):
         raise ValueError("ИИ вернул ответ неверного формата.")
+
+    if "paragraphs" in payload:
+        entries = payload.get("paragraphs")
+        if not isinstance(entries, list) or not entries:
+            raise ValueError("ИИ вернул пустой или некорректный список абзацев.")
+        normalized = []
+        seen = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError("ИИ вернул некорректное описание абзаца.")
+            paragraph_number = entry.get("paragraph")
+            if isinstance(paragraph_number, bool) or not isinstance(paragraph_number, int) or paragraph_number < 1:
+                raise ValueError("ИИ вернул некорректный номер абзаца.")
+            if paragraph_number in seen:
+                raise ValueError("ИИ повторил номер абзаца в предложении.")
+            seen.add(paragraph_number)
+            properties = {key: value for key, value in entry.items() if key != "paragraph"}
+            if not properties:
+                raise ValueError("ИИ не указал параметры для одного из абзацев.")
+            normalized.append({"paragraph": paragraph_number, **validate_format_suggestion(properties)})
+        return {"paragraphs": normalized}
 
     result = {}
     alignment = payload.get("alignment")
@@ -132,9 +154,25 @@ def _word_selection_snapshot():
             ):
                 continue
             fmt = paragraph.Format
+            paragraph_text = str(paragraph.Range.Text or "").rstrip("\r\x07")
+            whitespace = {
+                "multiple_space_runs": len(re.findall(r" {2,}", paragraph_text)),
+                "tabs": paragraph_text.count("\t"),
+                "leading_spaces": len(paragraph_text) - len(paragraph_text.lstrip(" ")),
+                "trailing_spaces": len(paragraph_text) - len(paragraph_text.rstrip(" ")),
+            }
+            character_format = {}
+            for property_name in ("Bold", "Italic", "Underline"):
+                try:
+                    numeric_value = int(getattr(paragraph.Range.Font, property_name))
+                    character_format[property_name.lower()] = "mixed" if numeric_value == 9999999 else numeric_value
+                except Exception:
+                    character_format[property_name.lower()] = "unknown"
             profiles.append({
                 "paragraph": index,
                 "style": style_name[:80],
+                "whitespace": whitespace,
+                "character_format": character_format,
                 "alignment": int(fmt.Alignment),
                 "left_indent_pt": round(float(fmt.LeftIndent), 2),
                 "right_indent_pt": round(float(fmt.RightIndent), 2),
@@ -179,8 +217,17 @@ def _apply_to_word(start: int, end: int, document_identity: str, expected_text: 
             if undo_record is not None:
                 undo_record.StartCustomRecord("Zero Control — форматирование Word")
                 record_started = True
+            paragraph_suggestions = None
+            if "paragraphs" in suggestion:
+                paragraph_suggestions = {
+                    item["paragraph"]: {key: value for key, value in item.items() if key != "paragraph"}
+                    for item in suggestion["paragraphs"]
+                }
             for index in range(1, paragraphs.Count + 1):
                 paragraph = paragraphs.Item(index)
+                current_suggestion = paragraph_suggestions.get(index) if paragraph_suggestions is not None else suggestion
+                if not current_suggestion:
+                    continue
                 try:
                     if int(paragraph.Range.ListFormat.ListType) != 0:
                         continue
@@ -196,18 +243,18 @@ def _apply_to_word(start: int, end: int, document_identity: str, expected_text: 
                     continue
 
                 fmt = paragraph.Format
-                if "alignment" in suggestion:
-                    fmt.Alignment = _WORD_ALIGNMENTS[suggestion["alignment"]]
-                if "left_indent_pt" in suggestion:
-                    fmt.LeftIndent = suggestion["left_indent_pt"]
-                if "right_indent_pt" in suggestion:
-                    fmt.RightIndent = suggestion["right_indent_pt"]
-                if "first_line_indent_pt" in suggestion:
-                    fmt.FirstLineIndent = suggestion["first_line_indent_pt"]
-                if "space_before_pt" in suggestion:
-                    fmt.SpaceBefore = suggestion["space_before_pt"]
-                if "space_after_pt" in suggestion:
-                    fmt.SpaceAfter = suggestion["space_after_pt"]
+                if "alignment" in current_suggestion:
+                    fmt.Alignment = _WORD_ALIGNMENTS[current_suggestion["alignment"]]
+                if "left_indent_pt" in current_suggestion:
+                    fmt.LeftIndent = current_suggestion["left_indent_pt"]
+                if "right_indent_pt" in current_suggestion:
+                    fmt.RightIndent = current_suggestion["right_indent_pt"]
+                if "first_line_indent_pt" in current_suggestion:
+                    fmt.FirstLineIndent = current_suggestion["first_line_indent_pt"]
+                if "space_before_pt" in current_suggestion:
+                    fmt.SpaceBefore = current_suggestion["space_before_pt"]
+                if "space_after_pt" in current_suggestion:
+                    fmt.SpaceAfter = current_suggestion["space_after_pt"]
                 applied += 1
         finally:
             if record_started:
@@ -233,9 +280,17 @@ def _format_summary(suggestion: dict) -> str:
         "justify": "по ширине",
     }
     lines = []
-    for key, value in suggestion.items():
-        shown = values.get(value, f"{value:g} пт" if isinstance(value, float) else str(value))
-        lines.append(f"• {labels[key]}: {shown}")
+    if "paragraphs" in suggestion:
+        for item in suggestion["paragraphs"]:
+            for key, value in item.items():
+                if key == "paragraph":
+                    continue
+                shown = values.get(value, f"{value:g} пт" if isinstance(value, float) else str(value))
+                lines.append(f"• Абзац {item['paragraph']} — {labels[key]}: {shown}")
+    else:
+        for key, value in suggestion.items():
+            shown = values.get(value, f"{value:g} пт" if isinstance(value, float) else str(value))
+            lines.append(f"• {labels[key]}: {shown}")
     return "\n".join(lines)
 
 
@@ -265,6 +320,13 @@ def _build_analysis_messages(selected_text: str, profiles: list[dict]) -> list[d
         "изменяемыми полями и итоговыми значениями. Если после оценки качества улучшение "
         "не нужно, верни строго "
         '{"no_changes":true,"reason":"краткое объяснение"}. '
+        "Если меняются не все абзацы или значения различаются, используй формат "
+        '{"paragraphs":[{"paragraph":1,"space_after_pt":6},'
+        '{"paragraph":2,"alignment":"left"}]}. Номер абзаца — номер из профиля. '
+        "Если одно изменение подходит всем, также можно вернуть общий объект. "
+        "Учитывай переданные счётчики лишних пробелов/табуляций и признаки жирного, "
+        "курсива и подчёркивания; используй их для понимания структуры и диагностики, "
+        "но никогда не предлагай менять текст или символьное оформление. "
         "Не возвращай пустой объект. Только JSON без Markdown. Безопасные пределы: "
         "отступы -36..144 пт, интервалы 0..48 пт."
     )
