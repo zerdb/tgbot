@@ -60,6 +60,7 @@ SYSTEM_PROMPT = """Ты — слой понимания намерений ру�
 Если пользователь хочет сохранить содержимое буфера как заметку, это save_note, source.type=clipboard, target.type=list, target.name="заметки".
 Если пользователь хочет сохранить произнесённый текст как заметку — add_note, source.type=spoken_text.
 Если пользователь хочет задать вопрос, получить совет, объяснение или справку, выбери ai_chat и kind=respond; question должен содержать полный вопрос.
+Если пользователь просит отправить, переслать или послать файлы/документы конкретному человеку, используй email_compose, даже если он не произносит слова «почта», «email» или «письмо»: в Zero Control это текущий способ отправки. Имя адресата укажи в parameters.recipient_name, сохраняя форму из речи; attach_copied_files=true. Если человек назван в target.name, перенеси его туда. Не спрашивай способ отправки, если адресат — человек. Не отправляй письмо автоматически: открой редактор для проверки пользователем.
 Если пользователь хочет выполнить действие, выбери kind=execute и подходящее действие из каталога.
 Если действие потенциально опасное (перезагрузка, очистка корзины и т.п.), не меняй его смысл и не инициируй дополнительных действий.
 Если данных недостаточно для безопасного выполнения, выбери kind=clarify и сформулируй один конкретный вопрос.
@@ -188,6 +189,68 @@ def _classify_semantically(user_text: str) -> dict:
     return result
 
 
+def _implicit_file_email_intent(user_text: str, semantic: dict | None = None) -> dict | None:
+    """Route file transfers addressed to a person through the current email workflow."""
+    normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip()
+    if not re.search(r"\b(отправ\w*|перешл\w*|пошл\w*|передай|передать)\b", normalized):
+        return None
+    if not re.search(r"\b(файл\w*|документ\w*|вложен\w*)\b", normalized):
+        return None
+
+    semantic = semantic if isinstance(semantic, dict) else {}
+    target = semantic.get("target") if isinstance(semantic.get("target"), dict) else {}
+    params = semantic.get("parameters") if isinstance(semantic.get("parameters"), dict) else {}
+    recipient = str(params.get("recipient_name") or "").strip()
+    if not recipient and str(target.get("type") or "").lower() == "person":
+        recipient = str(target.get("name") or "").strip()
+
+    # Local fallback for a dative recipient when the semantic model is unavailable.
+    if not recipient:
+        patterns = (
+            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(?:мне\s+)?(?:эти\s+)?(?:файл\w*|документ\w*|вложен\w*)\s+(.+)$",
+            r"\b(?:отправ\w*|перешл\w*|пошл\w*|передай|передать)\s+(.+?)\s+(?:эти\s+)?(?:файл\w*|документ\w*|вложен\w*)\b",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, user_text or "", re.IGNORECASE)
+            if not match:
+                continue
+            candidate = re.sub(
+                r"\b(?:мне|пожалуйста|срочно|эти|этих|файлы?|документы?|вложения?|по\s+почте|на\s+почту|email)\b",
+                " ", match.group(1), flags=re.IGNORECASE,
+            )
+            candidate = re.sub(r"\s+", " ", candidate).strip(" .,!?:;«»\\"")
+            # Dative endings cover common spoken recipient forms without guessing folders or paths.
+            if candidate and re.search(r"(?:у|ю|е|и|ам|ям|ом|ем|ой|ей)$", candidate.lower().replace("ё", "е")):
+                recipient = candidate
+                break
+
+    if not recipient and str(target.get("type") or "").lower() != "person":
+        return None
+    if not recipient:
+        return {
+            "kind": "clarify", "action": "email_compose",
+            "goal": "Отправить файлы по электронной почте",
+            "target": {"type": "person", "name": "", "location": ""},
+            "source": {"type": "clipboard", "name": "скопированные файлы"},
+            "method": "Открыть редактор письма",
+            "parameters": {"attach_copied_files": True},
+            "confidence": 0.9,
+            "clarification": "Кому отправить файлы?",
+            "response": "",
+        }
+
+    return {
+        "kind": "execute", "action": "email_compose",
+        "goal": "Отправить файлы человеку по электронной почте",
+        "target": {"type": "person", "name": recipient, "location": ""},
+        "source": {"type": "clipboard", "name": "скопированные файлы"},
+        "method": "Открыть редактор письма с файлами во вложениях",
+        "parameters": {"recipient_name": recipient, "attach_copied_files": True},
+        "confidence": max(0.9, float(semantic.get("confidence", 0.0) or 0.0)),
+        "clarification": "", "response": "",
+    }
+
+
 def _understand_command(user_text: str) -> dict:
     """Use deterministic local rules before calling a semantic model."""
     # Сначала проверяем точные фразы, которые пользователь сам подтвердил
@@ -255,6 +318,9 @@ def _understand_command(user_text: str) -> dict:
 
     try:
         semantic = _classify_semantically(user_text)
+        implicit_email = _implicit_file_email_intent(user_text, semantic)
+        if implicit_email:
+            return implicit_email
         if semantic.get("kind") == "clarify":
             # Явная просьба отправить письмо — команда открыть редактор,
             # даже если модель не смогла извлечь адресата. Имя из фразы
@@ -624,6 +690,9 @@ def _understand_command_rules(user_text: str) -> dict:
         return {"action": "read_unread_mail", "confidence": 1.0, "parameters": {}}
     if _is_natural_information_question(user_text):
         return {"action": "ai_chat", "confidence": 0.99, "parameters": {"question": user_text.strip()}}
+    implicit_email = _implicit_file_email_intent(user_text)
+    if implicit_email:
+        return implicit_email
     return {"action": "unknown", "confidence": 0.0, "parameters": {}}
 
 
