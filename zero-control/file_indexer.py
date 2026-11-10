@@ -70,13 +70,30 @@ def is_admin() -> bool:
 
 
 def _available_ntfs_volumes() -> list[str]:
-    """Return mounted drive letters; mftparser will reject non-NTFS volumes."""
+    """Return local mounted volumes without probing slow/network paths via Path.exists()."""
     if os.name != "nt":
         raise OSError("MFT-поиск доступен только в Windows.")
+    from ctypes import wintypes
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GetLogicalDrives.restype = wintypes.DWORD
+    kernel32.GetDriveTypeW.argtypes = [wintypes.LPCWSTR]
+    kernel32.GetDriveTypeW.restype = wintypes.UINT
+
+    drive_mask = kernel32.GetLogicalDrives()
+    if not drive_mask:
+        raise OSError("Windows не вернула список подключённых дисков.")
+
+    # DRIVE_REMOVABLE, DRIVE_FIXED, DRIVE_RAMDISK.
+    # DRIVE_REMOTE (сетевые диски) намеренно пропускаем: обращение к ним
+    # может зависать на тайм-аутах сети и не подходит для локального MFT-поиска.
+    local_drive_types = {2, 3, 6}
     drives = []
-    for letter in string.ascii_uppercase:
-        root = Path(f"{letter}:\\")
-        if root.exists():
+    for index, letter in enumerate(string.ascii_uppercase):
+        if not (drive_mask & (1 << index)):
+            continue
+        root = f"{letter}:\\\\"
+        if kernel32.GetDriveTypeW(root) in local_drive_types:
             drives.append(f"{letter}:")
     return drives
 
@@ -266,20 +283,32 @@ def _search_index_query(connection: sqlite3.Connection, raw_query: str, report: 
 def refresh_and_search(query: str | list[str], report: Callable[[str], None] | None = None, force_refresh: bool = False) -> list[Path] | dict[str, list[Path]]:
     """Refresh available NTFS volumes and return matching file paths."""
     report = report or (lambda message: print(message, flush=True))
+    preflight_started = time.perf_counter()
+    admin_started = time.perf_counter()
     if not is_admin():
+        report(f"[Тайминг] Проверка прав администратора: {time.perf_counter() - admin_started:.3f} сек.")
         raise PermissionError(
             "Для чтения MFT нужны права администратора. Закройте программу и запустите "
             "PyCharm от имени администратора, затем снова запустите проект."
         )
+    report(f"[Тайминг] Проверка прав администратора: {time.perf_counter() - admin_started:.3f} сек.")
 
+    import_started = time.perf_counter()
     try:
         import mftparser  # noqa: F401
     except ImportError as exc:
         raise RuntimeError("Не установлена библиотека mftparser. Обновите requirements.txt.") from exc
+    report(f"[Тайминг] Загрузка mftparser: {time.perf_counter() - import_started:.3f} сек.")
 
+    volumes_started = time.perf_counter()
     volumes = _available_ntfs_volumes()
+    report(
+        f"[Тайминг] Определение локальных дисков: {time.perf_counter() - volumes_started:.3f} сек.; "
+        f"диски: {', '.join(volumes) if volumes else 'нет'}."
+    )
+    report(f"[Тайминг] Подготовка MFT-поиска: {time.perf_counter() - preflight_started:.3f} сек.")
     if not volumes:
-        raise OSError("Не найдены доступные диски.")
+        raise OSError("Не найдены доступные локальные диски для MFT-поиска.")
 
     report("Открываю локальную базу SQLite и проверяю индекс файлов…")
     db_open_started = time.perf_counter()
