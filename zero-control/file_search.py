@@ -624,6 +624,7 @@ def _search_worker(query: str, parent, export_format=None):
         display_query = "*" + " ".join(group[0] for group in term_groups) + "*" + extension
     print(f"Ищу «{display_query}» по локальному индексу MFT и SQLite...", flush=True)
     try:
+        vector_results = []
         if term_groups:
             # Внутри смысловой группы ищем любой вариант (OR), между
             # обязательными понятиями требуем совпадение всех групп (AND).
