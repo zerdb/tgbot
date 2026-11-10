@@ -76,6 +76,29 @@ class WordFormatterValidationTests(unittest.TestCase):
         self.assertIsNone(suggestion)
         self.assertEqual(reason, "Абзацы оформлены единообразно.")
 
+    def test_parses_per_paragraph_suggestions(self):
+        from word_formatter import parse_format_response
+
+        answer = '{"paragraphs":[{"paragraph":1,"space_after_pt":6},' \
+                 '{"paragraph":3,"alignment":"left"}]}'
+        suggestion, reason = parse_format_response(answer)
+        self.assertEqual(suggestion, {
+            "paragraphs": [
+                {"paragraph": 1, "space_after_pt": 6.0},
+                {"paragraph": 3, "alignment": "left"},
+            ]
+        })
+        self.assertIsNone(reason)
+
+    def test_rejects_duplicate_paragraph_numbers(self):
+        from word_formatter import parse_format_response
+
+        with self.assertRaises(ValueError):
+            parse_format_response(
+                '{"paragraphs":[{"paragraph":1,"space_after_pt":6},'
+                '{"paragraph":1,"alignment":"left"}]}'
+            )
+
     def test_parses_fenced_json(self):
         from word_formatter import parse_format_response
 
