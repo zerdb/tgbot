@@ -57,7 +57,8 @@ class WordFormatterValidationTests(unittest.TestCase):
         from word_formatter import _build_analysis_messages
 
         messages = _build_analysis_messages("Тест", [])
-        self.assertIn("жирность, курсив, подчёркивание", messages[0]["content"])
+        self.assertIn("символьное оформление", messages[0]["content"])
+        self.assertIn("character_formats", messages[0]["content"])
         self.assertIn("только свойства абзацев", messages[0]["content"])
 
     def test_parses_valid_suggestion(self):
@@ -98,6 +99,17 @@ class WordFormatterValidationTests(unittest.TestCase):
                 '{"paragraphs":[{"paragraph":1,"space_after_pt":6},'
                 '{"paragraph":1,"alignment":"left"}]}'
             )
+
+    def test_formats_character_only_suggestions_for_preview(self):
+        from word_formatter import _format_summary
+
+        summary = _format_summary({
+            "character_formats": [
+                {"start": 0, "end": 5, "bold": True, "italic": True}
+            ]
+        })
+        self.assertIn("жирный", summary)
+        self.assertIn("курсив", summary)
 
     def test_parses_character_formatting_spans(self):
         from word_formatter import parse_format_response
