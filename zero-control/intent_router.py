@@ -358,7 +358,7 @@ def _understand_command(user_text: str) -> dict:
             if email_request:
                 attach_files = (
                     source.get("type") == "clipboard"
-                    or bool(re.search(r"\\b(файл\\w*|вложен\\w*|буфер\\w*|документ\\w*)\\b", normalized))
+                    or bool(re.search(r"\b(файл\w*|вложен\w*|буфер\w*|документ\w*)\b", normalized))
                 )
                 semantic["action"] = "email_compose"
                 semantic["parameters"] = {"attach_copied_files": attach_files}
