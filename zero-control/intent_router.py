@@ -472,6 +472,19 @@ def _understand_command_rules(user_text: str) -> dict:
     if re.search(r"\b(открой|открыть|покажи|показать|зайди в|перейди в)\b.*\b(настройк)", normalized) or normalized in ("настройки", "настройки помощника"):
         return {"action": "open_assistant_settings", "confidence": 1.0, "parameters": {}}
 
+    # Короткие запросы вида «файлы <название>» — это поиск файлов,
+    # а не открытие папки. Не отдаём такую фразу семантической модели:
+    # она нередко принимает имя после слова «файлы» за название каталога.
+    files_only_match = re.match(
+        r"^(?:пожалуйста\s+)?(?:покажи\s+|найди\s+)?(?:мне\s+)?файл\w*\s+(.+)$",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if files_only_match:
+        query = files_only_match.group(1).strip(" .,!?:;«»")
+        if query:
+            return {"action": "search_files", "confidence": 1.0, "parameters": {"query": query}}
+
     # Открытие произвольной папки — локальное намерение, поиск пути выполняет Python/MFT.
     folder_match = re.search(
         r"\b(?:открой|открыть|покажи|показать|зайди в|зайти в|перейди в|перейти в)\b\s+"
