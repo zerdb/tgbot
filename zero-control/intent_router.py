@@ -286,12 +286,19 @@ def _understand_command(user_text: str) -> dict:
     # точная короткая команда сразу передаётся локальному диспетчеру.
     normalized = re.sub(r"\s+", " ", (user_text or "").lower().replace("ё", "е")).strip(" .,!?:;")
     quick_app_match = re.fullmatch(
-        r"(?:пожалуйста\s+)?(?:открой|открыть|запусти|запустить|включи|включить)\s+(?:мне\s+)?(блокнот|notepad|калькулятор|calculator)(?:\s+пожалуйста)?",
+        r"(?:пожалуйста\s+)?(?:открой|открыть|запусти|запустить|включи|включить)\s+(?:мне\s+)?"
+        r"(блокнот|notepad|калькулятор|calculator|word|ворд|ворт|wort|уорд|microsoft\s+word)"
+        r"(?:\s+пожалуйста)?",
         normalized,
     )
     if quick_app_match:
         app_name = quick_app_match.group(1)
-        app = "notepad" if app_name in ("блокнот", "notepad") else "calculator"
+        if app_name in ("блокнот", "notepad"):
+            app = "notepad"
+        elif app_name in ("калькулятор", "calculator"):
+            app = "calculator"
+        else:
+            app = "word"
         print("[Команды] Локальный быстрый запуск приложения: %s." % app, flush=True)
         return {"action": "open_application", "confidence": 1.0, "parameters": {"app": app}}
 

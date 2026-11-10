@@ -61,6 +61,27 @@ class LocalIntentValidationTests(unittest.TestCase):
         self.assertEqual(matched["action"], "open_application")
         self.assertEqual(matched["parameters"], {"app": "notepad"})
 
+
+    def test_spoken_wort_alias_routes_directly_to_word(self):
+        with patch.object(
+            intent_router, "_classify_semantically",
+            side_effect=AssertionError("semantic model must not be called"),
+        ):
+            intent = intent_router._understand_command("Открой Wort.")
+        self.assertEqual(intent["action"], "open_application")
+        self.assertEqual(intent["parameters"], {"app": "word"})
+
+    def test_word_aliases_route_to_word(self):
+        for phrase in ("Открой Word", "Открой Ворд", "Запусти Ворт", "Открой Уорд"):
+            with self.subTest(phrase=phrase):
+                with patch.object(
+                    intent_router, "_classify_semantically",
+                    side_effect=AssertionError("semantic model must not be called"),
+                ):
+                    intent = intent_router._understand_command(phrase)
+                self.assertEqual(intent["action"], "open_application")
+                self.assertEqual(intent["parameters"], {"app": "word"})
+
     def test_email_recipient_keeps_first_and_last_name(self):
         intent = intent_router._understand_command_rules(
             "Напиши письмо Ивану Петрову о встрече"
