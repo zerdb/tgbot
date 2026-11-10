@@ -90,6 +90,8 @@ def resolve_contact(spoken_name: str, address_book: dict) -> dict:
     second_score = ranked[1]["score"] if len(ranked) > 1 else 0.0
     if best["score"] >= 0.90 and (len(ranked) == 1 or best["score"] - second_score >= 0.12):
         return {"status": "match", "contact": best, "candidates": ranked[:3]}
+    if len(ranked) == 1 and best["score"] >= 0.86:
+        return {"status": "match", "contact": best, "candidates": ranked[:3]}
 
     # Show only close candidates; never silently select among similar contacts.
     close = [item for item in ranked if item["score"] >= max(0.62, best["score"] - 0.12)]
