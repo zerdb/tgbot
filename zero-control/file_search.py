@@ -624,7 +624,6 @@ def _search_worker(query: str, parent, export_format=None):
         display_query = "*" + " ".join(group[0] for group in term_groups) + "*" + extension
     print(f"Ищу «{display_query}» по локальному индексу MFT и SQLite...", flush=True)
     try:
-        vector_matches = False
         if term_groups:
             # Внутри смысловой группы ищем любой вариант (OR), между
             # обязательными понятиями требуем совпадение всех групп (AND).
@@ -645,25 +644,6 @@ def _search_worker(query: str, parent, export_format=None):
                 for group in term_groups
             ]
             matches = list(set.intersection(*group_results)) if group_results else []
-            if not matches and term_groups:
-                # Try the fully local vector index before the legacy cloud-based
-                # synonym fallback. The vector module is optional: failures must
-                # never break the existing MFT/FTS5 search path.
-                vector_query = " ".join(group[0] for group in term_groups if group)
-                if vector_query:
-                    try:
-                        from vector_search import search_similar
-                        matches = search_similar(
-                            vector_query,
-                            report=_report_search_progress,
-                        )
-                        vector_matches = bool(matches)
-                    except Exception as vector_exc:
-                        print(
-                            f"[Поиск файлов] Локальный векторный поиск недоступен: {vector_exc}",
-                            flush=True,
-                        )
-
             if not matches and parsed.get("_semantic_fallback"):
                 # Avoid paying for a second LLM call on common exact matches.
                 # If literal search misses, ask Groq for synonyms/ASR variants,
