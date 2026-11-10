@@ -72,6 +72,20 @@ class CommandHandler:
         ui = self._get_ui()
         if ui is not None:
             self._ui_actions.put(("busy", "Обработка…"))
+
+        office_prefix = re.match(r"^\s*помощник(?:\s*[,!:]|\s)", str(text or ""), re.I)
+        office_explicit = re.search(
+            r"\b(?:в|на)\s+(?:excel|экселе|word|ворде)\b.*"
+            r"\b(?:сделай|добавь|посчитай|выдели|покрась|закрась|форматируй|"
+            r"вставь|запиши|поставь|измени)\b",
+            str(text or ""),
+            re.I,
+        )
+        if office_prefix or office_explicit:
+            print("[Office] Голосовая команда передана помощнику Word / Excel.", flush=True)
+            self._ui_actions.put(("office_command", str(text or "").strip()))
+            return
+
         try:
             from intent_router import understand_command
             intent = understand_command(text)
