@@ -38,5 +38,11 @@ class ImplicitFileEmailIntentTests(unittest.TestCase):
         self.assertEqual(intent["clarification"], "Кому отправить файлы?")
 
 
+    def test_does_not_treat_demonstrative_person_reference_as_recipient(self):
+        intent = _implicit_file_email_intent("Отправь файлы этому человеку.")
+        self.assertEqual(intent["kind"], "clarify")
+        self.assertEqual(intent["clarification"], "Кому отправить файлы?")
+        self.assertNotIn("recipient_name", intent["parameters"])
+
 if __name__ == "__main__":
     unittest.main()
