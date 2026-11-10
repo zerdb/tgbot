@@ -492,7 +492,8 @@ def export_file_results(results, query: str, export_format: str) -> Path:
     output_path = output_dir / f"Результаты_{safe_query}_{stamp}{extensions[export_format]}"
 
     rows = []
-    for path, created_at, size in results:
+    for item in results:
+        path, created_at, size = item[:3]
         try:
             created_text = datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M:%S")
         except (OSError, OverflowError, ValueError):
@@ -735,6 +736,34 @@ def _search_worker(query: str, parent, export_format=None):
                 empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else "__ALL_FILTERED__" if any((filters["start"], filters["end"], filters["drive"], filters["folder"], filters["min_size"], filters["max_size"], filters["exact_size"])) else ""
                 matches = refresh_and_search(empty_query, report=_report_search_progress)
 
+        # Preserve both independent result sets and their provenance.
+        legacy_matches = list(matches)
+        source_by_path = {path: "legacy" for path in legacy_matches}
+        if term_groups:
+            vector_query = " ".join(group[0] for group in term_groups if group)
+            if vector_query:
+                try:
+                    from vector_search import search_similar
+                    vector_results = search_similar(
+                        vector_query,
+                        report=_report_search_progress,
+                    )
+                    for vector_path in vector_results:
+                        source_by_path[vector_path] = (
+                            "both" if vector_path in source_by_path else "vector"
+                        )
+                    print(
+                        f"[Поиск файлов] Два механизма: обычный — {len(legacy_matches)}, "
+                        f"векторный — {len(vector_results)}.",
+                        flush=True,
+                    )
+                except Exception as vector_exc:
+                    print(
+                        f"[Поиск файлов] Векторный поиск недоступен; показываю обычные результаты: {vector_exc}",
+                        flush=True,
+                    )
+        matches = list(source_by_path)
+
         filter_started = time.perf_counter()
         filtered = []
         for path in matches:
@@ -768,12 +797,12 @@ def _search_worker(query: str, parent, export_format=None):
                     continue
                 if filters["end"] and datetime.fromtimestamp(timestamp) > filters["end"]:
                     continue
-                filtered.append((path, size, stat.st_mtime, stat.st_ctime))
+                filtered.append((path, size, stat.st_mtime, stat.st_ctime, source_by_path.get(path, "legacy")))
             except (OSError, ValueError):
                 continue
 
         sort_mode = filters["sort"]
-        if sort_mode is None and term_groups and not vector_matches and not (filters["start"] or filters["end"]):
+        if sort_mode is None and term_groups and not (filters["start"] or filters["end"]):
             # Relevance is ranked locally: prefer matches in the filename over
             # matches only in a parent directory. No local filenames are sent
             # back to the cloud model for ranking.
@@ -791,7 +820,12 @@ def _search_worker(query: str, parent, export_format=None):
                 path_hits = sum(any(term in path_key for term in group) for group in term_groups)
                 return (-name_hits, -path_hits, len(path.name), str(path).casefold())
 
-            filtered.sort(key=relevance_key)
+            filtered.sort(
+                key=lambda item: (
+                    0 if item[4] in {"legacy", "both"} else 1,
+                    *relevance_key(item),
+                )
+            )
         if sort_mode == "size_desc":
             filtered.sort(key=lambda item: item[1], reverse=True)
         elif sort_mode == "size_asc":
@@ -800,7 +834,7 @@ def _search_worker(query: str, parent, export_format=None):
             filtered.sort(key=lambda item: item[2])
         elif sort_mode == "date_desc" or filters["start"] or filters["end"]:
             filtered.sort(key=lambda item: item[2], reverse=True)
-        matches = [(item[0], item[3], item[1]) for item in filtered]
+        matches = [(item[0], item[3], item[1], item[4]) for item in filtered]
         print(
             f"[Поиск файлов][Тайминг] Фильтры и сортировка: {time.perf_counter() - filter_started:.3f} сек.; "
             f"кандидатов: {len(filtered)}.",
@@ -1064,7 +1098,12 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
     ttk.Label(
         window,
         text=f"Найдено файлов: {len(results)}. Двойной щелчок — открыть файл.",
-    ).pack(anchor="w", padx=12, pady=(12, 6))
+    ).pack(anchor="w", padx=12, pady=(12, 4))
+    legend = ttk.Frame(window)
+    legend.pack(anchor="w", padx=12, pady=(0, 6))
+    tk.Label(legend, text=" Старый поиск ", bg="#E2F0D9", fg="#24512D").pack(side="left", padx=(0, 6))
+    tk.Label(legend, text=" Векторный поиск ", bg="#FFF2CC", fg="#765800").pack(side="left", padx=(0, 6))
+    tk.Label(legend, text=" Оба поиска ", bg="#DDEBF7", fg="#1F4E79").pack(side="left")
 
     frame = ttk.Frame(window)
     frame.pack(fill="both", expand=True, padx=12, pady=6)
@@ -1074,6 +1113,9 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
     listing.heading("created", text="Дата создания")
     listing.heading("size", text="Размер")
     listing.heading("path", text="Путь к папке")
+    listing.tag_configure("legacy", background="#E2F0D9", foreground="#24512D")
+    listing.tag_configure("vector", background="#FFF2CC", foreground="#765800")
+    listing.tag_configure("both", background="#DDEBF7", foreground="#1F4E79")
     listing.column("name", width=330, minwidth=180, stretch=False)
     listing.column("created", width=210, minwidth=150, stretch=False, anchor="center")
     listing.column("size", width=130, minwidth=90, stretch=False, anchor="e")
@@ -1108,7 +1150,9 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
 
     paths = []
     results = _sort_file_results_by_creation(results)
-    for index, (path, created_at, size) in enumerate(results):
+    for index, item in enumerate(results):
+        path, created_at, size = item[:3]
+        source = item[3] if len(item) > 3 else "legacy"
         paths.append(path)
         try:
             created_text = datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M")
@@ -1119,6 +1163,7 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
             "end",
             iid=str(index),
             values=(path.name, created_text, format_size(size), str(path.parent)),
+            tags=(source if source in {"legacy", "vector", "both"} else "legacy",),
         )
 
     def open_selected(_event=None):
