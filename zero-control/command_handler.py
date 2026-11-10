@@ -1,6 +1,7 @@
 """Маршрутизация распознанных команд к действиям приложения."""
 from __future__ import annotations
 
+import re
 import threading
 from queue import SimpleQueue
 from typing import Callable, Any
@@ -146,18 +147,20 @@ class CommandHandler:
         elif action == "email_compose":
             recipient_name = str(args.get("recipient_name") or "").strip()
             print(f"[Почта] Получатель из голосовой команды: {recipient_name or 'не распознан'}", flush=True)
-            attach_files = bool(args.get("attach_copied_files", False))
-            attachment_paths = []
-            if attach_files:
-                try:
-                    from clipboard_files import copied_file_paths
-                    attachment_paths = copied_file_paths()
-                    print(f"[Почта] Файлов в буфере обмена: {len(attachment_paths)}", flush=True)
-                except Exception as exc:
-                    print(f"[Почта] Не удалось получить список файлов из буфера: {exc}", flush=True)
+            # Голосовая команда «отправь на почту <человек>» означает отправку
+            # текущих скопированных файлов, даже если ASR/семантика не назвали их
+            # отдельным словом. Сам буфер читаем позже в GUI-потоке: чтение из
+            # рабочего потока часто сталкивается с временной блокировкой clipboard.
+            send_to_person = bool(
+                recipient_name
+                and re.search(r"\\b(отправ\\w*|перешл\\w*|пошл\\w*|передай\\w*)\\b", text or "", re.IGNORECASE)
+            )
+            attach_files = bool(args.get("attach_copied_files", False) or send_to_person)
+            if attach_files and not args.get("attach_copied_files", False):
+                print("[Почта] Для отправки адресату автоматически добавлю скопированные файлы.", flush=True)
             self._ui_actions.put(("email_compose", {
                 "attach_copied_files": attach_files,
-                "attachment_paths": attachment_paths,
+                "attachment_paths": [],
                 "recipient_name": recipient_name,
             }))
         elif action == "inspect_camera_image":
