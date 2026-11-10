@@ -58,3 +58,15 @@ def mail_reader_worker(ui_actions: SimpleQueue) -> None:
     except Exception as exc:
         result = ("Сводка непрочитанных писем", None, str(exc))
     ui_actions.put(("ai_chat_result", result))
+
+
+
+def office_command_worker(command: str, ui_actions: SimpleQueue) -> None:
+    """Run an Office automation command outside the Tkinter thread."""
+    try:
+        from office_assistant import execute_office_command
+        answer = execute_office_command(command)
+        result = (command, answer, None)
+    except Exception as exc:
+        result = (command, None, str(exc))
+    ui_actions.put(("office_command_result", result))
