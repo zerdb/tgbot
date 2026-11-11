@@ -10,7 +10,7 @@ from windows_actions import (
     lock_computer, reboot_computer, open_downloads, open_recycle_bin,
     open_application, open_settings, empty_recycle_bin, take_screenshot,
     paste_clipboard_to_excel, save_clipboard_as_note,
-    paste_clipboard_to_application,
+    paste_clipboard_to_application, open_magnifier, open_onscreen_keyboard,
 )
 from installed_apps import open_installed_application
 from notifications import speak_text
@@ -231,6 +231,12 @@ class CommandHandler:
         elif action == "open_settings":
             open_settings()
             self._announce_success("Параметры открыты")
+        elif action == "open_magnifier":
+            open_magnifier()
+            self._announce_success("Экранная лупа включена")
+        elif action == "open_onscreen_keyboard":
+            open_onscreen_keyboard()
+            self._announce_success("Экранная клавиатура открыта")
         elif action == "empty_recycle_bin":
             empty_recycle_bin()
         elif action == "screenshot":
