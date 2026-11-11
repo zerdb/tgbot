@@ -62,6 +62,26 @@ class LocalIntentValidationTests(unittest.TestCase):
         self.assertEqual(matched["parameters"], {"app": "notepad"})
 
 
+    def test_magnifier_command_routes_locally_without_semantic_model(self):
+        for phrase in ("Включи экранную лупу", "Открой лупу", "Запусти экранную лупу"):
+            with self.subTest(phrase=phrase):
+                with patch.object(
+                    intent_router, "_classify_semantically",
+                    side_effect=AssertionError("semantic model must not be called"),
+                ):
+                    intent = intent_router._understand_command(phrase)
+                self.assertEqual(intent["action"], "open_magnifier")
+
+    def test_onscreen_keyboard_command_routes_locally_without_semantic_model(self):
+        for phrase in ("Включи экранную клавиатуру", "Открой виртуальную клавиатуру", "Покажи клавиатуру на экране"):
+            with self.subTest(phrase=phrase):
+                with patch.object(
+                    intent_router, "_classify_semantically",
+                    side_effect=AssertionError("semantic model must not be called"),
+                ):
+                    intent = intent_router._understand_command(phrase)
+                self.assertEqual(intent["action"], "open_onscreen_keyboard")
+
     def test_spoken_wort_alias_routes_directly_to_word(self):
         with patch.object(
             intent_router, "_classify_semantically",
