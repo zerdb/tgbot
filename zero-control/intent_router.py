@@ -21,6 +21,8 @@ ACTIONS = {
  "open_application": "Открыть приложение из разрешённого списка; app — notepad, calculator, browser, word, excel или images.",
  "open_installed_application": "Найти и запустить установленное приложение Windows по его названию; app_name — название из команды пользователя.",
  "open_settings": "Открыть настройки Windows.",
+ "open_magnifier": "Включить экранную лупу Windows для увеличения изображения на экране.",
+ "open_onscreen_keyboard": "Открыть экранную клавиатуру Windows для ввода текста мышью.",
  "empty_recycle_bin": "Очистить корзину.",
  "screenshot": "Сделать скриншот.",
  "inspect_screen": "Сделать свежий снимок экрана и открыть сохранённое изображение в стандартном просмотрщике Windows.",
@@ -311,6 +313,8 @@ def _understand_command(user_text: str) -> dict:
     local_first_actions = {
         "inspect_screen",
         "open_settings",
+        "open_magnifier",
+        "open_onscreen_keyboard",
         "open_assistant_settings",
         "open_folder",
         "add_contact",
@@ -412,6 +416,14 @@ def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"^мне нужно\s*,?\s*(?:чтобы ты\s+)?", "", normalized)
     normalized = re.sub(r"[,!]?\s+пожалуйста$", "", normalized)
     normalized = re.sub(r"\s+(?:на компьютере|на пк)$", "", normalized).strip(" .,!?:;")
+
+    # Средства специальных возможностей Windows — локальные команды без ИИ.
+    if re.search(r"\b(лупк\w*|экранн\w* луп\w*|увеличител\w* экран\w*)\b", normalized):
+        if re.search(r"\b(открой\w*|запусти\w*|включи\w*|активируй\w*|нужн\w*)\b", normalized) or normalized in ("лупа", "экранная лупа"):
+            return {"action": "open_magnifier", "confidence": 1.0, "parameters": {}}
+    if re.search(r"\b(экранн\w* клавиатур\w*|виртуальн\w* клавиатур\w*|клавиатур\w* на экран\w*)\b", normalized):
+        if re.search(r"\b(открой\w*|запусти\w*|включи\w*|покажи\w*|активируй\w*)\b", normalized) or normalized in ("экранная клавиатура", "виртуальная клавиатура"):
+            return {"action": "open_onscreen_keyboard", "confidence": 1.0, "parameters": {}}
 
     # Снимок текущего экрана — локальная команда. Учитываем варианты ASR:
     # «скрин», «скриншот», «снепшот», «фото/снимок монитора» и разные порядки слов.
