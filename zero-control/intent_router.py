@@ -421,7 +421,7 @@ def _understand_command_rules(user_text: str) -> dict:
 
     # Групповое переименование файлов, скопированных в Проводнике.
     if re.search(r"\b(переимену\w*|назови\w*|дай\s+понятн\w*\s+имен\w*)\b", normalized) and re.search(
-        r"\b(скопированн\w*\s+файл\w*|файл\w*\s+из\s+буфер\w*|файл\w*\s+в\s+буфер\w*|эт\w*\s+файл\w*|выделенн\w*\s+файл\w*|котор\w*\s+я\s+скопировал\w*)\b",
+        r"\b(скопированн\w*\s+файл\w*|файл\w*\s+из\s+буфер\w*|файл\w*\s+в\s+буфер\w*|эт\w*\s+файл\w*|выделенн\w*\s+файл\w*|котор\w*\s+я\s+скопировал\w*|файл\w*)\b",
         normalized,
     ):
         return {"action": "rename_copied_files", "confidence": 1.0, "parameters": {}}
