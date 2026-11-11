@@ -418,7 +418,7 @@ def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"\s+(?:на компьютере|на пк)$", "", normalized).strip(" .,!?:;")
 
     # Средства специальных возможностей Windows — локальные команды без ИИ.
-    if re.search(r"\b(лупк\w*|экранн\w* луп\w*|увеличител\w* экран\w*)\b", normalized):
+    if re.search(r"\b(луп\w*|экранн\w* луп\w*|увеличител\w* экран\w*)\b", normalized):
         if re.search(r"\b(открой\w*|запусти\w*|включи\w*|активируй\w*|нужн\w*)\b", normalized) or normalized in ("лупа", "экранная лупа"):
             return {"action": "open_magnifier", "confidence": 1.0, "parameters": {}}
     if re.search(r"\b(экранн\w* клавиатур\w*|виртуальн\w* клавиатур\w*|клавиатур\w* на экран\w*)\b", normalized):
