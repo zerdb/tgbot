@@ -722,19 +722,10 @@ def _search_worker(query: str, parent, export_format=None):
                 empty_query = "__SORT_SIZE_DESC__" if filters["sort"] == "size_desc" else "__SORT_SIZE_ASC__" if filters["sort"] == "size_asc" else "__ALL_FILTERED__" if any((filters["start"], filters["end"], filters["drive"], filters["folder"], filters["min_size"], filters["max_size"], filters["exact_size"])) else ""
                 matches = refresh_and_search(empty_query, report=_report_search_progress)
 
-        # Preserve both independent result sets and their provenance.
-        legacy_matches = list(matches)
-        source_by_path = {path: "legacy" for path in legacy_matches}
-        for vector_path in vector_results:
-            source_by_path[vector_path] = (
-                "both" if vector_path in source_by_path else "vector"
-            )
         print(
-            f"[Поиск файлов] Два механизма: обычный — {len(legacy_matches)}, "
-            f"векторный — {len(vector_results)}.",
+            f"[Поиск файлов] Обычный поиск по индексу: найдено {len(matches)} кандидатов.",
             flush=True,
         )
-        matches = list(source_by_path)
 
         filter_started = time.perf_counter()
         filtered = []
