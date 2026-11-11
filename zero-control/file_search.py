@@ -646,23 +646,9 @@ def _search_worker(query: str, parent, export_format=None):
             ]
             matches = list(set.intersection(*group_results)) if group_results else []
 
-            # Run the local vector search for every text query, regardless of
-            # whether FTS5 found anything. It runs before the legacy AI synonym
-            # fallback, so a semantic hit does not need a cloud round-trip.
+            # Векторный поиск отключён в обычном сценарии.
+            # Индекс строится только вручную из настроек.
             vector_results = []
-            vector_query = " ".join(group[0] for group in term_groups if group)
-            if vector_query:
-                try:
-                    from vector_search import search_similar
-                    vector_results = search_similar(
-                        vector_query,
-                        report=_report_search_progress,
-                    )
-                except Exception as vector_exc:
-                    print(
-                        f"[Поиск файлов] Векторный поиск недоступен; продолжаю обычный поиск: {vector_exc}",
-                        flush=True,
-                    )
 
             if not matches and not vector_results and parsed.get("_semantic_fallback"):
                 # Avoid paying for a second LLM call on common exact matches.
@@ -1087,9 +1073,7 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
     ).pack(anchor="w", padx=12, pady=(12, 4))
     legend = ttk.Frame(window)
     legend.pack(anchor="w", padx=12, pady=(0, 6))
-    tk.Label(legend, text=" Старый поиск ", bg="#E2F0D9", fg="#24512D").pack(side="left", padx=(0, 6))
-    tk.Label(legend, text=" Векторный поиск ", bg="#FFF2CC", fg="#765800").pack(side="left", padx=(0, 6))
-    tk.Label(legend, text=" Оба поиска ", bg="#DDEBF7", fg="#1F4E79").pack(side="left")
+    tk.Label(legend, text=" Обычный поиск по индексу ", bg="#E2F0D9", fg="#24512D").pack(side="left")
 
     frame = ttk.Frame(window)
     frame.pack(fill="both", expand=True, padx=12, pady=6)
