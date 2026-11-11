@@ -75,6 +75,7 @@ class LocalIntentValidationTests(unittest.TestCase):
     def test_copied_file_rename_command_routes_locally_without_semantic_model(self):
         for phrase in (
             "Переименуй скопированные файлы",
+            "Переименуй файлы",
             "Дай понятные имена этим файлам",
             "Переименуй файлы, которые я скопировал",
         ):
