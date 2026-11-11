@@ -198,6 +198,62 @@ def open_settings_window(parent):
         refresh_button = ttk.Button(index_card, text="Обновить индекс сейчас", command=refresh_index_now, style="Card.TButton")
         refresh_button.pack(anchor="w", pady=(2, 0))
 
+        vector_card = make_card(frame, "Локальный векторный поиск")
+        ttk.Label(
+            vector_card,
+            text="Векторный поиск не запускается при обычном поиске файлов. Построение индекса выполняется только вручную и может занять несколько часов. Уже созданные записи сохраняются, обработка продолжается с оставшихся файлов.",
+            wraplength=540, style="Card.TLabel",
+        ).pack(anchor="w")
+        vector_status = tk.StringVar(master=window, value="Индекс можно создать или дополнить вручную.")
+        ttk.Label(vector_card, textvariable=vector_status, style="CardMuted.TLabel", wraplength=530).pack(anchor="w", pady=(4, 5))
+
+        def build_vector_index_now():
+            vector_button.configure(state="disabled")
+            vector_status.set("Подготавливаю векторный индекс в фоновом потоке…")
+
+            def report_vector_progress(message):
+                try:
+                    window.after(0, lambda msg=message: vector_status.set(msg) if window.winfo_exists() else None)
+                except (tk.TclError, RuntimeError):
+                    pass
+
+            def worker():
+                try:
+                    from vector_search import build_vector_index
+                    added = build_vector_index(report=report_vector_progress)
+                    result = (True, added)
+                except Exception as exc:
+                    result = (False, str(exc))
+
+                def finish():
+                    if not window.winfo_exists():
+                        return
+                    vector_button.configure(state="normal")
+                    if result[0]:
+                        vector_status.set(f"Векторный индекс готов. Добавлено или обновлено записей: {result[1]:,}.")
+                        messagebox.showinfo(
+                            "Векторный индекс",
+                            f"Построение завершено. Добавлено или обновлено записей: {result[1]:,}.",
+                            parent=window,
+                        )
+                    else:
+                        vector_status.set("Не удалось построить векторный индекс.")
+                        messagebox.showerror("Векторный индекс", result[1], parent=window)
+
+                try:
+                    window.after(0, finish)
+                except (tk.TclError, RuntimeError):
+                    pass
+
+            import threading
+            threading.Thread(target=worker, name="vector-index-manual", daemon=True).start()
+
+        vector_button = ttk.Button(
+            vector_card, text="Создать / обновить векторный индекс",
+            command=build_vector_index_now, style="Card.TButton",
+        )
+        vector_button.pack(anchor="w", pady=(2, 0))
+
         learning = make_card(frame, "Обучение локальной маршрутизации")
         ttk.Label(
             learning,
