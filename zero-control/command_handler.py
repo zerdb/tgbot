@@ -237,6 +237,8 @@ class CommandHandler:
         elif action == "open_onscreen_keyboard":
             open_onscreen_keyboard()
             self._announce_success("Экранная клавиатура открыта")
+        elif action == "rename_copied_files":
+            self._ui_actions.put(("rename_copied_files", None))
         elif action == "empty_recycle_bin":
             empty_recycle_bin()
         elif action == "screenshot":
