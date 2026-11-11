@@ -29,6 +29,21 @@ class FileRenameTests(unittest.TestCase):
             self.assertTrue(target.exists())
             self.assertEqual(target.read_text(encoding="utf-8"), "content")
 
+    def test_batch_rename_preserves_compound_archive_extension(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "archive_001.tar.gz"
+            source.write_text("content", encoding="utf-8")
+            rename_files([(source, "Архив документов")])
+            target = Path(directory) / "Архив документов.tar.gz"
+            self.assertTrue(target.exists())
+
+    def test_typed_extension_is_not_duplicated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "scan.pdf"
+            source.write_text("content", encoding="utf-8")
+            rename_files([(source, "Скан договора.pdf")])
+            self.assertTrue((Path(directory) / "Скан договора.pdf").exists())
+
     def test_batch_rename_supports_swapping_names(self):
         with tempfile.TemporaryDirectory() as directory:
             first = Path(directory) / "first.txt"
