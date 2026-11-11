@@ -184,6 +184,9 @@ def main():
                     show_ai_answer(_ui.root, question, answer, error)
                 elif ui_action == "organize_folder":
                     open_folder_organizer(_ui.root)
+                elif ui_action == "rename_copied_files":
+                    from copied_file_renamer import open_copied_file_renamer
+                    open_copied_file_renamer(_ui.root)
                 elif ui_action == "add_contact":
                     print("[GUI] Открываю раздел контактов почтового клиента.", flush=True)
                     open_mail_client(_ui.root, initial_tab="contacts", start_new_contact=bool(value))
