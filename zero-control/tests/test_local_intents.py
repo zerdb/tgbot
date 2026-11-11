@@ -72,6 +72,20 @@ class LocalIntentValidationTests(unittest.TestCase):
                     intent = intent_router._understand_command(phrase)
                 self.assertEqual(intent["action"], "open_magnifier")
 
+    def test_copied_file_rename_command_routes_locally_without_semantic_model(self):
+        for phrase in (
+            "Переименуй скопированные файлы",
+            "Дай понятные имена этим файлам",
+            "Переименуй файлы, которые я скопировал",
+        ):
+            with self.subTest(phrase=phrase):
+                with patch.object(
+                    intent_router, "_classify_semantically",
+                    side_effect=AssertionError("semantic model must not be called"),
+                ):
+                    intent = intent_router._understand_command(phrase)
+                self.assertEqual(intent["action"], "rename_copied_files")
+
     def test_onscreen_keyboard_command_routes_locally_without_semantic_model(self):
         for phrase in ("Включи экранную клавиатуру", "Открой виртуальную клавиатуру", "Покажи клавиатуру на экране"):
             with self.subTest(phrase=phrase):
