@@ -231,6 +231,11 @@ def _sync_index(report: Callable[[str], None] | None = None) -> int:
         connection.close()
 
 
+def build_vector_index(report: Callable[[str], None] | None = None) -> int:
+    """Build or incrementally update the local vector index on explicit request."""
+    with _LOCK:
+        return _sync_index(report)
+
 def search_similar(
     query: str,
     top_k: int = 1000,
