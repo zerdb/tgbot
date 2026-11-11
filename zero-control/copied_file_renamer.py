@@ -82,7 +82,7 @@ def _suggest_batch(paths: list[Path]) -> list[str]:
     try:
         payload = json.loads(answer)
     except json.JSONDecodeError:
-        match = re.search(r"\\{.*\\}", answer, re.DOTALL)
+        match = re.search(r"\{.*\}", answer, re.DOTALL)
         if not match:
             raise RuntimeError("ИИ вернул ответ в неизвестном формате.")
         payload = json.loads(match.group(0))
@@ -110,6 +110,7 @@ def suggest_file_names(paths: list[Path]) -> list[str]:
     for start in range(0, len(paths), 25):
         result.extend(_suggest_batch(paths[start:start + 25]))
     return result
+
 
 def rename_files(plan: list[tuple[Path, str]]) -> int:
     """Safely rename a batch, staging all sources first to support name swaps."""
