@@ -1,7 +1,7 @@
 """Local semantic file-name search backed by a separate SQLite index.
 
 The main MFT/FTS5 index remains the source of truth. Embeddings contain only
-file names and paths, are generated on the local CPU, and are stored separately.
+file names and paths, are generated locally on the best available device, and are stored separately.
 """
 from __future__ import annotations
 
@@ -19,7 +19,9 @@ from file_indexer import DB_PATH as FILE_DB_PATH
 MODEL_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 VECTOR_DB_PATH = APP_DATA / "vector_index.sqlite3"
 MODEL_CACHE = APP_DATA / "models"
-EMBEDDING_BATCH_SIZE = 32
+EMBEDDING_BATCH_SIZE = 256
+CPU_INFERENCE_BATCH_SIZE = 128
+CUDA_INFERENCE_BATCH_SIZE = 256
 SCAN_BATCH_SIZE = 1024
 MIN_SIMILARITY = 0.30
 
@@ -27,6 +29,8 @@ _LOCK = threading.RLock()
 _MODEL = None
 _TOKENIZER = None
 _TORCH = None
+_DEVICE = None
+_INFERENCE_BATCH_SIZE = None
 
 
 def _report(callback: Callable[[str], None] | None, message: str) -> None:
@@ -35,8 +39,8 @@ def _report(callback: Callable[[str], None] | None, message: str) -> None:
 
 
 def _load_model():
-    """Load the multilingual model lazily; inference always runs on CPU."""
-    global _MODEL, _TOKENIZER, _TORCH
+    """Load the multilingual model lazily and select CUDA when it is available."""
+    global _MODEL, _TOKENIZER, _TORCH, _DEVICE, _INFERENCE_BATCH_SIZE
     if _MODEL is not None:
         return _TOKENIZER, _MODEL, _TORCH
 
@@ -45,33 +49,80 @@ def _load_model():
     import torch
     from transformers import AutoModel, AutoTokenizer
 
-    # Keep background indexing responsive on everyday Windows machines.
-    torch.set_num_threads(max(1, min(4, os.cpu_count() or 1)))
+    # Use more of the available CPU without allowing PyTorch to claim every core.
+    cpu_threads = max(1, min(8, os.cpu_count() or 1))
+    torch.set_num_threads(cpu_threads)
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        # PyTorch may already have initialized its inter-op pool.
+        pass
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     MODEL_CACHE.mkdir(parents=True, exist_ok=True)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, cache_dir=str(MODEL_CACHE))
     model = AutoModel.from_pretrained(MODEL_ID, cache_dir=str(MODEL_CACHE))
-    model.to("cpu")
+    model.to(device)
     model.eval()
+
+    if device.type == "cuda":
+        # Allow fast TF32 matrix operations on supported NVIDIA GPUs.
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        inference_batch_size = CUDA_INFERENCE_BATCH_SIZE
+    else:
+        inference_batch_size = CPU_INFERENCE_BATCH_SIZE
+
     _TOKENIZER, _MODEL, _TORCH = tokenizer, model, torch
+    _DEVICE, _INFERENCE_BATCH_SIZE = device, inference_batch_size
     return _TOKENIZER, _MODEL, _TORCH
 
 
 def _embed(texts: list[str]) -> np.ndarray:
+    """Encode texts in device-sized micro-batches, shrinking CUDA batches on OOM."""
+    global _INFERENCE_BATCH_SIZE
     tokenizer, model, torch = _load_model()
-    encoded = tokenizer(
-        texts,
-        padding=True,
-        truncation=True,
-        max_length=128,
-        return_tensors="pt",
-    )
-    with torch.inference_mode():
-        hidden = model(**encoded).last_hidden_state
-        mask = encoded["attention_mask"].unsqueeze(-1).to(hidden.dtype)
-        pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-        vectors = torch.nn.functional.normalize(pooled, p=2, dim=1)
-    return vectors.cpu().numpy().astype(np.float32, copy=False)
+    device = _DEVICE
+    output = []
+    offset = 0
 
+    while offset < len(texts):
+        current_size = min(_INFERENCE_BATCH_SIZE, len(texts) - offset)
+        while True:
+            chunk = texts[offset:offset + current_size]
+            try:
+                encoded = tokenizer(
+                    chunk,
+                    padding=True,
+                    truncation=True,
+                    max_length=128,
+                    return_tensors="pt",
+                ).to(device)
+                with torch.inference_mode():
+                    if device.type == "cuda":
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            hidden = model(**encoded).last_hidden_state
+                    else:
+                        hidden = model(**encoded).last_hidden_state
+                    mask = encoded["attention_mask"].unsqueeze(-1).to(hidden.dtype)
+                    pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+                    vectors = torch.nn.functional.normalize(pooled, p=2, dim=1)
+                output.append(vectors.float().cpu().numpy().astype(np.float32, copy=False))
+                offset += len(chunk)
+                break
+            except RuntimeError as exc:
+                is_cuda_oom = (
+                    device.type == "cuda"
+                    and "out of memory" in str(exc).casefold()
+                    and current_size > 1
+                )
+                if not is_cuda_oom:
+                    raise
+                torch.cuda.empty_cache()
+                current_size = max(1, current_size // 2)
+                _INFERENCE_BATCH_SIZE = min(_INFERENCE_BATCH_SIZE, current_size)
+
+    return np.concatenate(output, axis=0) if output else np.empty((0, 0), dtype=np.float32)
 
 def _document_text(full_path: str, name: str) -> str:
     path = Path(full_path)
@@ -144,6 +195,15 @@ def _sync_index(report: Callable[[str], None] | None = None) -> int:
             f"Векторный индекс: файлов {len(inventory):,}; "
             f"новых или изменённых записей {len(pending):,}.",
         )
+
+        if pending:
+            _load_model()
+            _report(
+                report,
+                f"Модель векторизации загружена: устройство {_DEVICE}; "
+                f"пакет сохранения {EMBEDDING_BATCH_SIZE}, "
+                f"пакет вычисления {_INFERENCE_BATCH_SIZE}.",
+            )
 
         for offset in range(0, len(pending), EMBEDDING_BATCH_SIZE):
             batch = pending[offset:offset + EMBEDDING_BATCH_SIZE]
