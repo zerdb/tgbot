@@ -426,7 +426,7 @@ def _understand_command_rules(user_text: str) -> dict:
     ):
         return {"action": "rename_copied_files", "confidence": 1.0, "parameters": {}}
 
-        # Средства специальных возможностей Windows — локальные команды без ИИ.
+    # Средства специальных возможностей Windows — локальные команды без ИИ.
     if re.search(r"\b(луп\w*|экранн\w* луп\w*|увеличител\w* экран\w*)\b", normalized):
         if re.search(r"\b(открой\w*|запусти\w*|включи\w*|активируй\w*|нужн\w*)\b", normalized) or normalized in ("лупа", "экранная лупа"):
             return {"action": "open_magnifier", "confidence": 1.0, "parameters": {}}
