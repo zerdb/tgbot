@@ -23,6 +23,7 @@ ACTIONS = {
  "open_settings": "Открыть настройки Windows.",
  "open_magnifier": "Включить экранную лупу Windows для увеличения изображения на экране.",
  "open_onscreen_keyboard": "Открыть экранную клавиатуру Windows для ввода текста мышью.",
+ "rename_copied_files": "Предложить понятные имена для файлов, скопированных в Проводнике, с предварительным просмотром и подтверждением пользователя.",
  "empty_recycle_bin": "Очистить корзину.",
  "screenshot": "Сделать скриншот.",
  "inspect_screen": "Сделать свежий снимок экрана и открыть сохранённое изображение в стандартном просмотрщике Windows.",
@@ -315,6 +316,7 @@ def _understand_command(user_text: str) -> dict:
         "open_settings",
         "open_magnifier",
         "open_onscreen_keyboard",
+        "rename_copied_files",
         "open_assistant_settings",
         "open_folder",
         "add_contact",
@@ -416,6 +418,13 @@ def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"^мне нужно\s*,?\s*(?:чтобы ты\s+)?", "", normalized)
     normalized = re.sub(r"[,!]?\s+пожалуйста$", "", normalized)
     normalized = re.sub(r"\s+(?:на компьютере|на пк)$", "", normalized).strip(" .,!?:;")
+
+    # Групповое переименование файлов, скопированных в Проводнике.
+    if re.search(r"\\b(переимену\\w*|назови\\w*|дай\\s+понятн\\w*\\s+имен\\w*)\\b", normalized) and re.search(
+        r"\\b(скопированн\\w*\\s+файл\\w*|файл\\w*\\s+из\\s+буфер\\w*|файл\\w*\\s+в\\s+буфер\\w*|эти\\s+файл\\w*|выделенн\\w*\\s+файл\\w*)\\b",
+        normalized,
+    ):
+        return {"action": "rename_copied_files", "confidence": 1.0, "parameters": {}}
 
     # Средства специальных возможностей Windows — локальные команды без ИИ.
     if re.search(r"\b(луп\w*|экранн\w* луп\w*|увеличител\w* экран\w*)\b", normalized):
