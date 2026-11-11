@@ -26,6 +26,19 @@ def _path_key(path: Path) -> str:
     return os.path.normcase(os.path.abspath(str(path)))
 
 
+def _file_extension(path: Path) -> str:
+    lower_name = path.name.casefold()
+    for extension in (".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst"):
+        if lower_name.endswith(extension):
+            return path.name[-len(extension):]
+    return path.suffix
+
+
+def _original_stem(path: Path) -> str:
+    extension = _file_extension(path)
+    return path.name[:-len(extension)] if extension else path.name
+
+
 def validate_stem(value: str) -> str:
     """Validate a user-edited filename stem without changing its extension."""
     stem = str(value or "").strip()
@@ -43,12 +56,13 @@ def validate_stem(value: str) -> str:
 def _suggestion_stem(value: str, original: Path) -> str:
     """Convert a model suggestion into a safe editable stem."""
     candidate = str(value or "").strip().strip('"«»')
-    if original.suffix and candidate.casefold().endswith(original.suffix.casefold()):
-        candidate = candidate[:-len(original.suffix)]
+    extension = _file_extension(original)
+    if extension and candidate.casefold().endswith(extension.casefold()):
+        candidate = candidate[:-len(extension)]
     candidate = _INVALID_WINDOWS_CHARS.sub(" ", candidate)
     candidate = re.sub(r"\s+", " ", candidate).strip(" .")
     if not candidate or candidate.split(".", 1)[0].upper() in _RESERVED_WINDOWS_NAMES:
-        return original.stem
+        return _original_stem(original)
     return candidate[:160].rstrip(" .") or original.stem
 
 
@@ -126,10 +140,13 @@ def rename_files(plan: list[tuple[Path, str]]) -> int:
             raise ValueError(f"Файл добавлен в список дважды: {source.name}")
         source_keys.add(source_key)
         editable_stem = str(new_stem or "").strip()
-        if source.suffix and editable_stem.casefold().endswith(source.suffix.casefold()):
-            editable_stem = editable_stem[:-len(source.suffix)].rstrip()
+        extension = _file_extension(source)
+        if extension and editable_stem.casefold().endswith(extension.casefold()):
+            editable_stem = editable_stem[:-len(extension)].rstrip()
         stem = validate_stem(editable_stem)
-        target = source.with_name(stem + source.suffix)
+        if len(stem + extension) > 255:
+            raise ValueError(f"Новое имя файла слишком длинное: {stem + extension}")
+        target = source.with_name(stem + extension)
         target_key = _path_key(target)
         if target_key in target_keys:
             raise ValueError(f"Несколько файлов получат имя «{target.name}». Исправь варианты.")
@@ -251,8 +268,9 @@ class RenameReviewWindow:
             name_frame.pack(side="left", fill="x", expand=True)
             name_var = tk.StringVar(master=self.window, value=suggestion)
             ttk.Entry(name_frame, textvariable=name_var).pack(side="left", fill="x", expand=True)
-            if path.suffix:
-                ttk.Label(name_frame, text=path.suffix).pack(side="left", padx=(5, 0))
+            extension = _file_extension(path)
+            if extension:
+                ttk.Label(name_frame, text=extension).pack(side="left", padx=(5, 0))
             ttk.Separator(rows_frame, orient="horizontal").pack(fill="x")
             self.rows.append((path, include, name_var))
 
