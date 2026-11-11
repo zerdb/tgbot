@@ -313,51 +313,15 @@ class RenameReviewWindow:
 
 
 def open_copied_file_renamer(parent):
-    """Read Explorer's copied-file list, request consent, then show AI suggestions."""
+    """Read Explorer's copied-file list and show AI suggestions without preliminary dialogs."""
     if parent is None or not parent.winfo_exists():
         return
-    loading = tk.Toplevel(parent)
-    apply_modern_style(loading)
-    loading.title("Zero Control — переименование")
-    loading.geometry("460x150")
-    loading.transient(parent)
-    body = ttk.Frame(loading, padding=18)
-    body.pack(fill="both", expand=True)
-    status = tk.StringVar(master=loading, value="Читаю список скопированных файлов…")
-    ttk.Label(body, textvariable=status, wraplength=410).pack(fill="both", expand=True)
-    center_window(loading, parent)
-    activate_modal(loading, parent)
 
     def find_files(attempt=0):
-        if not loading.winfo_exists():
+        if not parent.winfo_exists():
             return
         paths = [Path(item) for item in copied_file_paths()]
         if paths:
-            loading.destroy()
-            if not messagebox.askyesno(
-                "Передача имён файлов ИИ",
-                f"Найдено файлов: {len(paths)}. Чтобы предложить понятные имена, "
-                "Zero Control отправит подключённой модели ИИ только текущие имена "
-                "файлов и их расширения. Содержимое файлов не читается и не отправляется.\n\n"
-                "Продолжить?",
-                parent=parent,
-            ):
-                return
-            progress = tk.Toplevel(parent)
-            apply_modern_style(progress)
-            progress.title("Zero Control — ИИ")
-            progress.geometry("440x140")
-            progress.transient(parent)
-            progress_body = ttk.Frame(progress, padding=18)
-            progress_body.pack(fill="both", expand=True)
-            ttk.Label(
-                progress_body,
-                text=f"ИИ подбирает понятные имена для {len(paths)} файлов…",
-                wraplength=400,
-            ).pack(fill="both", expand=True)
-            center_window(progress, parent)
-            activate_modal(progress, parent)
-
             results = SimpleQueue()
 
             def worker():
@@ -367,14 +331,13 @@ def open_copied_file_renamer(parent):
                     results.put((None, str(exc)))
 
             def poll_result():
-                if not progress.winfo_exists():
+                if not parent.winfo_exists():
                     return
                 try:
                     suggestions, error = results.get_nowait()
                 except Empty:
-                    progress.after(100, poll_result)
+                    parent.after(100, poll_result)
                     return
-                progress.destroy()
                 if error:
                     messagebox.showerror(
                         "Не удалось получить предложения ИИ",
@@ -384,16 +347,15 @@ def open_copied_file_renamer(parent):
                     return
                 RenameReviewWindow(parent, paths, suggestions)
 
-            progress.after(100, poll_result)
+            parent.after(100, poll_result)
             threading.Thread(
                 target=worker, daemon=True, name="copied-file-name-suggestions",
             ).start()
             return
+
         if attempt < 12:
-            status.set("Проводник ещё не освободил буфер обмена. Повторяю…")
-            loading.after(250, lambda: find_files(attempt + 1))
+            parent.after(250, lambda: find_files(attempt + 1))
         else:
-            loading.destroy()
             messagebox.showinfo(
                 "Файлы не найдены",
                 "Сначала выдели файлы в Проводнике и скопируй их (Ctrl+C), затем повтори команду.",
