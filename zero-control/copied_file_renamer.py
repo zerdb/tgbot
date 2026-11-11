@@ -63,7 +63,7 @@ def _suggestion_stem(value: str, original: Path) -> str:
     candidate = re.sub(r"\s+", " ", candidate).strip(" .")
     if not candidate or candidate.split(".", 1)[0].upper() in _RESERVED_WINDOWS_NAMES:
         return _original_stem(original)
-    return candidate[:160].rstrip(" .") or original.stem
+    return candidate[:160].rstrip(" .") or _original_stem(original)
 
 
 def _suggest_batch(paths: list[Path]) -> list[str]:
