@@ -52,8 +52,7 @@ def _suggestion_stem(value: str, original: Path) -> str:
     return candidate[:160].rstrip(" .") or original.stem
 
 
-def suggest_file_names(paths: list[Path]) -> list[str]:
-    """Ask the configured Groq model for concise names based only on filenames."""
+def _suggest_batch(paths: list[Path]) -> list[str]:
     from groq_client import chat
 
     source = [
@@ -68,14 +67,11 @@ def suggest_file_names(paths: list[Path]) -> list[str]:
                 "предложи короткое, понятное и информативное имя на русском языке. "
                 "Не выдумывай содержимое файла и не добавляй даты или факты, которых "
                 "нет в исходном имени. Сохраняй важные идентификаторы и смысл. "
-                "Верни только JSON вида {\"files\":[{\"index\":0,\"name\":\"Новое имя без расширения\"}]}. "
+                "Верни только JSON вида {\\"files\\":[{\\"index\\":0,\\"name\\":\\"Новое имя без расширения\\"}]}. "
                 "Для каждого входного индекса верни ровно один вариант. Расширения не добавляй."
             ),
         },
-        {
-            "role": "user",
-            "content": json.dumps(source, ensure_ascii=False),
-        },
+        {"role": "user", "content": json.dumps(source, ensure_ascii=False)},
     ]
     answer = chat(
         messages,
@@ -86,7 +82,7 @@ def suggest_file_names(paths: list[Path]) -> list[str]:
     try:
         payload = json.loads(answer)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", answer, re.DOTALL)
+        match = re.search(r"\\{.*\\}", answer, re.DOTALL)
         if not match:
             raise RuntimeError("ИИ вернул ответ в неизвестном формате.")
         payload = json.loads(match.group(0))
@@ -108,6 +104,13 @@ def suggest_file_names(paths: list[Path]) -> list[str]:
     return [indexed[index] for index in range(len(paths))]
 
 
+def suggest_file_names(paths: list[Path]) -> list[str]:
+    """Ask the configured Groq model for names in small batches based only on filenames."""
+    result = []
+    for start in range(0, len(paths), 25):
+        result.extend(_suggest_batch(paths[start:start + 25]))
+    return result
+
 def rename_files(plan: list[tuple[Path, str]]) -> int:
     """Safely rename a batch, staging all sources first to support name swaps."""
     normalized = []
@@ -121,7 +124,10 @@ def rename_files(plan: list[tuple[Path, str]]) -> int:
         if source_key in source_keys:
             raise ValueError(f"Файл добавлен в список дважды: {source.name}")
         source_keys.add(source_key)
-        stem = validate_stem(new_stem)
+        editable_stem = str(new_stem or "").strip()
+        if source.suffix and editable_stem.casefold().endswith(source.suffix.casefold()):
+            editable_stem = editable_stem[:-len(source.suffix)].rstrip()
+        stem = validate_stem(editable_stem)
         target = source.with_name(stem + source.suffix)
         target_key = _path_key(target)
         if target_key in target_keys:
