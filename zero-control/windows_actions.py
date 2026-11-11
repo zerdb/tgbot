@@ -143,6 +143,18 @@ def open_settings():
     _bring_window_to_front(("Параметры", "Settings"))
 
 
+def open_magnifier():
+    """Launch the built-in Windows Magnifier accessibility tool."""
+    windows_only()
+    subprocess.Popen(["magnify.exe"])
+
+
+def open_onscreen_keyboard():
+    """Launch the built-in Windows On-Screen Keyboard."""
+    windows_only()
+    subprocess.Popen(["osk.exe"])
+
+
 def empty_recycle_bin():
     if not confirm_action("Очистка корзины", "Безвозвратно удалить все файлы из корзины? Это действие нельзя отменить."):
         print("Очистка корзины отменена.")
