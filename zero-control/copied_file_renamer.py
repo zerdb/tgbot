@@ -5,6 +5,7 @@ import json
 import os
 import re
 import threading
+from queue import Empty, SimpleQueue
 from pathlib import Path
 from tkinter import messagebox, ttk
 import tkinter as tk
@@ -357,32 +358,33 @@ def open_copied_file_renamer(parent):
             center_window(progress, parent)
             activate_modal(progress, parent)
 
+            results = SimpleQueue()
+
             def worker():
                 try:
-                    suggestions = suggest_file_names(paths)
-                    result = (suggestions, None)
+                    results.put((suggest_file_names(paths), None))
                 except Exception as exc:
-                    result = (None, str(exc))
+                    results.put((None, str(exc)))
 
-                def finish():
-                    if not progress.winfo_exists():
-                        return
-                    progress.destroy()
-                    suggestions, error = result
-                    if error:
-                        messagebox.showerror(
-                            "Не удалось получить предложения ИИ",
-                            error,
-                            parent=parent,
-                        )
-                        return
-                    RenameReviewWindow(parent, paths, suggestions)
-
+            def poll_result():
+                if not progress.winfo_exists():
+                    return
                 try:
-                    parent.after(0, finish)
-                except tk.TclError:
-                    pass
+                    suggestions, error = results.get_nowait()
+                except Empty:
+                    progress.after(100, poll_result)
+                    return
+                progress.destroy()
+                if error:
+                    messagebox.showerror(
+                        "Не удалось получить предложения ИИ",
+                        error,
+                        parent=parent,
+                    )
+                    return
+                RenameReviewWindow(parent, paths, suggestions)
 
+            progress.after(100, poll_result)
             threading.Thread(
                 target=worker, daemon=True, name="copied-file-name-suggestions",
             ).start()
