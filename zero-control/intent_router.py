@@ -420,13 +420,13 @@ def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"\s+(?:на компьютере|на пк)$", "", normalized).strip(" .,!?:;")
 
     # Групповое переименование файлов, скопированных в Проводнике.
-    if re.search(r"\\b(переимену\\w*|назови\\w*|дай\\s+понятн\\w*\\s+имен\\w*)\\b", normalized) and re.search(
-        r"\\b(скопированн\\w*\\s+файл\\w*|файл\\w*\\s+из\\s+буфер\\w*|файл\\w*\\s+в\\s+буфер\\w*|эти\\s+файл\\w*|выделенн\\w*\\s+файл\\w*)\\b",
+    if re.search(r"\b(переимену\w*|назови\w*|дай\s+понятн\w*\s+имен\w*)\b", normalized) and re.search(
+        r"\b(скопированн\w*\s+файл\w*|файл\w*\s+из\s+буфер\w*|файл\w*\s+в\s+буфер\w*|эти\s+файл\w*|выделенн\w*\s+файл\w*|котор\w*\s+я\s+скопировал\w*)\b",
         normalized,
     ):
         return {"action": "rename_copied_files", "confidence": 1.0, "parameters": {}}
 
-    # Средства специальных возможностей Windows — локальные команды без ИИ.
+        # Средства специальных возможностей Windows — локальные команды без ИИ.
     if re.search(r"\b(луп\w*|экранн\w* луп\w*|увеличител\w* экран\w*)\b", normalized):
         if re.search(r"\b(открой\w*|запусти\w*|включи\w*|активируй\w*|нужн\w*)\b", normalized) or normalized in ("лупа", "экранная лупа"):
             return {"action": "open_magnifier", "confidence": 1.0, "parameters": {}}
