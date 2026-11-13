@@ -264,12 +264,11 @@ class AssistantWindow:
             style="Section.TLabel",
         ).pack(side="left")
 
+        self.command_search_var = tk.StringVar()
         command_search = ttk.Entry(
-            commands_header, textvariable=tk.StringVar(),
+            commands_header, textvariable=self.command_search_var,
             style="Search.TEntry", width=28,
         )
-        self.command_search_var = tk.StringVar()
-        command_search.configure(textvariable=self.command_search_var)
         command_search.pack(side="right")
         command_search.insert(0, "")
         command_search.bind("<KeyRelease>", lambda _event: filter_commands())
@@ -343,16 +342,17 @@ class AssistantWindow:
 
         def filter_commands():
             query = self.command_search_var.get().strip().casefold()
-            for row, title, description, phrase, separator in command_rows:
-                visible = not query or query in " ".join(
-                    (title, description, phrase),
-                ).casefold()
-                if visible:
-                    row.pack(fill="x")
+            for row, _title, _description, _phrase, separator in command_rows:
+                row.pack_forget()
+                separator.pack_forget()
+            visible_rows = [
+                item for item in command_rows
+                if not query or query in " ".join(item[1:4]).casefold()
+            ]
+            for index, (row, _title, _description, _phrase, separator) in enumerate(visible_rows):
+                row.pack(fill="x")
+                if index < len(visible_rows) - 1:
                     separator.pack(fill="x", padx=12)
-                else:
-                    row.pack_forget()
-                    separator.pack_forget()
             command_canvas.configure(scrollregion=command_canvas.bbox("all"))
 
         def update_scroll_region(_event=None):
@@ -449,8 +449,8 @@ class AssistantWindow:
             pass
 
     def _hover_card(self, card, widgets, active):
-        bg = "#F2F1FF" if active else self.SURFACE
-        border = "#C8C3FF" if active else self.BORDER
+        bg = "#F0F2F5" if active else self.SURFACE
+        border = "#C8D1DF" if active else self.BORDER
         try:
             card.configure(bg=bg, highlightbackground=border)
             for widget in widgets:
