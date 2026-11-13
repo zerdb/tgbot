@@ -6,22 +6,22 @@ from dialog_utils import activate_modal, center_window, apply_modern_style
 
 
 class AssistantWindow:
-    BG = "#F4F6FB"
+    BG = "#F7F8FA"
     SURFACE = "#FFFFFF"
-    TEXT = "#172033"
-    MUTED = "#7B8497"
-    ACCENT = "#5146D8"
-    ACCENT_HOVER = "#4338CA"
-    BORDER = "#E6E9F2"
-    GREEN = "#16A36A"
-    RED = "#D9485F"
+    TEXT = "#202938"
+    MUTED = "#697586"
+    ACCENT = "#405E9B"
+    ACCENT_HOVER = "#334D82"
+    BORDER = "#E5E8ED"
+    GREEN = "#25845B"
+    RED = "#C34D4D"
     GREY = "#98A2B3"
 
     def __init__(self, on_close, on_command, microphone_status="ПРОВЕРКА", on_open_mail=None, on_open_files=None, on_open_reminders=None, on_open_screen=None, on_open_other=None, on_open_notes=None, on_open_settings=None, on_office_command=None):
         self.root = tk.Tk()
         self.root.title("Zero Control")
-        self.root.geometry("760x600")
-        self.root.minsize(620, 500)
+        self.root.geometry("820x700")
+        self.root.minsize(680, 580)
         self.root.configure(bg=self.BG)
         self.on_close = on_close
         self.on_command = on_command
@@ -52,134 +52,246 @@ class AssistantWindow:
         except tk.TclError:
             pass
         style.configure("TFrame", background=self.BG)
-        style.configure("Surface.TFrame", background=self.SURFACE)
-        style.configure("TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 10))
-        style.configure("Muted.TLabel", background=self.BG, foreground=self.MUTED, font=("Segoe UI", 9))
-        style.configure("Card.TLabel", background=self.SURFACE, foreground=self.TEXT, font=("Segoe UI", 10))
-        style.configure("Title.TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 18, "bold"))
-        style.configure("Subtitle.TLabel", background=self.BG, foreground=self.MUTED, font=("Segoe UI", 10))
-        style.configure("Section.TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 10, "bold"))
-        style.configure("StatusTitle.TLabel", background=self.SURFACE, foreground=self.TEXT, font=("Segoe UI", 9, "bold"))
-        style.configure("StatusValue.TLabel", background=self.SURFACE, foreground=self.TEXT, font=("Segoe UI", 9))
-        style.configure("Action.TButton", background=self.SURFACE, foreground=self.TEXT,
-                        bordercolor=self.BORDER, lightcolor=self.BORDER, darkcolor=self.BORDER,
-                        relief="solid", borderwidth=1, padding=(8, 7),
-                        font=("Segoe UI", 10, "bold"))
-        style.map("Action.TButton",
-                  background=[("active", "#F0EFFF"), ("pressed", "#E8E6FF")],
-                  foreground=[("active", self.ACCENT)])
-        style.configure("Accent.TButton", background=self.ACCENT, foreground="#FFFFFF",
-                        borderwidth=0, padding=(12, 8), font=("Segoe UI", 9, "bold"))
-        style.map("Accent.TButton", background=[("active", self.ACCENT_HOVER), ("pressed", self.ACCENT_HOVER)])
-        style.configure("Header.TButton", background=self.BG, foreground=self.TEXT,
-                        borderwidth=0, padding=(9, 7), font=("Segoe UI", 11, "bold"))
-        style.map("Header.TButton", background=[("active", "#E9EAF5")])
-        style.configure("TNotebook", background=self.BG, borderwidth=0, tabmargins=(0, 0, 0, 0))
-        style.configure("TNotebook.Tab", background="#E9ECF4", foreground=self.MUTED,
-                        padding=(11, 6), font=("Segoe UI", 9, "bold"), borderwidth=0)
-        style.map("TNotebook.Tab", background=[("selected", self.SURFACE), ("active", "#E0E3F0")],
-                  foreground=[("selected", self.ACCENT), ("active", self.TEXT)])
-
+        style.configure(
+            "TLabel", background=self.BG, foreground=self.TEXT,
+            font=("Segoe UI", 9),
+        )
+        style.configure(
+            "Muted.TLabel", background=self.BG, foreground=self.MUTED,
+            font=("Segoe UI", 8),
+        )
+        style.configure(
+            "Section.TLabel", background=self.BG, foreground=self.TEXT,
+            font=("Segoe UI", 9, "bold"),
+        )
+        style.configure(
+            "StatusValue.TLabel", background=self.SURFACE,
+            foreground=self.TEXT, font=("Segoe UI", 9),
+        )
+        style.configure(
+            "Quiet.TButton", background=self.SURFACE, foreground=self.TEXT,
+            bordercolor=self.BORDER, padding=(11, 7),
+            font=("Segoe UI", 9),
+        )
+        style.map(
+            "Quiet.TButton",
+            background=[("active", "#F0F2F5"), ("pressed", "#E8EBF0")],
+            foreground=[("active", self.ACCENT)],
+        )
+        style.configure(
+            "Accent.TButton", background=self.ACCENT, foreground="#FFFFFF",
+            borderwidth=0, padding=(13, 8), font=("Segoe UI", 9, "bold"),
+        )
+        style.map(
+            "Accent.TButton",
+            background=[("active", self.ACCENT_HOVER), ("pressed", self.ACCENT_HOVER)],
+        )
+        style.configure(
+            "Search.TEntry", padding=(8, 6), fieldbackground=self.SURFACE,
+            foreground=self.TEXT, bordercolor=self.BORDER,
+            font=("Segoe UI", 9),
+        )
     def _build(self):
         self._build_styles()
-        outer = ttk.Frame(self.root, padding=(15, 11, 15, 9))
+        outer = ttk.Frame(self.root, padding=(22, 18, 22, 14))
         outer.pack(fill="both", expand=True)
         self._content_frame = outer
 
+        # Header: restrained branding and a clearly separated settings action.
         header = ttk.Frame(outer)
-        header.pack(fill="x", pady=(0, 10))
+        header.pack(fill="x", pady=(0, 18))
         brand = ttk.Frame(header)
         brand.pack(side="left", fill="x", expand=True)
-        ttk.Label(brand, text="Zero Control", font=("Segoe UI", 11, "bold"),
-                  foreground=self.ACCENT).pack(anchor="w")
-        settings_button = tk.Canvas(
-            header, width=36, height=36, bg=self.BG,
-            highlightthickness=0, bd=0, cursor="hand2",
+        ttk.Label(
+            brand, text="ZERO CONTROL", font=("Segoe UI", 12, "bold"),
+            foreground=self.TEXT,
+        ).pack(anchor="w")
+        ttk.Label(
+            brand, text="Персональный помощник", style="Muted.TLabel",
+        ).pack(anchor="w", pady=(2, 0))
+        settings_button = ttk.Button(
+            header, text="Настройки", command=self.on_open_settings,
+            style="Quiet.TButton",
         )
-        settings_button.pack(side="right", anchor="ne", padx=(8, 0))
-        settings_circle = settings_button.create_oval(
-            2, 2, 34, 34, fill="#EAE8FF", outline="",
-        )
-        settings_glyph = settings_button.create_text(
-            18, 18, text="⚙", fill=self.ACCENT,
-            font=("Segoe UI Symbol", 17, "bold"),
-        )
-        settings_button.bind("<Button-1>", lambda _event: self.on_open_settings())
-        settings_button.bind(
-            "<Enter>",
-            lambda _event: settings_button.itemconfigure(settings_circle, fill="#DCD8FF"),
-        )
-        settings_button.bind(
-            "<Leave>",
-            lambda _event: settings_button.itemconfigure(settings_circle, fill="#EAE8FF"),
-        )
+        settings_button.pack(side="right", anchor="center")
 
-        status_card = tk.Frame(outer, bg=self.SURFACE, highlightthickness=1,
-                               highlightbackground=self.BORDER, bd=0)
-        status_card.pack(fill="x", pady=(0, 11))
-        status_inner = tk.Frame(status_card, bg=self.SURFACE, padx=11, pady=8)
+        # A compact system status panel; status variables are kept intact.
+        status_card = tk.Frame(
+            outer, bg=self.SURFACE, highlightthickness=1,
+            highlightbackground=self.BORDER, bd=0,
+        )
+        status_card.pack(fill="x", pady=(0, 16))
+        status_inner = tk.Frame(status_card, bg=self.SURFACE, padx=15, pady=11)
         status_inner.pack(fill="x")
-        left = tk.Frame(status_inner, bg=self.SURFACE)
-        left.pack(side="left", fill="x", expand=True)
-        tk.Label(left, text="СОСТОЯНИЕ", bg=self.SURFACE, fg=self.MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
-        details = tk.Frame(left, bg=self.SURFACE)
-        details.pack(anchor="w")
-        self.mic_dot = tk.Canvas(details, width=10, height=10, bg=self.SURFACE,
-                                 highlightthickness=0)
-        self.mic_dot.pack(side="left", padx=(0, 6))
-        self.mic_dot_id = self.mic_dot.create_oval(1, 1, 9, 9, fill=self.GREY, outline="")
-        tk.Label(details, text="Микрофон", bg=self.SURFACE, fg=self.MUTED,
-                 font=("Segoe UI", 9)).pack(side="left")
-        ttk.Label(details, textvariable=self.microphone_var, style="StatusValue.TLabel").pack(side="left", padx=(5, 22))
-        self.state_dot = tk.Canvas(details, width=10, height=10, bg=self.SURFACE,
-                                   highlightthickness=0)
-        self.state_dot.pack(side="left", padx=(0, 6))
-        self.state_dot_id = self.state_dot.create_oval(1, 1, 9, 9, fill=self.GREY, outline="")
-        tk.Label(details, text="Команды", bg=self.SURFACE, fg=self.MUTED,
-                 font=("Segoe UI", 9)).pack(side="left")
-        ttk.Label(details, textvariable=self.listening_var, style="StatusValue.TLabel").pack(side="left", padx=(5, 0))
+        tk.Label(
+            status_inner, text="СОСТОЯНИЕ СИСТЕМЫ", bg=self.SURFACE,
+            fg=self.MUTED, font=("Segoe UI", 8, "bold"),
+        ).pack(anchor="w", pady=(0, 7))
+        details = tk.Frame(status_inner, bg=self.SURFACE)
+        details.pack(fill="x")
+        mic_group = tk.Frame(details, bg=self.SURFACE)
+        mic_group.pack(side="left", padx=(0, 24))
+        self.mic_dot = tk.Canvas(
+            mic_group, width=10, height=10, bg=self.SURFACE,
+            highlightthickness=0, bd=0,
+        )
+        self.mic_dot.pack(side="left", padx=(0, 7))
+        self.mic_dot_id = self.mic_dot.create_oval(
+            1, 1, 9, 9, fill=self.GREY, outline="",
+        )
+        tk.Label(
+            mic_group, text="Микрофон", bg=self.SURFACE, fg=self.MUTED,
+            font=("Segoe UI", 9),
+        ).pack(side="left")
+        ttk.Label(
+            mic_group, textvariable=self.microphone_var,
+            style="StatusValue.TLabel",
+        ).pack(side="left", padx=(7, 0))
+
+        command_group = tk.Frame(details, bg=self.SURFACE)
+        command_group.pack(side="left")
+        self.state_dot = tk.Canvas(
+            command_group, width=10, height=10, bg=self.SURFACE,
+            highlightthickness=0, bd=0,
+        )
+        self.state_dot.pack(side="left", padx=(0, 7))
+        self.state_dot_id = self.state_dot.create_oval(
+            1, 1, 9, 9, fill=self.GREY, outline="",
+        )
+        tk.Label(
+            command_group, text="Голосовое управление", bg=self.SURFACE,
+            fg=self.MUTED, font=("Segoe UI", 9),
+        ).pack(side="left")
+        ttk.Label(
+            command_group, textvariable=self.listening_var,
+            style="StatusValue.TLabel",
+        ).pack(side="left", padx=(7, 0))
         self._refresh_status_dots()
 
+        # Welcome panel explains the existing keyboard controls; it does not
+        # introduce a new recording action or change the audio workflow.
+        welcome = tk.Frame(
+            outer, bg="#F0F3F8", highlightthickness=1,
+            highlightbackground=self.BORDER, bd=0,
+        )
+        welcome.pack(fill="x", pady=(0, 17))
+        welcome_inner = tk.Frame(welcome, bg="#F0F3F8", padx=17, pady=13)
+        welcome_inner.pack(fill="x")
+        tk.Label(
+            welcome_inner, text="Добро пожаловать", bg="#F0F3F8",
+            fg=self.TEXT, font=("Segoe UI", 17, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            welcome_inner, text="Чем могу помочь сегодня?", bg="#F0F3F8",
+            fg=self.MUTED, font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(2, 9))
+        shortcuts = tk.Frame(welcome_inner, bg="#F0F3F8")
+        shortcuts.pack(fill="x")
+        tk.Label(
+            shortcuts, text="RIGHT CTRL", bg="#FFFFFF", fg=self.ACCENT,
+            font=("Segoe UI", 8, "bold"), padx=8, pady=5,
+        ).pack(side="left")
+        tk.Label(
+            shortcuts, text="Голосовая команда", bg="#F0F3F8",
+            fg=self.TEXT, font=("Segoe UI", 9),
+        ).pack(side="left", padx=(8, 20))
+        tk.Label(
+            shortcuts, text="RIGHT CTRL + RIGHT SHIFT", bg="#FFFFFF",
+            fg=self.ACCENT, font=("Segoe UI", 8, "bold"), padx=8, pady=5,
+        ).pack(side="left")
+        tk.Label(
+            shortcuts, text="Диктовка", bg="#F0F3F8",
+            fg=self.TEXT, font=("Segoe UI", 9),
+        ).pack(side="left", padx=(8, 0))
+
+        ttk.Label(
+            outer, text="РАБОЧИЕ РАЗДЕЛЫ", style="Section.TLabel",
+        ).pack(anchor="w", pady=(0, 8))
         actions = ttk.Frame(outer)
-        actions.pack(fill="x", pady=(0, 20))
+        actions.pack(fill="x", pady=(0, 17))
         cards = [
             ("✉", "Почта", "Письма и отправка файлов", self.on_open_mail),
             ("▤", "Файлы", "Поиск и рабочие папки", self.on_open_files),
-            ("▤", "Заметки и дела", "Заметки, задачи и сроки", self.on_open_reminders),
-            ("▣", "Экран", "Снимок и анализ экрана", self.on_open_screen),
+            ("▧", "Заметки и дела", "Задачи и сроки", self.on_open_reminders),
+            ("▣", "Экран", "Снимок и анализ", self.on_open_screen),
             ("◉", "Камера", "Просмотр видеопотока", self.on_open_other),
             ("▧", "Фото-заметки", "Текст, фото и файлы", self.on_open_notes),
         ]
-        for col, (symbol, title, hint, callback) in enumerate(cards):
-            card = tk.Frame(actions, bg=self.SURFACE, highlightthickness=1,
-                            highlightbackground=self.BORDER, bd=0, cursor="hand2")
-            card.grid(row=0, column=col, sticky="nsew",
-                      padx=(0 if col == 0 else 3, 0 if col == len(cards) - 1 else 3))
-            actions.columnconfigure(col, weight=1, uniform="action")
-            icon = tk.Label(card, text=symbol, bg=self.SURFACE, fg=self.ACCENT,
-                            font=("Segoe UI Symbol", 12, "bold"))
-            icon.pack(pady=(5, 1))
-            name = tk.Label(card, text=title, bg=self.SURFACE, fg=self.TEXT,
-                            font=("Segoe UI", 8, "bold"), wraplength=92,
-                            justify="center", height=2)
-            name.pack(fill="x", padx=2, pady=(0, 5))
-            for widget in (card, icon, name):
-                widget.bind("<Button-1>", lambda _e, fn=callback: fn())
-                widget.bind("<Enter>", lambda _e, c=card, ws=(icon, name): self._hover_card(c, ws, True))
-                widget.bind("<Leave>", lambda _e, c=card, ws=(icon, name): self._hover_card(c, ws, False))
+        for index, (symbol, title, hint, callback) in enumerate(cards):
+            row_index, col_index = divmod(index, 3)
+            card = tk.Frame(
+                actions, bg=self.SURFACE, highlightthickness=1,
+                highlightbackground=self.BORDER, bd=0, cursor="hand2",
+            )
+            card.grid(
+                row=row_index, column=col_index, sticky="nsew",
+                padx=(0 if col_index == 0 else 5, 0 if col_index == 2 else 5),
+                pady=(0, 8),
+            )
+            actions.columnconfigure(col_index, weight=1, uniform="action")
+            actions.rowconfigure(row_index, weight=1)
+            icon = tk.Label(
+                card, text=symbol, bg=self.SURFACE, fg=self.ACCENT,
+                font=("Segoe UI Symbol", 17),
+            )
+            icon.pack(anchor="w", padx=13, pady=(10, 2))
+            name = tk.Label(
+                card, text=title, bg=self.SURFACE, fg=self.TEXT,
+                font=("Segoe UI", 10, "bold"), anchor="w",
+            )
+            name.pack(fill="x", padx=13)
+            description = tk.Label(
+                card, text=hint, bg=self.SURFACE, fg=self.MUTED,
+                font=("Segoe UI", 8), anchor="w",
+            )
+            description.pack(fill="x", padx=13, pady=(3, 11))
+            widgets = (icon, name, description)
+            for widget in (card,) + widgets:
+                widget.bind("<Button-1>", lambda _event, fn=callback: fn())
+                widget.bind(
+                    "<Enter>",
+                    lambda _event, c=card, ws=widgets: self._hover_card(c, ws, True),
+                )
+                widget.bind(
+                    "<Leave>",
+                    lambda _event, c=card, ws=widgets: self._hover_card(c, ws, False),
+                )
 
-        ttk.Label(outer, text="Команды", style="Section.TLabel").pack(anchor="w", pady=(0, 5))
-        command_area = tk.Frame(outer, bg=self.SURFACE, highlightthickness=1,
-                                highlightbackground=self.BORDER, bd=0)
+        commands_header = ttk.Frame(outer)
+        commands_header.pack(fill="x", pady=(0, 7))
+        ttk.Label(
+            commands_header, text="КОМАНДЫ ПОМОЩНИКА",
+            style="Section.TLabel",
+        ).pack(side="left")
+
+        command_search = ttk.Entry(
+            commands_header, textvariable=tk.StringVar(),
+            style="Search.TEntry", width=28,
+        )
+        self.command_search_var = tk.StringVar()
+        command_search.configure(textvariable=self.command_search_var)
+        command_search.pack(side="right")
+        command_search.insert(0, "")
+        command_search.bind("<KeyRelease>", lambda _event: filter_commands())
+
+        command_area = tk.Frame(
+            outer, bg=self.SURFACE, highlightthickness=1,
+            highlightbackground=self.BORDER, bd=0,
+        )
         command_area.pack(fill="both", expand=True)
-        command_canvas = tk.Canvas(command_area, bg=self.SURFACE, highlightthickness=0, bd=0)
-        command_scroll = ttk.Scrollbar(command_area, orient="vertical", command=command_canvas.yview)
+        command_canvas = tk.Canvas(
+            command_area, bg=self.SURFACE, highlightthickness=0, bd=0,
+        )
+        command_scroll = ttk.Scrollbar(
+            command_area, orient="vertical", command=command_canvas.yview,
+        )
         command_canvas.configure(yscrollcommand=command_scroll.set)
         command_scroll.pack(side="right", fill="y")
         command_canvas.pack(side="left", fill="both", expand=True)
         command_list = tk.Frame(command_canvas, bg=self.SURFACE)
-        list_window = command_canvas.create_window((0, 0), window=command_list, anchor="nw")
+        list_window = command_canvas.create_window(
+            (0, 0), window=command_list, anchor="nw",
+        )
 
         commands = [
             ("Заблокировать компьютер", "Заблокирует текущий сеанс Windows.", "заблокируй компьютер"),
@@ -209,36 +321,72 @@ class AssistantWindow:
             ("Проанализировать экран", "Сделает снимок и объяснит, что на нём отображено.", "что у меня на экране"),
             ("Спросить о камере", "Получит свежий кадр и ответит по изображению.", "что видно на камере"),
         ]
-        for index, (title, description, phrase) in enumerate(commands):
-            row = tk.Frame(command_list, bg=self.SURFACE, padx=10, pady=4)
+        command_rows = []
+        for title, description, phrase in commands:
+            row = tk.Frame(command_list, bg=self.SURFACE, padx=12, pady=7)
             row.pack(fill="x")
-            tk.Label(row, text=title, bg=self.SURFACE, fg=self.TEXT,
-                     font=("Segoe UI", 9, "bold"), anchor="w", width=27).pack(side="left")
-            tk.Label(row, text=description, bg=self.SURFACE, fg=self.MUTED,
-                     font=("Segoe UI", 8), anchor="w").pack(side="left", fill="x", expand=True, padx=(7, 10))
-            tk.Label(row, text="«" + phrase + "»", bg=self.SURFACE, fg=self.ACCENT,
-                     font=("Segoe UI", 8), anchor="e").pack(side="right")
-            if index < len(commands) - 1:
-                tk.Frame(command_list, bg=self.BORDER, height=1).pack(fill="x", padx=10)
+            tk.Label(
+                row, text=title, bg=self.SURFACE, fg=self.TEXT,
+                font=("Segoe UI", 9, "bold"), anchor="w", width=27,
+            ).pack(side="left")
+            tk.Label(
+                row, text=description, bg=self.SURFACE, fg=self.MUTED,
+                font=("Segoe UI", 8), anchor="w",
+            ).pack(side="left", fill="x", expand=True, padx=(7, 10))
+            tk.Label(
+                row, text="«" + phrase + "»", bg=self.SURFACE, fg=self.ACCENT,
+                font=("Segoe UI", 8), anchor="e",
+            ).pack(side="right")
+            separator = tk.Frame(command_list, bg=self.BORDER, height=1)
+            separator.pack(fill="x", padx=12)
+            command_rows.append((row, title, description, phrase, separator))
+
+        def filter_commands():
+            query = self.command_search_var.get().strip().casefold()
+            for row, title, description, phrase, separator in command_rows:
+                visible = not query or query in " ".join(
+                    (title, description, phrase),
+                ).casefold()
+                if visible:
+                    row.pack(fill="x")
+                    separator.pack(fill="x", padx=12)
+                else:
+                    row.pack_forget()
+                    separator.pack_forget()
+            command_canvas.configure(scrollregion=command_canvas.bbox("all"))
 
         def update_scroll_region(_event=None):
             command_canvas.configure(scrollregion=command_canvas.bbox("all"))
-            command_canvas.itemconfigure(list_window, width=command_canvas.winfo_width())
+            command_canvas.itemconfigure(
+                list_window, width=command_canvas.winfo_width(),
+            )
 
         command_list.bind("<Configure>", update_scroll_region)
         command_canvas.bind("<Configure>", update_scroll_region)
-        command_canvas.bind("<Enter>", lambda _e: command_canvas.bind_all(
-            "<MouseWheel>", lambda e: command_canvas.yview_scroll(int(-e.delta / 120), "units")))
-        command_canvas.bind("<Leave>", lambda _e: command_canvas.unbind_all("<MouseWheel>"))
+        command_canvas.bind(
+            "<Enter>",
+            lambda _event: command_canvas.bind_all(
+                "<MouseWheel>",
+                lambda event: command_canvas.yview_scroll(
+                    int(-event.delta / 120), "units",
+                ),
+            ),
+        )
+        command_canvas.bind(
+            "<Leave>", lambda _event: command_canvas.unbind_all("<MouseWheel>"),
+        )
 
         footer = ttk.Frame(outer)
-        footer.pack(fill="x", pady=(7, 0))
+        footer.pack(fill="x", pady=(11, 0))
         ttk.Button(
             footer, text="ИИ-помощник Word / Excel",
             command=self._ask_office_command, style="Accent.TButton",
         ).pack(anchor="center", pady=(0, 5))
-        ttk.Label(footer, text="Right Ctrl — голосовая команда   ·   Right Ctrl + Right Shift — диктовка",
-                  style="Muted.TLabel").pack(anchor="center")
+        ttk.Label(
+            footer,
+            text="Zero Control  ·  Right Ctrl — голосовая команда  ·  Right Ctrl + Right Shift — диктовка",
+            style="Muted.TLabel",
+        ).pack(anchor="center")
 
     def _ask_office_command(self):
         command = simpledialog.askstring(
