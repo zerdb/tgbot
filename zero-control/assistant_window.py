@@ -36,6 +36,9 @@ class AssistantWindow:
         self.microphone_var = tk.StringVar(value=microphone_status)
         self.listening_var = tk.StringVar(value="ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
         self._recording_overlay = None
+        self._recording_overlay_active = False
+        self._recording_overlay_mode = None
+        self._recording_overlay_transcript = ""
         self._busy_overlay = None
         self._build()
         self._prepare_recording_overlay()
@@ -512,18 +515,26 @@ class AssistantWindow:
                  fg="#ff3b30", bg="#202124").pack()
         self._overlay_label = tk.Label(
             frame, text="", font=("Segoe UI", 9, "bold"),
-            fg="white", bg="#202124"
+            fg="white", bg="#202124", wraplength=520, justify="center"
         )
         self._overlay_label.pack(pady=(2, 0))
         overlay.update_idletasks()
         self._recording_overlay = overlay
 
-    def set_recording_overlay(self, active, mode=None):
+    def set_recording_overlay(self, active=None, mode=None, transcript=None):
+        """Обновляет индикатор записи и промежуточную гипотезу SpeechKit."""
+        if active is not None:
+            self._recording_overlay_active = bool(active)
+        if mode is not None:
+            self._recording_overlay_mode = mode
+        if transcript is not None:
+            self._recording_overlay_transcript = transcript
+
         def apply():
-            if active:
-                self._overlay_label.configure(
-                    text="СЛУШАЮ" if mode == "command" else "ДИКТОВКА"
-                )
+            if self._recording_overlay_active:
+                heading = "СЛУШАЮ" if self._recording_overlay_mode == "command" else "ДИКТОВКА"
+                text = self._recording_overlay_transcript.strip()
+                self._overlay_label.configure(text=heading + ("\n" + text if text else ""))
                 w = self._recording_overlay.winfo_reqwidth()
                 h = self._recording_overlay.winfo_reqheight()
                 x = (self.root.winfo_screenwidth() - w) // 2
