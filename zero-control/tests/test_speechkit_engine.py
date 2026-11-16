@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from speechkit_engine import transcribe_audio
+from speechkit_engine import transcribe_audio, transcribe_audio_stream
 
 
 class SpeechKitEngineTests(unittest.TestCase):
@@ -83,5 +83,33 @@ class SpeechKitEngineTests(unittest.TestCase):
             )
 
 
+    def test_live_stream_consumes_microphone_queue_and_reports_partial_text(self):
+        import queue
+        audio_queue = queue.Queue()
+        stop_token = object()
+        audio_queue.put(np.zeros(6400, dtype=np.float32))
+        audio_queue.put(stop_token)
+        partials = []
+        stt = Mock()
+        def consume(chunks, timeout):
+            sent = list(chunks)
+            self.assertEqual(timeout, 90)
+            self.assertEqual(len(sent), 1)
+            self.assertEqual(len(sent[0]), 12800)
+            return iter([
+                types.SimpleNamespace(event_type="partial", partial_text="потоковая проверка"),
+                types.SimpleNamespace(event_type="final", final_text="потоковая проверка"),
+                types.SimpleNamespace(event_type="final_refinement", final_refinement_text="Потоковая проверка."),
+            ])
+        stt.run_stream.side_effect = consume
+        sdk = Mock()
+        sdk.speechkit.AudioFormat.PCM16.return_value = "pcm16"
+        sdk.speechkit.speech_to_text.return_value = stt
+        sdk_module = types.SimpleNamespace(AIStudio=Mock(return_value=sdk))
+        with patch.dict(os.environ, {"YC_API_KEY": "test-secret"}, clear=True):
+            with patch.dict(sys.modules, {"yandex_ai_studio_sdk": sdk_module}):
+                result = transcribe_audio_stream(audio_queue, stop_token, numpy_module=np, on_partial=partials.append)
+        self.assertEqual(result, "Потоковая проверка.")
+        self.assertEqual(partials, ["потоковая проверка", "потоковая проверка"])
 if __name__ == "__main__":
     unittest.main()
