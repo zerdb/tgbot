@@ -1,4 +1,6 @@
 """Unit tests for the Yandex SpeechKit v3 streaming client."""
+import contextlib
+import io
 import os
 import queue
 import sys
@@ -123,9 +125,16 @@ class SpeechKitEngineTests(unittest.TestCase):
         sdk.speechkit.AudioFormat.PCM16.return_value = "pcm16"
         sdk.speechkit.speech_to_text.return_value = stt
         sdk_module = types.SimpleNamespace(AsyncAIStudio=Mock(return_value=sdk))
+        retry_module = types.SimpleNamespace(NoRetryPolicy=Mock(return_value="no-retry"))
 
         with patch.dict(os.environ, {"YC_API_KEY": "test-secret"}, clear=True):
-            with patch.dict(sys.modules, {"yandex_ai_studio_sdk": sdk_module}):
+            with patch.dict(
+                sys.modules,
+                {
+                    "yandex_ai_studio_sdk": sdk_module,
+                    "yandex_ai_studio_sdk._retry": retry_module,
+                },
+            ):
                 result = transcribe_audio_stream(
                     audio_queue,
                     stop_token,
@@ -142,8 +151,54 @@ class SpeechKitEngineTests(unittest.TestCase):
         sdk_module.AsyncAIStudio.assert_called_once_with(
             auth="test-secret",
             folder_id="b1gfpt3ceq4e2au6p5md",
+            retry_policy="no-retry",
         )
         stt.create_bistream.assert_called_once_with(timeout=90)
+
+    def test_live_stream_reports_original_rpc_error_and_cancels_sender(self):
+        audio_queue = queue.Queue()
+        stop_token = object()
+        partials = []
+
+        class FakeStream:
+            async def write(self, data):
+                raise RuntimeError("RPC already finished")
+
+            async def done_writing(self):
+                pass
+
+            async def gen(self):
+                while True:
+                    await __import__("asyncio").sleep(1)
+                    yield None
+
+        stt = Mock()
+        stt.create_bistream.return_value = FakeStream()
+        sdk = Mock()
+        sdk.speechkit.AudioFormat.PCM16.return_value = "pcm16"
+        sdk.speechkit.speech_to_text.return_value = stt
+        sdk_module = types.SimpleNamespace(AsyncAIStudio=Mock(return_value=sdk))
+        retry_module = types.SimpleNamespace(NoRetryPolicy=Mock(return_value="no-retry"))
+        audio_queue.put(np.zeros(6400, dtype=np.float32))
+        audio_queue.put(stop_token)
+
+        output = io.StringIO()
+        with patch.dict(os.environ, {"YC_API_KEY": "test-secret"}, clear=True):
+            with patch.dict(
+                sys.modules,
+                {
+                    "yandex_ai_studio_sdk": sdk_module,
+                    "yandex_ai_studio_sdk._retry": retry_module,
+                },
+            ):
+                with contextlib.redirect_stdout(output):
+                    with self.assertRaisesRegex(RuntimeError, "RPC already finished"):
+                        transcribe_audio_stream(
+                            audio_queue, stop_token, numpy_module=np
+                        )
+
+        self.assertIn("Ошибка двустороннего gRPC-потока", output.getvalue())
+        self.assertIn("RuntimeError: RPC already finished", output.getvalue())
 
 
 if __name__ == "__main__":
