@@ -58,10 +58,13 @@ _keyboard_listener = None
 _ui_actions = queue.SimpleQueue()
 
 
-def update_ui_status(listening=None, recording=None):
+def update_ui_status(listening=None, recording=None, transcript=None):
     """Queue status changes so Tkinter is only touched by its main thread."""
     if _ui is not None:
-        _ui_actions.put(("status", {"listening": listening, "recording": recording}))
+        _ui_actions.put((
+            "status",
+            {"listening": listening, "recording": recording, "transcript": transcript},
+        ))
 
 
 def handle_command(text: str):
@@ -180,8 +183,13 @@ def main():
                     status = value if isinstance(value, dict) else {}
                     _ui.set_status(listening=status.get("listening"))
                     recording = status.get("recording")
-                    if recording is not None:
-                        _ui.set_recording_overlay(bool(recording), mode=recording if recording else None)
+                    transcript = status.get("transcript")
+                    if recording is not None or transcript is not None:
+                        _ui.set_recording_overlay(
+                            recording if recording is not None else None,
+                            mode=recording if recording else None,
+                            transcript=transcript,
+                        )
                 elif ui_action == "show_ai_answer":
                     question, answer, error = value
                     show_ai_answer(_ui.root, question, answer, error)
