@@ -40,6 +40,7 @@ DEFAULTS = {
     "imap_port": 993,
     "remember_chat_history": True,
     "clean_dictation_with_ai": False,
+    "speech_engine": "gigaam",
     "mft_refresh_interval_days": 7,
     "mft_last_refresh_at": 0,
     "mft_last_reminder_at": 0,
@@ -80,6 +81,10 @@ def save_settings(values: dict) -> dict:
                 continue
         elif key in ("remember_chat_history", "clean_dictation_with_ai"):
             value = bool(value)
+        elif key == "speech_engine":
+            value = str(value).strip().lower()
+            if value not in ("gigaam", "speechkit"):
+                continue
         elif key == "mft_refresh_interval_days":
             try:
                 value = int(value)
