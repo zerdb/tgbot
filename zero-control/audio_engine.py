@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import queue
 import shutil
 import tempfile
 import threading
@@ -34,6 +35,11 @@ class AudioEngine:
         self._recording_mode = "text"
         self._lock = threading.Lock()
         self._transcription_lock = threading.Lock()
+        self._speech_audio_queue = None
+        self._speech_stop_token = None
+        self._speech_stream_thread = None
+        self._speech_final_mode = "text"
+        self._speech_sample_count = 0
 
         self.imageio_ffmpeg = None
         self.keyboard = None
@@ -134,8 +140,16 @@ class AudioEngine:
         if status:
             print(f"Состояние аудиоустройства: {status}")
         with self._lock:
-            if self._recording:
+            if not self._recording:
+                return
+            if self.speech_engine == "speechkit":
+                audio_queue = self._speech_audio_queue
+                self._speech_sample_count += len(indata)
+            else:
                 self._audio_chunks.append(indata.copy())
+                audio_queue = None
+        if audio_queue is not None:
+            audio_queue.put_nowait(indata.copy())
 
     def start_recording(self, mode: str) -> None:
         with self._lock:
@@ -144,6 +158,10 @@ class AudioEngine:
             self._audio_chunks = []
             self._recording_mode = mode
             self._recording = True
+            self._speech_sample_count = 0
+            self._speech_final_mode = mode
+            self._speech_audio_queue = queue.Queue() if self.speech_engine == "speechkit" else None
+            self._speech_stop_token = object() if self.speech_engine == "speechkit" else None
         try:
             self._update_ui_status(
                 "ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ",
@@ -160,6 +178,13 @@ class AudioEngine:
                 callback=self.audio_callback,
             )
             self._stream.start()
+            if self.speech_engine == "speechkit":
+                self._speech_stream_thread = threading.Thread(
+                    target=self._run_speechkit_stream,
+                    args=(self._speech_audio_queue, self._speech_stop_token),
+                    daemon=True,
+                )
+                self._speech_stream_thread.start()
             key_name = "Right Ctrl+Right Shift" if mode == "text" else "правый Ctrl"
             purpose = "для ввода текста" if mode == "text" else "для голосовой команды"
             print(f"Идёт запись {purpose}. Отпустите {key_name}, чтобы выполнить.")
@@ -193,6 +218,19 @@ class AudioEngine:
             finally:
                 stream.close()
         self._update_ui_status("РАСПОЗНАЮ РЕЧЬ", recording=False)
+        if self.speech_engine == "speechkit":
+            with self._lock:
+                audio_queue = self._speech_audio_queue
+                stop_token = self._speech_stop_token
+                sample_count = self._speech_sample_count
+                self._speech_final_mode = mode
+                self._speech_audio_queue = None
+            if audio_queue is not None:
+                audio_queue.put_nowait(stop_token)
+            if sample_count == 0:
+                print("Звук не записан: микрофон не передал аудиоданные.")
+                self._update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
+            return
         if not chunks:
             print("Звук не записан: микрофон не передал аудиоданные.")
             self._update_ui_status("ОЖИДАЮ НАЖАТИЯ RIGHT CTRL")
@@ -204,6 +242,44 @@ class AudioEngine:
         print(f"Запись завершена: {len(audio_data) / self.SAMPLE_RATE:.2f} сек.")
         worker = self.transcribe_and_paste if mode == "text" else self.transcribe_and_execute
         threading.Thread(target=worker, args=(audio_data,), daemon=True).start()
+
+    def _run_speechkit_stream(self, audio_queue, stop_token) -> None:
+        if not self._transcription_lock.acquire(blocking=False):
+            print("Предыдущее распознавание ещё выполняется. Эта запись пропущена.")
+            while True:
+                item = audio_queue.get()
+                if item is stop_token:
+                    break
+            return
+        try:
+            from speechkit_engine import transcribe_audio_stream
+
+            print("Потоковое распознавание через Yandex SpeechKit v3...", flush=True)
+            text = transcribe_audio_stream(
+                audio_queue,
+                stop_token,
+                numpy_module=self.np,
+                on_partial=lambda partial: self._update_ui_status(transcript=partial),
+            )
+            mode = self._speech_final_mode
+            if text:
+                if mode == "text":
+                    self._paste_transcription(text)
+                else:
+                    self._handle_command(text)
+                print(f"Текст распознан и обработан: {text}", flush=True)
+            else:
+                print("Речь не распознана.")
+        except Exception as exc:
+            print(f"Ошибка потокового распознавания: {exc}")
+            traceback.print_exc()
+        finally:
+            self._transcription_lock.release()
+            self._update_ui_status(
+                "ОЖИДАЮ НАЖАТИЯ RIGHT CTRL",
+                recording=False,
+                transcript="",
+            )
 
     def transcribe_audio_file(self, audio_data) -> str:
         if self.speech_engine == "speechkit":
@@ -241,6 +317,43 @@ class AudioEngine:
                 results.append(result)
         return " ".join(results).strip()
 
+    def _paste_transcription(self, text: str) -> None:
+        try:
+            from agent_core import load_settings
+            if load_settings().get("clean_dictation_with_ai", False):
+                print("Очищаю текст диктовки с помощью ИИ...")
+                from groq_client import chat
+                cleaned = chat(
+                    [
+                        {
+                            "role": "system",
+                            "content": (
+                                "Ты редактор расшифровки русской устной речи. "
+                                "Убери слова-паразиты, случайные повторы, запинки, "
+                                "оговорки и незавершённые дубли фраз. Сохрани исходный "
+                                "смысл, факты, имена, числа и стиль говорящего. "
+                                "Не пересказывай и не сокращай содержательные мысли, "
+                                "не добавляй ничего от себя. Верни только готовый текст "
+                                "без пояснений и кавычек."
+                            ),
+                        },
+                        {"role": "user", "content": text},
+                    ],
+                    temperature=0.1,
+                    max_tokens=max(300, min(2000, len(text) // 2 + 200)),
+                    timeout=60,
+                ).strip()
+                if cleaned:
+                    text = cleaned
+                    print("ИИ-очистка диктовки завершена.")
+                else:
+                    print("ИИ вернул пустой текст; использую исходную расшифровку.")
+        except Exception as exc:
+            print(f"Не удалось очистить диктовку через ИИ; использую исходный текст: {exc}")
+        self.pyperclip.copy(text)
+        self.keyboard.send("ctrl+v")
+        print(f"Текст распознан и вставлен: {text}")
+
     def transcribe_and_paste(self, audio_data) -> None:
         if not self._transcription_lock.acquire(blocking=False):
             print("Предыдущее распознавание ещё выполняется. Эта запись пропущена.")
@@ -250,41 +363,7 @@ class AudioEngine:
             print(f"Распознаю речь {engine_label}...")
             text = self.transcribe_parts(audio_data, "фрагмент")
             if text:
-                try:
-                    from agent_core import load_settings
-                    if load_settings().get("clean_dictation_with_ai", False):
-                        print("Очищаю текст диктовки с помощью ИИ...")
-                        from groq_client import chat
-                        cleaned = chat(
-                            [
-                                {
-                                    "role": "system",
-                                    "content": (
-                                        "Ты редактор расшифровки русской устной речи. "
-                                        "Убери слова-паразиты, случайные повторы, запинки, "
-                                        "оговорки и незавершённые дубли фраз. Сохрани исходный "
-                                        "смысл, факты, имена, числа и стиль говорящего. "
-                                        "Не пересказывай и не сокращай содержательные мысли, "
-                                        "не добавляй ничего от себя. Верни только готовый текст "
-                                        "без пояснений и кавычек."
-                                    ),
-                                },
-                                {"role": "user", "content": text},
-                            ],
-                            temperature=0.1,
-                            max_tokens=max(300, min(2000, len(text) // 2 + 200)),
-                            timeout=60,
-                        ).strip()
-                        if cleaned:
-                            text = cleaned
-                            print("ИИ-очистка диктовки завершена.")
-                        else:
-                            print("ИИ вернул пустой текст; использую исходную расшифровку.")
-                except Exception as exc:
-                    print(f"Не удалось очистить диктовку через ИИ; использую исходный текст: {exc}")
-                self.pyperclip.copy(text)
-                self.keyboard.send("ctrl+v")
-                print(f"Текст распознан и вставлен: {text}")
+                self._paste_transcription(text)
             else:
                 print("Речь не распознана.")
         except Exception as exc:
