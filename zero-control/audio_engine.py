@@ -246,7 +246,8 @@ class AudioEngine:
             print("Предыдущее распознавание ещё выполняется. Эта запись пропущена.")
             return
         try:
-            print("Распознаю речь локально...")
+            engine_label = "через Yandex SpeechKit v3" if self.speech_engine == "speechkit" else "локально"
+            print(f"Распознаю речь {engine_label}...")
             text = self.transcribe_parts(audio_data, "фрагмент")
             if text:
                 try:
