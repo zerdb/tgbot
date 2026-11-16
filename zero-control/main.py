@@ -110,8 +110,11 @@ def main():
 
     microphone_found = _audio_engine.check_microphone()
     _ui.set_status(microphone="НАЙДЕН" if microphone_found else "НЕ НАЙДЕН")
-    _audio_engine.configure_ffmpeg()
-    _audio_engine.load_model()
+    if _audio_engine.requires_local_model:
+        _audio_engine.configure_ffmpeg()
+        _audio_engine.load_model()
+    else:
+        print("[Речь] Используется Yandex SpeechKit; аудио будет отправляться в облако Yandex.", flush=True)
     _ui.set_busy_overlay(None)
     _keyboard_listener = KeyboardListener(
         start_recording=_audio_engine.start_recording,
