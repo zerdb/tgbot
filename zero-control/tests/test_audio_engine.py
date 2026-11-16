@@ -1,6 +1,6 @@
 """Тесты логики аудиодвижка без обращения к микрофону и GigaAM."""
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -38,7 +38,7 @@ class AudioEngineTests(unittest.TestCase):
     def test_speechkit_engine_routes_audio_to_cloud_client(self):
         self.engine.speech_engine = "speechkit"
         self.engine.np = np
-        with unittest.mock.patch(
+        with patch(
             "speechkit_engine.transcribe_audio",
             return_value="проверка",
         ) as transcribe:
