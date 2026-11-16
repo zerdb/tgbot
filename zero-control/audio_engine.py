@@ -38,7 +38,7 @@ class AudioEngine:
         self._speech_audio_queue = None
         self._speech_stop_token = None
         self._speech_stream_thread = None
-        self._speech_final_mode = "text"
+        self._speech_mode_state = None
         self._speech_sample_count = 0
 
         self.imageio_ffmpeg = None
@@ -159,7 +159,7 @@ class AudioEngine:
             self._recording_mode = mode
             self._recording = True
             self._speech_sample_count = 0
-            self._speech_final_mode = mode
+            self._speech_mode_state = {"mode": mode}
             self._speech_audio_queue = queue.Queue() if self.speech_engine == "speechkit" else None
             self._speech_stop_token = object() if self.speech_engine == "speechkit" else None
         try:
@@ -181,7 +181,7 @@ class AudioEngine:
             if self.speech_engine == "speechkit":
                 self._speech_stream_thread = threading.Thread(
                     target=self._run_speechkit_stream,
-                    args=(self._speech_audio_queue, self._speech_stop_token),
+                    args=(self._speech_audio_queue, self._speech_stop_token, self._speech_mode_state),
                     daemon=True,
                 )
                 self._speech_stream_thread.start()
@@ -201,6 +201,8 @@ class AudioEngine:
             if not self._recording or self._recording_mode == "text":
                 return
             self._recording_mode = "text"
+            if self._speech_mode_state is not None:
+                self._speech_mode_state["mode"] = "text"
         print("Режим переключён на диктовку: удерживайте Right Ctrl + Right Shift.")
         self._update_ui_status("ДИКТОВКА", recording="text")
 
@@ -223,7 +225,8 @@ class AudioEngine:
                 audio_queue = self._speech_audio_queue
                 stop_token = self._speech_stop_token
                 sample_count = self._speech_sample_count
-                self._speech_final_mode = mode
+                if self._speech_mode_state is not None:
+                    self._speech_mode_state["mode"] = mode
                 self._speech_audio_queue = None
             if audio_queue is not None:
                 audio_queue.put_nowait(stop_token)
@@ -243,7 +246,7 @@ class AudioEngine:
         worker = self.transcribe_and_paste if mode == "text" else self.transcribe_and_execute
         threading.Thread(target=worker, args=(audio_data,), daemon=True).start()
 
-    def _run_speechkit_stream(self, audio_queue, stop_token) -> None:
+    def _run_speechkit_stream(self, audio_queue, stop_token, mode_state) -> None:
         if not self._transcription_lock.acquire(blocking=False):
             print("Предыдущее распознавание ещё выполняется. Эта запись пропущена.")
             while True:
@@ -261,7 +264,7 @@ class AudioEngine:
                 numpy_module=self.np,
                 on_partial=lambda partial: self._update_ui_status(transcript=partial),
             )
-            mode = self._speech_final_mode
+            mode = mode_state["mode"]
             if text:
                 if mode == "text":
                     self._paste_transcription(text)
