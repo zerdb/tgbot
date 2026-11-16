@@ -35,7 +35,6 @@ def camera_inspection_worker(ui_actions: SimpleQueue) -> None:
 def camera_question_worker(question: str, ui_actions: SimpleQueue) -> None:
     try:
         from camera_inspector import inspect_camera_question
-        from notifications import speak_text as speak
 
         answer = inspect_camera_question(question)
         result = (question, answer, None)
