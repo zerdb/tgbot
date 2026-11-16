@@ -110,7 +110,7 @@ def open_settings_window(parent):
         speech_engine_var = tk.StringVar(master=window, value=selected_engine_label)
         ttk.Label(
             speech_box,
-            text="Выбери движок, который будет распознавать диктовку и голосовые команды.",
+            text="Выбери движок для диктовки и голосовых команд. При выборе облачного движка аудио отправляется в Yandex SpeechKit.",
             wraplength=530, style="Card.TLabel",
         ).pack(anchor="w")
         ttk.Combobox(
