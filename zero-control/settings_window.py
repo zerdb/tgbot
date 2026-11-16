@@ -100,7 +100,7 @@ def open_settings_window(parent):
         speech_box = make_card(frame, "Распознавание речи")
         speech_engine_labels = {
             "Локально — GigaAM": "gigaam",
-            "Облачно — Алиса (Yandex SpeechKit)": "speechkit",
+            "Облачно — Алиса (Yandex SpeechKit v3)": "speechkit",
         }
         current_engine = str(values.get("speech_engine", "gigaam")).strip().lower()
         selected_engine_label = next(
@@ -110,7 +110,7 @@ def open_settings_window(parent):
         speech_engine_var = tk.StringVar(master=window, value=selected_engine_label)
         ttk.Label(
             speech_box,
-            text="Выбери движок для диктовки и голосовых команд. При выборе облачного движка аудио отправляется в Yandex SpeechKit.",
+            text="Выбери движок для диктовки и голосовых команд. При выборе облачного движка аудио отправляется в Yandex SpeechKit v3.",
             wraplength=530, style="Card.TLabel",
         ).pack(anchor="w")
         ttk.Combobox(
