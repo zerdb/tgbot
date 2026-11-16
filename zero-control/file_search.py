@@ -624,7 +624,6 @@ def _search_worker(query: str, parent, export_format=None):
         display_query = "*" + " ".join(group[0] for group in term_groups) + "*" + extension
     print(f"Ищу «{display_query}» по локальному индексу MFT и SQLite...", flush=True)
     try:
-        vector_results = []
         if term_groups:
             # Внутри смысловой группы ищем любой вариант (OR), между
             # обязательными понятиями требуем совпадение всех групп (AND).
@@ -646,11 +645,8 @@ def _search_worker(query: str, parent, export_format=None):
             ]
             matches = list(set.intersection(*group_results)) if group_results else []
 
-            # Векторный поиск отключён в обычном сценарии.
-            # Индекс строится только вручную из настроек.
-            vector_results = []
-
-            if not matches and not vector_results and parsed.get("_semantic_fallback"):
+    
+            if not matches and parsed.get("_semantic_fallback"):
                 # Avoid paying for a second LLM call on common exact matches.
                 # If literal search misses, ask Groq for synonyms/ASR variants,
                 # then retry locally without ever uploading filenames.
@@ -760,7 +756,7 @@ def _search_worker(query: str, parent, export_format=None):
                     continue
                 if filters["end"] and datetime.fromtimestamp(timestamp) > filters["end"]:
                     continue
-                filtered.append((path, size, stat.st_mtime, stat.st_ctime, source_by_path.get(path, "legacy")))
+                filtered.append((path, size, stat.st_mtime, stat.st_ctime))
             except (OSError, ValueError):
                 continue
 
@@ -785,7 +781,6 @@ def _search_worker(query: str, parent, export_format=None):
 
             filtered.sort(
                 key=lambda item: (
-                    0 if item[4] in {"legacy", "both"} else 1,
                     *relevance_key(item),
                 )
             )
@@ -1062,10 +1057,6 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
         window,
         text=f"Найдено файлов: {len(results)}. Двойной щелчок — открыть файл.",
     ).pack(anchor="w", padx=12, pady=(12, 4))
-    legend = ttk.Frame(window)
-    legend.pack(anchor="w", padx=12, pady=(0, 6))
-    tk.Label(legend, text=" Обычный поиск по индексу ", bg="#E2F0D9", fg="#24512D").pack(side="left")
-
     frame = ttk.Frame(window)
     frame.pack(fill="both", expand=True, padx=12, pady=6)
     columns = ("name", "created", "size", "path")
@@ -1074,9 +1065,6 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
     listing.heading("created", text="Дата создания")
     listing.heading("size", text="Размер")
     listing.heading("path", text="Путь к папке")
-    listing.tag_configure("legacy", background="#E2F0D9", foreground="#24512D")
-    listing.tag_configure("vector", background="#FFF2CC", foreground="#765800")
-    listing.tag_configure("both", background="#DDEBF7", foreground="#1F4E79")
     listing.column("name", width=330, minwidth=180, stretch=False)
     listing.column("created", width=210, minwidth=150, stretch=False, anchor="center")
     listing.column("size", width=130, minwidth=90, stretch=False, anchor="e")
@@ -1113,7 +1101,6 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
     results = _sort_file_results_by_creation(results)
     for index, item in enumerate(results):
         path, created_at, size = item[:3]
-        source = item[3] if len(item) > 3 else "legacy"
         paths.append(path)
         try:
             created_text = datetime.fromtimestamp(created_at).strftime("%d.%m.%Y %H:%M")
@@ -1124,7 +1111,6 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
             "end",
             iid=str(index),
             values=(path.name, created_text, format_size(size), str(path.parent)),
-            tags=(source if source in {"legacy", "vector", "both"} else "legacy",),
         )
 
     def open_selected(_event=None):
