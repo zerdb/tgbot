@@ -37,9 +37,17 @@ def _create_async_stt():
             "окружения Windows и перезапустите Zero Control."
         )
     from yandex_ai_studio_sdk import AsyncAIStudio
+    # В SDK 0.22.1 retry-interceptor оборачивает gRPC calls объектом,
+    # у которого add_done_callback не реализован. Для bidi-streaming
+    # отключаем SDK retry interceptors, оставляя сам поток gRPC нетронутым.
+    from yandex_ai_studio_sdk._retry import NoRetryPolicy
 
     folder_id = os.getenv("YC_FOLDER_ID", "").strip() or API_FOLDER_ID
-    sdk = AsyncAIStudio(auth=api_key, folder_id=folder_id)
+    sdk = AsyncAIStudio(
+        auth=api_key,
+        folder_id=folder_id,
+        retry_policy=NoRetryPolicy(),
+    )
     return sdk.speechkit.speech_to_text(
         model="general",
         audio_format=sdk.speechkit.AudioFormat.PCM16(16000),
@@ -90,6 +98,22 @@ def _events_to_text(
     return collector.result()
 
 
+def _describe_stream_error(exc: BaseException) -> str:
+    details = []
+    code_method = getattr(exc, "code", None)
+    details_method = getattr(exc, "details", None)
+    for label, method in (("gRPC code", code_method), ("gRPC details", details_method)):
+        if callable(method):
+            try:
+                value = method()
+                if value is not None:
+                    details.append(f"{label}: {value}")
+            except Exception as detail_error:
+                details.append(f"{label}: не удалось получить ({detail_error})")
+    suffix = "; ".join(details)
+    return f"{type(exc).__name__}: {exc}" + (f" | {suffix}" if suffix else "")
+
+
 def transcribe_audio_stream(
     audio_queue,
     stop_token,
@@ -113,8 +137,7 @@ def transcribe_audio_stream(
 
         async def send_audio() -> None:
             pending = bytearray()
-            stopped = False
-            while not stopped:
+            while True:
                 try:
                     block = audio_queue.get_nowait()
                 except queue.Empty:
@@ -122,7 +145,6 @@ def transcribe_audio_stream(
                     continue
 
                 if block is stop_token:
-                    stopped = True
                     break
 
                 audio = numpy_module.asarray(
@@ -145,8 +167,37 @@ def transcribe_audio_stream(
             async for event in stream.gen():
                 collector.add(event)
 
-        await asyncio.gather(send_audio(), receive_events())
-        return collector.result()
+        send_task = asyncio.create_task(send_audio(), name="speechkit-send-audio")
+        receive_task = asyncio.create_task(receive_events(), name="speechkit-receive-events")
+        tasks = (send_task, receive_task)
+        try:
+            done, pending_tasks = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_EXCEPTION
+            )
+            failure = next(
+                (task.exception() for task in done if not task.cancelled() and task.exception()),
+                None,
+            )
+            if failure is not None:
+                for task in pending_tasks:
+                    task.cancel()
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
+                raise failure
+            if pending_tasks:
+                await asyncio.gather(*pending_tasks)
+            return collector.result()
+        except Exception as exc:
+            print(
+                "[SpeechKit v3] Ошибка двустороннего gRPC-потока: "
+                + _describe_stream_error(exc),
+                flush=True,
+            )
+            raise
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     return asyncio.run(run_stream())
 
