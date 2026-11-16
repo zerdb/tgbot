@@ -598,6 +598,11 @@ def _report_search_progress(message: str) -> None:
     _progress_messages.put(str(message))
 
 
+def _build_file_result_rows(filtered):
+    """Convert filtered stat tuples to the (path, creation_time, size) UI contract."""
+    return [(item[0], item[3], item[1]) for item in filtered]
+
+
 def _search_worker(query: str, parent, export_format=None):
     from datetime import datetime
     search_started = time.perf_counter()
@@ -792,7 +797,7 @@ def _search_worker(query: str, parent, export_format=None):
             filtered.sort(key=lambda item: item[2])
         elif sort_mode == "date_desc" or filters["start"] or filters["end"]:
             filtered.sort(key=lambda item: item[2], reverse=True)
-        matches = [(item[0], item[3], item[1], item[4]) for item in filtered]
+        matches = _build_file_result_rows(filtered)
         print(
             f"[Поиск файлов][Тайминг] Фильтры и сортировка: {time.perf_counter() - filter_started:.3f} сек.; "
             f"кандидатов: {len(filtered)}.",
