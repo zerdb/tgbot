@@ -53,7 +53,7 @@ class SpeechKitEngineTests(unittest.TestCase):
         )
         args, kwargs = stt.run_stream.call_args
         self.assertEqual(kwargs["timeout"], 90)
-        self.assertEqual(args[0], [b"\\x00\\x00\\xff\\x7f\\x01\\x80"])
+        self.assertEqual(args[0], [bytes([0, 0, 255, 127, 1, 128])])
 
     @patch.dict("os.environ", {"YC_API_KEY": "test-secret"})
     def test_custom_folder_id_is_used(self):
