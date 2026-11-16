@@ -1,5 +1,6 @@
 """Unit tests for the Yandex SpeechKit v3 streaming client."""
 import os
+import queue
 import sys
 import types
 import unittest
@@ -82,34 +83,68 @@ class SpeechKitEngineTests(unittest.TestCase):
                 numpy_module=np,
             )
 
-
-    def test_live_stream_consumes_microphone_queue_and_reports_partial_text(self):
-        import queue
+    def test_live_stream_uses_bidirectional_sdk_and_reports_partial_text(self):
         audio_queue = queue.Queue()
         stop_token = object()
         audio_queue.put(np.zeros(6400, dtype=np.float32))
         audio_queue.put(stop_token)
         partials = []
+
+        class FakeStream:
+            def __init__(self):
+                self.written = []
+                self.closed = False
+
+            async def write(self, data):
+                self.written.append(data)
+
+            async def done_writing(self):
+                self.closed = True
+
+            async def gen(self):
+                while not self.closed:
+                    import asyncio
+                    await asyncio.sleep(0)
+                yield types.SimpleNamespace(
+                    event_type="partial", partial_text="потоковая проверка"
+                )
+                yield types.SimpleNamespace(
+                    event_type="final", final_text="потоковая проверка"
+                )
+                yield types.SimpleNamespace(
+                    event_type="final_refinement",
+                    final_refinement_text="Потоковая проверка.",
+                )
+
+        fake_stream = FakeStream()
         stt = Mock()
-        def consume(chunks, timeout):
-            sent = list(chunks)
-            self.assertEqual(timeout, 90)
-            self.assertEqual(len(sent), 1)
-            self.assertEqual(len(sent[0]), 12800)
-            return iter([
-                types.SimpleNamespace(event_type="partial", partial_text="потоковая проверка"),
-                types.SimpleNamespace(event_type="final", final_text="потоковая проверка"),
-                types.SimpleNamespace(event_type="final_refinement", final_refinement_text="Потоковая проверка."),
-            ])
-        stt.run_stream.side_effect = consume
+        stt.create_bistream.return_value = fake_stream
         sdk = Mock()
         sdk.speechkit.AudioFormat.PCM16.return_value = "pcm16"
         sdk.speechkit.speech_to_text.return_value = stt
-        sdk_module = types.SimpleNamespace(AIStudio=Mock(return_value=sdk))
+        sdk_module = types.SimpleNamespace(AsyncAIStudio=Mock(return_value=sdk))
+
         with patch.dict(os.environ, {"YC_API_KEY": "test-secret"}, clear=True):
             with patch.dict(sys.modules, {"yandex_ai_studio_sdk": sdk_module}):
-                result = transcribe_audio_stream(audio_queue, stop_token, numpy_module=np, on_partial=partials.append)
+                result = transcribe_audio_stream(
+                    audio_queue,
+                    stop_token,
+                    numpy_module=np,
+                    on_partial=partials.append,
+                )
+
         self.assertEqual(result, "Потоковая проверка.")
-        self.assertEqual(partials, ["потоковая проверка", "потоковая проверка"])
+        self.assertEqual(fake_stream.written, [bytes(12800)])
+        self.assertEqual(
+            partials,
+            ["потоковая проверка", "потоковая проверка"],
+        )
+        sdk_module.AsyncAIStudio.assert_called_once_with(
+            auth="test-secret",
+            folder_id="b1gfpt3ceq4e2au6p5md",
+        )
+        stt.create_bistream.assert_called_once_with(timeout=90)
+
+
 if __name__ == "__main__":
     unittest.main()
