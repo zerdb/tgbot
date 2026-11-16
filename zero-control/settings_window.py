@@ -97,6 +97,39 @@ def open_settings_window(parent):
             ttk.Entry(frame, textvariable=var).pack(fill="x", pady=(0, 2))
             vars_[key] = var
 
+        speech_box = make_card(frame, "Распознавание речи")
+        speech_engine_labels = {
+            "Локально — GigaAM": "gigaam",
+            "Облачно — Алиса (Yandex SpeechKit)": "speechkit",
+        }
+        current_engine = str(values.get("speech_engine", "gigaam")).strip().lower()
+        selected_engine_label = next(
+            (label for label, engine in speech_engine_labels.items() if engine == current_engine),
+            "Локально — GigaAM",
+        )
+        speech_engine_var = tk.StringVar(master=window, value=selected_engine_label)
+        ttk.Label(
+            speech_box,
+            text="Выбери движок, который будет распознавать диктовку и голосовые команды.",
+            wraplength=530, style="Card.TLabel",
+        ).pack(anchor="w")
+        ttk.Combobox(
+            speech_box,
+            textvariable=speech_engine_var,
+            state="readonly",
+            values=tuple(speech_engine_labels),
+        ).pack(fill="x", pady=(5, 4))
+        speechkit_key_status = (
+            "YC_API_KEY найден в переменных среды Windows."
+            if os.getenv("YC_API_KEY", "").strip()
+            else "YC_API_KEY не найден. Для SpeechKit задай переменную среды и перезапусти Zero Control."
+        )
+        ttk.Label(
+            speech_box,
+            text=speechkit_key_status + " Ключ не записывается в настройки приложения.",
+            wraplength=530, style="CardMuted.TLabel",
+        ).pack(anchor="w")
+
         keys_box = make_card(frame, "API-ключи и доступы")
 
         secret_vars = {}
@@ -222,6 +255,7 @@ def open_settings_window(parent):
             payload = {key: var.get() for key, var in vars_.items()}
             payload["remember_chat_history"] = remember.get()
             payload["clean_dictation_with_ai"] = clean_dictation.get()
+            payload["speech_engine"] = speech_engine_labels.get(speech_engine_var.get(), "gigaam")
             try:
                 payload["mft_refresh_interval_days"] = int(interval_var.get())
             except (TypeError, ValueError):
