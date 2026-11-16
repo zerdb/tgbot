@@ -27,6 +27,26 @@ class AudioEngineTests(unittest.TestCase):
             [AudioEngine.SAMPLE_RATE * 24, AudioEngine.SAMPLE_RATE],
         )
 
+    def test_speechkit_selection_does_not_require_local_model(self):
+        self.engine.speech_engine = "speechkit"
+        self.assertFalse(self.engine.requires_local_model)
+
+    def test_gigaam_remains_the_default_local_engine(self):
+        self.assertEqual(self.engine.speech_engine, "gigaam")
+        self.assertTrue(self.engine.requires_local_model)
+
+    def test_speechkit_engine_routes_audio_to_cloud_client(self):
+        self.engine.speech_engine = "speechkit"
+        self.engine.np = np
+        with unittest.mock.patch(
+            "speechkit_engine.transcribe_audio",
+            return_value="проверка",
+        ) as transcribe:
+            result = self.engine.transcribe_audio_file(np.zeros(160, dtype=np.float32))
+
+        self.assertEqual(result, "проверка")
+        transcribe.assert_called_once()
+
     def test_recording_state_properties(self):
         self.assertFalse(self.engine.is_recording)
         self.assertFalse(self.engine.is_dictation_active)
