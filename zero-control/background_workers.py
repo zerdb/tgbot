@@ -22,14 +22,10 @@ def ask_ai_worker(question: str, ui_actions: SimpleQueue) -> None:
 def camera_inspection_worker(ui_actions: SimpleQueue) -> None:
     try:
         from camera_inspector import inspect_camera
-        from notifications import speak_text as speak
-
         present = inspect_camera()
         if present:
-            speak("Начальник есть")
             result = ("Начальник есть", None)
         else:
-            speak("Начальника нет")
             result = ("Начальника нет", None)
     except Exception as exc:
         result = ("", str(exc))
@@ -42,7 +38,6 @@ def camera_question_worker(question: str, ui_actions: SimpleQueue) -> None:
         from notifications import speak_text as speak
 
         answer = inspect_camera_question(question)
-        speak(answer)
         result = (question, answer, None)
     except Exception as exc:
         result = (question, None, str(exc))
