@@ -14,7 +14,6 @@ from pathlib import Path
 from datetime import datetime
 from PIL import ImageGrab
 from openpyxl import Workbook
-from notifications import speak_text
 from reminders import add_note
 
 SCREENSHOT_DIR = Path(__file__).resolve().parent / "Скриншоты"
