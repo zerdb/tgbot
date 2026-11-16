@@ -44,6 +44,11 @@ class AudioEngine:
         self.torch = None
         self.AutoModel = None
         self.model_dir = None
+        self.speech_engine = "gigaam"
+
+    @property
+    def requires_local_model(self) -> bool:
+        return self.speech_engine == "gigaam"
 
     @property
     def is_recording(self) -> bool:
@@ -56,34 +61,46 @@ class AudioEngine:
             return self._recording and self._recording_mode == "text"
 
     def load_dependencies(self) -> None:
-        """Загружает тяжёлые аудиозависимости после показа заставки."""
-        import imageio_ffmpeg
+        """Загружает аудиозависимости выбранного движка."""
+        from agent_core import load_settings
+
+        selected = str(load_settings().get("speech_engine", "gigaam")).strip().lower()
+        self.speech_engine = selected if selected in ("gigaam", "speechkit") else "gigaam"
+
         import keyboard
         import numpy
         import pyperclip
         import sounddevice
         import soundfile
-        import torch
-        from transformers import AutoModel
 
-        self.imageio_ffmpeg = imageio_ffmpeg
         self.keyboard = keyboard
         self.np = numpy
         self.pyperclip = pyperclip
         self.sd = sounddevice
         self.sf = soundfile
-        self.torch = torch
-        self.AutoModel = AutoModel
 
-        project_dir = Path(__file__).resolve().parent
-        self.model_dir = Path(
-            os.getenv(
-                "ZERO_CONTROL_MODEL_DIR",
-                os.getenv("GIGAAM_MODEL_DIR", str(project_dir.parent / "GigaAM-v3")),
-            )
-        ).expanduser().resolve()
+        if self.requires_local_model:
+            import imageio_ffmpeg
+            import torch
+            from transformers import AutoModel
+
+            self.imageio_ffmpeg = imageio_ffmpeg
+            self.torch = torch
+            self.AutoModel = AutoModel
+
+            project_dir = Path(__file__).resolve().parent
+            self.model_dir = Path(
+                os.getenv(
+                    "ZERO_CONTROL_MODEL_DIR",
+                    os.getenv("GIGAAM_MODEL_DIR", str(project_dir.parent / "GigaAM-v3")),
+                )
+            ).expanduser().resolve()
+        else:
+            print("Выбран Yandex SpeechKit: локальная модель GigaAM не загружается.", flush=True)
 
     def configure_ffmpeg(self) -> None:
+        if self.imageio_ffmpeg is None:
+            return
         source = Path(self.imageio_ffmpeg.get_ffmpeg_exe()).resolve()
         target_dir = Path(tempfile.gettempdir()) / "zero_control_ffmpeg"
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -189,6 +206,15 @@ class AudioEngine:
         threading.Thread(target=worker, args=(audio_data,), daemon=True).start()
 
     def transcribe_audio_file(self, audio_data) -> str:
+        if self.speech_engine == "speechkit":
+            from speechkit_engine import transcribe_audio
+
+            return transcribe_audio(
+                audio_data,
+                sample_rate=self.SAMPLE_RATE,
+                numpy_module=self.np,
+            )
+
         temp_path = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
