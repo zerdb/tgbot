@@ -199,7 +199,7 @@ class CommandHandler:
             app = str(args.get("app") or "").strip().casefold()
             open_application(app)
         elif action == "open_installed_application":
-            display_name = open_installed_application(str(args.get("app_name") or ""))
+            open_installed_application(str(args.get("app_name") or ""))
         elif action == "open_settings":
             open_settings()
         elif action == "open_magnifier":
@@ -217,7 +217,7 @@ class CommandHandler:
         elif action == "paste_clipboard_to_application":
             paste_clipboard_to_application(str(args.get("app_name") or ""))
         elif action == "reminder":
-            if add_reminder(str(args.get("reminder_text") or text)):
+            add_reminder(str(args.get("reminder_text") or text))
         elif action == "add_note":
             add_note(str(args.get("note_text") or text))
         elif action == "complete_item":
@@ -230,10 +230,9 @@ class CommandHandler:
         elif action == "open_folder":
             if ui is not None:
                 self._ui_actions.put(("busy", "Ищу папку…"))
-            opened = open_folder_by_name(str(args.get("folder") or text), parent)
+            open_folder_by_name(str(args.get("folder") or text), parent)
             if ui is not None:
                 self._ui_actions.put(("busy", None))
-            if opened:
         elif action == "search_files":
             if ui is not None:
                 self._ui_actions.put(("busy", "Ищу файлы…"))
