@@ -44,6 +44,17 @@ class SearchNeedleVariantTests(unittest.TestCase):
         self.assertIn("SQLite fallback", mode)
         connection.close()
 
+    def test_file_result_rows_use_three_field_display_contract(self):
+        from file_search import _build_file_result_rows
+
+        rows = _build_file_result_rows([
+            (Path("C:/Docs/report.pdf"), 2048, 1700000000.0, 1690000000.0),
+        ])
+        self.assertEqual(
+            rows,
+            [(Path("C:/Docs/report.pdf"), 1690000000.0, 2048)],
+        )
+
     def test_file_results_are_sorted_newest_creation_first(self):
         from file_search import _sort_file_results_by_creation
 
