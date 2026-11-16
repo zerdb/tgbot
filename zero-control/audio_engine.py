@@ -166,6 +166,7 @@ class AudioEngine:
             self._update_ui_status(
                 "ИДЁТ ДИКТОВКА" if mode == "text" else "СЛУШАЮ ГОЛОСОВУЮ КОМАНДУ",
                 recording=mode,
+                transcript="",
             )
             ui = self._get_ui()
             if ui is not None:
@@ -204,7 +205,7 @@ class AudioEngine:
             if self._speech_mode_state is not None:
                 self._speech_mode_state["mode"] = "text"
         print("Режим переключён на диктовку: удерживайте Right Ctrl + Right Shift.")
-        self._update_ui_status("ДИКТОВКА", recording="text")
+        self._update_ui_status("ДИКТОВКА", recording="text", transcript="")
 
     def stop_recording(self) -> None:
         with self._lock:
