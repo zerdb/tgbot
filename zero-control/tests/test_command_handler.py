@@ -40,11 +40,29 @@ class CommandHandlerTests(unittest.TestCase):
 
     def test_read_clipboard_text_uses_piper_and_does_not_modify_clipboard(self):
         with patch("pyperclip.paste", return_value="Текст для чтения") as paste:
-            with patch("notifications.speak_text") as speak:
+            with patch("notifications.speak_clipboard_text") as speak:
                 self.handler._read_clipboard_text()
 
         paste.assert_called_once_with()
         speak.assert_called_once_with("Текст для чтения")
+
+    def test_clipboard_speech_voice_controls_only_run_during_reading(self):
+        with patch("notifications.is_clipboard_reading_active", return_value=True):
+            with patch("notifications.pause_clipboard_reading") as pause:
+                self.assertTrue(self.handler._handle_clipboard_speech_control("Пауза"))
+                pause.assert_called_once_with()
+
+        with patch("notifications.is_clipboard_reading_active", return_value=False):
+            self.assertFalse(self.handler._handle_clipboard_speech_control("Стоп"))
+
+    def test_clipboard_speech_speed_commands(self):
+        with patch("notifications.is_clipboard_reading_active", return_value=True):
+            with patch("notifications.increase_clipboard_reading_speed") as faster:
+                self.assertTrue(self.handler._handle_clipboard_speech_control("Быстрее"))
+                faster.assert_called_once_with()
+            with patch("notifications.decrease_clipboard_reading_speed") as slower:
+                self.assertTrue(self.handler._handle_clipboard_speech_control("Медленнее"))
+                slower.assert_called_once_with()
 
     def test_low_confidence_intent_is_not_executed(self):
         intent = {
