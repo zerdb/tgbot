@@ -254,7 +254,7 @@ def _play_clipboard_audio(wav_path: Path, session):
         if not np.any(valid):
             outdata.fill(0)
             raise sd.CallbackStop
-        lower = positions.astype(np.int64)
+        lower = np.minimum(positions.astype(np.int64), len(audio_data) - 1)
         upper = np.minimum(lower + 1, len(audio_data) - 1)
         fraction = (positions - lower).astype(np.float32)
         for channel in range(channels):
