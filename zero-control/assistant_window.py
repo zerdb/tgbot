@@ -701,6 +701,12 @@ class AssistantWindow:
         self.root.mainloop()
 
     def close(self):
+        try:
+            from notifications import set_speech_state_callback, stop_clipboard_reading
+            set_speech_state_callback(None)
+            stop_clipboard_reading()
+        except Exception:
+            pass
         if self._tray_icon is not None:
             try:
                 self._tray_icon.stop()
