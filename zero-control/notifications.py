@@ -267,11 +267,12 @@ def _play_clipboard_audio(wav_path: Path, session):
         if position >= len(audio_data):
             raise sd.CallbackStop
 
-    with sd.OutputStream(
+    stream = sd.OutputStream(
         samplerate=sample_rate, channels=channels, dtype="float32",
         callback=callback,
-    ):
-        while True:
+    )
+    with stream:
+        while stream.active:
             with _speech_control_lock:
                 stopped = session.stopped
             if stopped:
