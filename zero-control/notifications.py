@@ -254,11 +254,14 @@ def _play_clipboard_audio(wav_path: Path, session):
         if not np.any(valid):
             outdata.fill(0)
             raise sd.CallbackStop
+        lower = positions.astype(np.int64)
+        upper = np.minimum(lower + 1, len(audio_data) - 1)
+        fraction = (positions - lower).astype(np.float32)
         for channel in range(channels):
-            outdata[:, channel] = np.interp(
-                positions, np.arange(len(audio_data)), audio_data[:, channel],
-                left=0.0, right=0.0,
-            ).astype(np.float32)
+            samples = audio_data[:, channel]
+            outdata[:, channel] = (
+                samples[lower] * (1.0 - fraction) + samples[upper] * fraction
+            )
         outdata[~valid] = 0
         position += frames * speed
         if position >= len(audio_data):
@@ -297,14 +300,18 @@ def _speech_worker():
         item_type, text = _speech_queue.get()
         session = None
         try:
-            if voice is None:
-                voice = _load_piper_voice()
             if item_type == "clipboard":
                 session = _ClipboardSpeechSession()
                 with _speech_control_lock:
                     _active_clipboard_session = session
                 _notify_speech_state("preparing")
-                _speak_clipboard_with_piper(voice, text, session)
+            if voice is None:
+                voice = _load_piper_voice()
+            if item_type == "clipboard":
+                with _speech_control_lock:
+                    stopped = session.stopped
+                if not stopped:
+                    _speak_clipboard_with_piper(voice, text, session)
             else:
                 _speak_with_piper(voice, text)
         except Exception as exc:
