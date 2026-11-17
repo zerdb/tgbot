@@ -287,7 +287,9 @@ def _speak_clipboard_with_piper(voice, text, session):
             voice.synthesize_wav(text, wav_file)
         with _speech_control_lock:
             stopped = session.stopped
+            paused = session.paused
         if not stopped:
+            _notify_speech_state("paused" if paused else "playing")
             _play_clipboard_audio(wav_path, session)
     finally:
         wav_path.unlink(missing_ok=True)
