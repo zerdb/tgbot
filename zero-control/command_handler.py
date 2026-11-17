@@ -44,37 +44,37 @@ class CommandHandler:
         self._handle_command_worker(text)
 
     @staticmethod
-    def _is_read_selected_text_command(text: str) -> bool:
-        normalized = re.sub(r"[^\\w\\s]", " ", str(text or "").casefold())
+    def _is_read_clipboard_text_command(text: str) -> bool:
+        normalized = re.sub(r"[^\w\s]", " ", str(text or "").casefold())
         normalized = " ".join(normalized.split())
         return bool(re.match(
-            r"^(?:пожалуйста\\s+)?(?:прочитай|прочти|зачитай|озвучь|прочитать|прочесть)"
-            r"\\s+(?:(?:мне|пожалуйста)\\s+)*(?:весь\\s+)?"
-            r"(?:выделенный\\s+текст|выделенное)",
+            r"^(?:пожалуйста\s+)?(?:прочитай|прочти|зачитай|озвучь|прочитать|прочесть)"
+            r"\s+(?:(?:мне|пожалуйста)\s+)*(?:текст\s+)?"
+            r"(?:из\s+)?(?:буфера(?:\s+обмена)?|буфер)",
             normalized,
         ))
 
-    def _read_selected_text(self) -> None:
-        """Читает выделение активного окна локальным голосом Piper Denis."""
+    def _read_clipboard_text(self) -> None:
+        """Озвучивает текст из Windows clipboard локальным голосом Piper Denis."""
         try:
-            from selected_text_reader import get_selected_text
-            selected_text = get_selected_text()
+            import pyperclip
             from notifications import speak_text
 
-            if selected_text:
-                print(f"[Чтение] Озвучиваю выделенный текст ({len(selected_text)} символов).", flush=True)
-                speak_text(selected_text)
+            clipboard_text = str(pyperclip.paste() or "").strip()
+            if clipboard_text:
+                print(f"[Чтение] Озвучиваю текст из буфера ({len(clipboard_text)} символов).", flush=True)
+                speak_text(clipboard_text)
             else:
-                print("[Чтение] Выделение не найдено или приложение не поддерживает UI Automation TextPattern.", flush=True)
-                speak_text("Не удалось получить выделенный текст. Возможно, в этом приложении чтение выделения не поддерживается.")
+                print("[Чтение] В буфере обмена нет текстового содержимого.", flush=True)
+                speak_text("В буфере обмена нет текста.")
         except Exception as exc:
-            print(f"[Чтение] Не удалось прочитать выделенный текст: {exc}", flush=True)
+            print(f"[Чтение] Не удалось прочитать текст из буфера: {exc}", flush=True)
 
     def _handle_command_worker(self, text: str) -> None:
         """Классифицирует намерение и передаёт его соответствующему исполнителю."""
         print(f"Распознана команда: {text}")
-        if self._is_read_selected_text_command(text):
-            self._read_selected_text()
+        if self._is_read_clipboard_text_command(text):
+            self._read_clipboard_text()
             return
 
         ui = self._get_ui()
