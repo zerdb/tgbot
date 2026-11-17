@@ -1125,6 +1125,8 @@ def show_file_results(parent, results: list[tuple[Path, float, int]], query: str
                 os.startfile(str(paths[int(selection[0])]))
             except OSError as exc:
                 messagebox.showerror("Не удалось открыть файл", str(exc), parent=window)
+            else:
+                window.destroy()
 
     listing.bind("<Double-Button-1>", open_selected)
     ttk.Button(window, text="Открыть выбранный файл", command=open_selected).pack(pady=(0, 12))
