@@ -58,21 +58,55 @@ class CommandHandler:
         """Озвучивает текст из Windows clipboard локальным голосом Piper Denis."""
         try:
             import pyperclip
-            from notifications import speak_text
+            from notifications import speak_clipboard_text, speak_text
 
             clipboard_text = str(pyperclip.paste() or "").strip()
             if clipboard_text:
                 print(f"[Чтение] Озвучиваю текст из буфера ({len(clipboard_text)} символов).", flush=True)
-                speak_text(clipboard_text)
+                speak_clipboard_text(clipboard_text)
             else:
                 print("[Чтение] В буфере обмена нет текстового содержимого.", flush=True)
                 speak_text("В буфере обмена нет текста.")
         except Exception as exc:
             print(f"[Чтение] Не удалось прочитать текст из буфера: {exc}", flush=True)
 
+    @staticmethod
+    def _handle_clipboard_speech_control(text: str) -> bool:
+        """Обрабатывает короткие команды только во время чтения буфера."""
+        normalized = " ".join(re.sub(r"[^\\w\\s]", " ", str(text or "").casefold()).split())
+        actions = {
+            "стоп": "stop", "останови": "stop", "останови чтение": "stop",
+            "стоп чтение": "stop", "пауза": "pause", "пауза чтения": "pause",
+            "продолжи": "resume", "продолжай": "resume", "продолжи чтение": "resume",
+            "быстрее": "faster", "читай быстрее": "faster",
+            "медленнее": "slower", "читай медленнее": "slower",
+        }
+        action = actions.get(normalized)
+        if action is None:
+            return False
+        from notifications import (
+            is_clipboard_reading_active, pause_clipboard_reading,
+            resume_clipboard_reading, stop_clipboard_reading,
+            increase_clipboard_reading_speed, decrease_clipboard_reading_speed,
+        )
+        if not is_clipboard_reading_active():
+            return False
+        handlers = {
+            "stop": stop_clipboard_reading,
+            "pause": pause_clipboard_reading,
+            "resume": resume_clipboard_reading,
+            "faster": increase_clipboard_reading_speed,
+            "slower": decrease_clipboard_reading_speed,
+        }
+        handlers[action]()
+        print(f"[Чтение] Голосовое управление: {normalized}", flush=True)
+        return True
+
     def _handle_command_worker(self, text: str) -> None:
         """Классифицирует намерение и передаёт его соответствующему исполнителю."""
         print(f"Распознана команда: {text}")
+        if self._handle_clipboard_speech_control(text):
+            return
         if self._is_read_clipboard_text_command(text):
             self._read_clipboard_text()
             return
