@@ -42,6 +42,9 @@ class AssistantWindow:
         self._busy_overlay = None
         self._build()
         self._prepare_recording_overlay()
+        self._prepare_speech_overlay()
+        from notifications import set_speech_state_callback
+        set_speech_state_callback(self.set_speech_reading_status)
         center_window(self.root)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self._tray_icon = None
@@ -583,6 +586,103 @@ class AssistantWindow:
         except tk.TclError:
             pass
 
+    def _prepare_speech_overlay(self):
+        """Создаёт компактную панель управления чтением буфера справа по центру."""
+        overlay = tk.Toplevel(self.root)
+        overlay.withdraw()
+        overlay.overrideredirect(True)
+        overlay.attributes("-topmost", True)
+        overlay.attributes("-alpha", 0.97)
+        overlay.configure(bg="#202124")
+        frame = tk.Frame(
+            overlay, bg="#202124", padx=12, pady=9,
+            highlightthickness=1, highlightbackground="#3C4043",
+        )
+        frame.pack()
+        header = tk.Frame(frame, bg="#202124")
+        header.pack(fill="x", pady=(0, 7))
+        tk.Label(
+            header, text="🔊  ЧТЕНИЕ БУФЕРА", bg="#202124",
+            fg="#E8EAED", font=("Segoe UI", 8, "bold"),
+        ).pack(side="left")
+        self._speech_speed_label = tk.Label(
+            header, text="1.0×", bg="#202124", fg="#AECBFA",
+            font=("Segoe UI", 8, "bold"),
+        )
+        self._speech_speed_label.pack(side="right")
+        controls = tk.Frame(frame, bg="#202124")
+        controls.pack()
+        button_style = {
+            "bg": "#303134", "fg": "#E8EAED", "activebackground": "#4A4D50",
+            "activeforeground": "#FFFFFF", "relief": "flat", "bd": 0,
+            "font": ("Segoe UI Symbol", 12), "width": 3, "height": 1,
+            "cursor": "hand2",
+        }
+        from notifications import (
+            pause_clipboard_reading, resume_clipboard_reading,
+            stop_clipboard_reading, increase_clipboard_reading_speed,
+            decrease_clipboard_reading_speed,
+        )
+        tk.Button(
+            controls, text="Ⅱ", command=pause_clipboard_reading,
+            **button_style,
+        ).pack(side="left", padx=2)
+        tk.Button(
+            controls, text="▶", command=resume_clipboard_reading,
+            **button_style,
+        ).pack(side="left", padx=2)
+        tk.Button(
+            controls, text="■", command=stop_clipboard_reading,
+            bg="#713B3B", fg="#FFFFFF", activebackground="#914747",
+            activeforeground="#FFFFFF", relief="flat", bd=0,
+            font=("Segoe UI Symbol", 12), width=3, height=1,
+            cursor="hand2",
+        ).pack(side="left", padx=2)
+        tk.Frame(controls, width=7, bg="#202124").pack(side="left")
+        tk.Button(
+            controls, text="−", command=decrease_clipboard_reading_speed,
+            **button_style,
+        ).pack(side="left", padx=2)
+        tk.Button(
+            controls, text="+", command=increase_clipboard_reading_speed,
+            **button_style,
+        ).pack(side="left", padx=2)
+        self._speech_status_label = tk.Label(
+            frame, text="Денис читает текст", bg="#202124",
+            fg="#9AA0A6", font=("Segoe UI", 8),
+        )
+        self._speech_status_label.pack(pady=(6, 0))
+        self._speech_overlay = overlay
+
+    def set_speech_reading_status(self, status, speed=1.0):
+        """Показывает/обновляет панель чтения из потока озвучивания."""
+        def apply():
+            if self._speech_overlay is None or not self._speech_overlay.winfo_exists():
+                return
+            if status == "finished":
+                self._speech_overlay.withdraw()
+                return
+            labels = {
+                "preparing": "Подготавливаю голос…",
+                "playing": "Денис читает текст",
+                "paused": "Чтение приостановлено",
+                "stopping": "Останавливаю чтение…",
+            }
+            self._speech_status_label.configure(text=labels.get(status, "Чтение буфера"))
+            self._speech_speed_label.configure(text=f"{speed:.1f}×")
+            self._speech_overlay.update_idletasks()
+            width = self._speech_overlay.winfo_reqwidth()
+            height = self._speech_overlay.winfo_reqheight()
+            x = self.root.winfo_screenwidth() - width - 24
+            y = (self.root.winfo_screenheight() - height) // 2
+            self._speech_overlay.geometry(f"+{x}+{y}")
+            self._speech_overlay.deiconify()
+            self._speech_overlay.lift()
+        try:
+            self.root.after(0, apply)
+        except tk.TclError:
+            pass
+
     def set_status(self, listening=None, microphone=None):
         def apply():
             if listening is not None:
@@ -606,6 +706,11 @@ class AssistantWindow:
                 pass
             self._tray_icon = None
         self.on_close()
+        if self._speech_overlay is not None:
+            try:
+                self._speech_overlay.destroy()
+            except tk.TclError:
+                pass
         self.root.destroy()
 
 
