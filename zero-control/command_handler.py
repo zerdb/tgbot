@@ -73,7 +73,7 @@ class CommandHandler:
     @staticmethod
     def _handle_clipboard_speech_control(text: str) -> bool:
         """Обрабатывает короткие команды только во время чтения буфера."""
-        normalized = " ".join(re.sub(r"[^\\w\\s]", " ", str(text or "").casefold()).split())
+        normalized = " ".join(re.sub(r"[^\w\s]", " ", str(text or "").casefold()).split())
         actions = {
             "стоп": "stop", "останови": "stop", "останови чтение": "stop",
             "стоп чтение": "stop", "пауза": "pause", "пауза чтения": "pause",
