@@ -43,9 +43,40 @@ class CommandHandler:
             return
         self._handle_command_worker(text)
 
+    @staticmethod
+    def _is_read_selected_text_command(text: str) -> bool:
+        normalized = re.sub(r"[^\\w\\s]", " ", str(text or "").casefold())
+        normalized = " ".join(normalized.split())
+        return bool(re.match(
+            r"^(?:пожалуйста\\s+)?(?:прочитай|прочти|зачитай|озвучь|прочитать|прочесть)"
+            r"\\s+(?:(?:мне|пожалуйста)\\s+)*(?:весь\\s+)?"
+            r"(?:выделенный\\s+текст|выделенное)",
+            normalized,
+        ))
+
+    def _read_selected_text(self) -> None:
+        """Читает выделение активного окна локальным голосом Piper Denis."""
+        try:
+            from selected_text_reader import get_selected_text
+            selected_text = get_selected_text()
+            from notifications import speak_text
+
+            if selected_text:
+                print(f"[Чтение] Озвучиваю выделенный текст ({len(selected_text)} символов).", flush=True)
+                speak_text(selected_text)
+            else:
+                print("[Чтение] Выделение не найдено или приложение не поддерживает UI Automation TextPattern.", flush=True)
+                speak_text("Не удалось получить выделенный текст. Возможно, в этом приложении чтение выделения не поддерживается.")
+        except Exception as exc:
+            print(f"[Чтение] Не удалось прочитать выделенный текст: {exc}", flush=True)
+
     def _handle_command_worker(self, text: str) -> None:
         """Классифицирует намерение и передаёт его соответствующему исполнителю."""
         print(f"Распознана команда: {text}")
+        if self._is_read_selected_text_command(text):
+            self._read_selected_text()
+            return
+
         ui = self._get_ui()
         if ui is not None:
             self._ui_actions.put(("busy", "Обработка…"))
