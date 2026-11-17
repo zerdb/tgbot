@@ -33,6 +33,19 @@ class CommandHandlerTests(unittest.TestCase):
             ("ai_chat", "Сколько будет два плюс два?"),
         )
 
+    def test_read_clipboard_text_command_is_recognized_without_intent_router(self):
+        self.assertTrue(self.handler._is_read_clipboard_text_command("Прочитай текст из буфера"))
+        self.assertTrue(self.handler._is_read_clipboard_text_command("Зачитай буфер обмена"))
+        self.assertFalse(self.handler._is_read_clipboard_text_command("Прочитай выделенный текст"))
+
+    def test_read_clipboard_text_uses_piper_and_does_not_modify_clipboard(self):
+        with patch("pyperclip.paste", return_value="Текст для чтения") as paste:
+            with patch("notifications.speak_text") as speak:
+                self.handler._read_clipboard_text()
+
+        paste.assert_called_once_with()
+        speak.assert_called_once_with("Текст для чтения")
+
     def test_low_confidence_intent_is_not_executed(self):
         intent = {
             "kind": "execute",
