@@ -43,17 +43,6 @@ class CommandHandler:
             return
         self._handle_command_worker(text)
 
-    @staticmethod
-    def _is_read_clipboard_text_command(text: str) -> bool:
-        normalized = re.sub(r"[^\w\s]", " ", str(text or "").casefold())
-        normalized = " ".join(normalized.split())
-        return bool(re.match(
-            r"^(?:пожалуйста\s+)?(?:прочитай|прочти|зачитай|озвучь|прочитать|прочесть)"
-            r"\s+(?:(?:мне|пожалуйста)\s+)*(?:текст\s+)?"
-            r"(?:из\s+)?(?:буфера(?:\s+обмена)?|буфер)",
-            normalized,
-        ))
-
     def _read_clipboard_text(self) -> None:
         """Озвучивает текст из Windows clipboard локальным голосом Piper Denis."""
         try:
@@ -107,10 +96,6 @@ class CommandHandler:
         print(f"Распознана команда: {text}")
         if self._handle_clipboard_speech_control(text):
             return
-        if self._is_read_clipboard_text_command(text):
-            self._read_clipboard_text()
-            return
-
         ui = self._get_ui()
         if ui is not None:
             self._ui_actions.put(("busy", "Обработка…"))
@@ -192,7 +177,9 @@ class CommandHandler:
         if ui is not None and not keep_busy:
             self._ui_actions.put(("busy", None))
 
-        if action == "ai_chat":
+        if action == "read_clipboard_text":
+            self._read_clipboard_text()
+        elif action == "ai_chat":
             question = str(args.get("question") or text).strip()
             if ui is not None:
                 self._ui_actions.put(("busy", "Жду ответ ИИ…"))
