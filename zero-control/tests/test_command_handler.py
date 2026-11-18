@@ -33,10 +33,36 @@ class CommandHandlerTests(unittest.TestCase):
             ("ai_chat", "Сколько будет два плюс два?"),
         )
 
-    def test_read_clipboard_text_command_is_recognized_without_intent_router(self):
-        self.assertTrue(self.handler._is_read_clipboard_text_command("Прочитай текст из буфера"))
-        self.assertTrue(self.handler._is_read_clipboard_text_command("Зачитай буфер обмена"))
-        self.assertFalse(self.handler._is_read_clipboard_text_command("Прочитай выделенный текст"))
+    def test_conversational_clipboard_read_phrases_use_local_intent_router(self):
+        from intent_router import understand_command
+
+        phrases = (
+            "Прочитай текст из буфера",
+            "Зачитай буфер обмена",
+            "Прочитай то, что в буфере находится",
+            "Прочитай, что в буфере",
+            "Прочитай содержимое буфера",
+            "Озвучь буфер обмена",
+        )
+        with patch("intent_router._classify_semantically", side_effect=AssertionError("AI must not be called")):
+            for phrase in phrases:
+                with self.subTest(phrase=phrase):
+                    intent = understand_command(phrase)
+                    self.assertEqual(intent["action"], "read_clipboard_text")
+                    self.assertEqual(intent["kind"], "execute")
+                    self.assertEqual(intent["confidence"], 1.0)
+
+    def test_clipboard_read_intent_dispatches_to_existing_reader(self):
+        intent = {
+            "kind": "execute",
+            "action": "read_clipboard_text",
+            "confidence": 1.0,
+            "parameters": {},
+        }
+        with patch("intent_router.understand_command", return_value=intent):
+            with patch.object(self.handler, "_read_clipboard_text") as read:
+                self.handler.handle_command("Прочитай то, что в буфере находится")
+        read.assert_called_once_with()
 
     def test_read_clipboard_text_uses_piper_and_does_not_modify_clipboard(self):
         with patch("pyperclip.paste", return_value="Текст для чтения") as paste:
