@@ -14,6 +14,7 @@ ACTIONS = {
  "add_note": "Сохранить произнесённый текст как заметку без срока; note_text — текст записи.",
  "complete_item": "Отметить заметку или дело выполненным; item_text — фрагмент текста записи.",
  "clipboard_to_excel": "Создать Excel из данных буфера обмена.",
+ "read_clipboard_text": "Прочитать вслух текстовое содержимое буфера обмена локальным голосом Дениса; источник — clipboard.",
  "lock_computer": "Заблокировать компьютер.",
  "reboot_computer": "Перезагрузить компьютер.",
  "open_downloads": "Открыть папку Загрузки.",
@@ -341,6 +342,7 @@ def _understand_command(user_text: str) -> dict:
         "complete_item",
         "save_note",
         "clipboard_to_excel",
+        "read_clipboard_text",
         "read_unread_mail",
     }
     if local_action in local_first_actions:
@@ -418,6 +420,13 @@ def _understand_command_rules(user_text: str) -> dict:
     normalized = re.sub(r"^мне нужно\s*,?\s*(?:чтобы ты\s+)?", "", normalized)
     normalized = re.sub(r"[,!]?\s+пожалуйста$", "", normalized)
     normalized = re.sub(r"\s+(?:на компьютере|на пк)$", "", normalized).strip(" .,!?:;")
+
+    # Чтение буфера — локальное намерение. Распознаём смысл всей фразы,
+    # в том числе разговорные вставки между глаголом и упоминанием буфера.
+    read_clipboard_verbs = r"\b(прочитай\w*|прочти\w*|зачитай\w*|озвучь\w*|прочитать|прочесть)\b"
+    clipboard_context = r"\b(буфер\w*(?:\s+обмен\w*)?|содержим\w*\s+буфер\w*|скопированн\w*\s+текст)\b"
+    if re.search(read_clipboard_verbs, normalized) and re.search(clipboard_context, normalized):
+        return {"action": "read_clipboard_text", "confidence": 1.0, "parameters": {}}
 
     # Групповое переименование файлов, скопированных в Проводнике.
     if re.search(r"\b(переимену\w*|назови\w*|дай\s+понятн\w*\s+имен\w*)\b", normalized) and re.search(
